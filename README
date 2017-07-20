@@ -1,0 +1,59 @@
+WINDOWS INSTALLATION
+
+1) Create a theory file. The name of the theory is not important but you must import IsaLibs.
+
+theory MyTheory
+imports IsaLibs
+begin
+
+end
+
+2) Create a new settings file or edit your existing one to include the following path. Note that IsaLibs comes with a working timeout tool.
+
+TIMEAOUT_PATH=path_to_timeout
+
+e.g.
+
+TIMEAOUT_PATH=/cygdrive/c/Users/Omar/Programs/IsaLibs
+
+3) Download the AProVE termination prover (command line version) from the link and place it on the same directory of your theory file (see step 1).
+
+http://aprove.informatik.rwth-aachen.de/
+
+4) Run the following command to build the heap image and work with your theory
+
+isabelle jedit -d path_to_IsaLibs_root_file -l IsaLibs your_theory.thy
+
+LINUX/MAC OS X INSTALLATION
+
+1) Create a theory file. The name of the theory is not important but you must import IsaLibs.
+
+theory MyTheory
+imports IsaLibs
+begin
+
+end
+
+2) Download the AProVE termination prover (command line version) from the link and place it on any directory such as 'path_to_AProVE_jar_file'.
+
+http://aprove.informatik.rwth-aachen.de/
+
+3) Create a new settings file or edit your existing one to include the following paths. Note that IsaLibs comes with a working timeout tool.
+
+APROVE_PATH=path_to_AProVE_jar_file
+TIMEAOUT_PATH=path_to_timeout
+
+4) Run the following command to build the heap image and work with your theory
+
+isabelle jedit -d path_to_IsaLibs_root_file -l IsaLibs your_theory.thy
+
+
+— Build IsaLibs —
+
+isabelle build -d /Users/omarmrivas/Programs/IsaLibs/IsaLibs -b IsaLibs
+
+
+- isabelle_build -
+
+./isabelle_build experiments/inductive_proofs3/nat_acc_plus_same.thy IsaLibs ../../../IsaLibs/IsaLibs
+

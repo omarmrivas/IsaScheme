@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+
+FILE=$1
+
+# running experiments
+
+for i in `seq 1 20`
+do
+	echo "Running experiment $i"
+	./isabelle_build $FILE
+done

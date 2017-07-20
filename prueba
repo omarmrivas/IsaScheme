@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# The Bash shell script executes a command with a time-out.
+# Upon time-out expiration SIGTERM (15) is sent to the process. If the signal
+# is blocked, then the subsequent SIGKILL (9) terminates it.
+#
+# Based on the Bash documentation example.
+
+# Hello Chet,
+# please find attached a "little easier"  :-)  to comprehend
+# time-out example.  If you find it suitable, feel free to include
+# anywhere: the very same logic as in the original examples/scripts, a
+# little more transparent implementation to my taste.
+#
+# Dmitry V Golovashkin <Dmitry.Golovashkin@sas.com>
+
+z3 -version

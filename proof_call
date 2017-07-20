@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+
+SMT=$1
+THY=$2
+PROVER=$3
+
+FILE=`echo ${SMT%.*}`
+THEORY=`ECHO ${FILE##*/}`
+
+# Change to experiments/inductive_proofs directory
+cd experiments/inductive_proofs
+
+# Creating Isabelle/HOL theory file
+tip $SMT --isabelle > $THEORY.thy
+
+# Changing Main to $THY
+sed -i '.bak\' "s/imports Main/imports $THY/g" $THEORY.thy
+
+# Changing A to $THEORY
+sed -i '.bak\' "s/theory A/theory $THEORY/g" $THEORY.thy
+
+# Changing oops to by $PROVER
+sed -i '.bak' "s/oops/by $PROVER/g" $THEORY.thy
+
+# Changing some constant names to be compatible with Isabelle/HOL
+sed -i '.bak' "s/EX/EXX/g" $THEORY.thy
+sed -i '.bak' "s/ o)/ oo)/g" $THEORY.thy
+
+# Calling the isabelle process
+isabelle_process -e "use_thy \"$THEORY\";" -q -r $THY
+
+# Delete theory file
+# rm $THEORY.thy*

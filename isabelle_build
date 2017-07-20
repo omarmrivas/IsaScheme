@@ -1,0 +1,49 @@
+#!/bin/bash
+#
+
+FILE=$1
+
+INCLUDE_FROM=$2
+INCLUDE_TO=$3
+
+FILE1=`echo ${FILE%.*}`
+LOGIC=`echo ${FILE1##*/}`
+
+# LOGIC=`echo ${FILE%.*}`
+TARGET="HOL"
+# CDIR=`pwd`
+
+DIR=$(dirname "$FILE")
+
+ROOTFILE=$DIR/$LOGIC/ROOT
+
+# creating the theory directory and isabelle make files
+
+echo "Creating $LOGIC directory..."
+mkdir -p $DIR/$LOGIC
+
+echo "Creating $LOGIC/ROOT..."
+echo "session \"$LOGIC\" = \"$TARGET\" +" > $ROOTFILE
+echo "options [document = false]" >> $ROOTFILE
+echo "theories [document = false]" >> $ROOTFILE
+echo "\"$LOGIC\"" >> $ROOTFILE
+
+echo $FILE
+echo $LOGIC
+echo $DIR
+echo $ROOTFILE
+
+cp $FILE $DIR/$LOGIC
+
+sed -i '.bak' "s|imports $INCLUDE_FROM|imports \"$INCLUDE_TO\"|g" $DIR/$LOGIC/$LOGIC".thy"
+
+#isabelle build -c -v -D $DIR/$LOGIC
+isabelle build -c -v -j 0 -o browser_info -D $DIR/$LOGIC
+
+echo "Copy browser info"
+mkdir -p $DIR/$LOGIC/Browser
+
+BROWSER_PATH=`isabelle getenv -b ISABELLE_HOME_USER`"/browser_info/Unsorted/$LOGIC"
+cp $BROWSER_PATH/*.* $DIR/$LOGIC/Browser
+
+#isabelle build -c -n -D $DIR/$LOGIC

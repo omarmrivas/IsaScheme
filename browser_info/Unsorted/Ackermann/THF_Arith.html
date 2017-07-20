@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<title>Theory THF_Arith (Isabelle2015: May 2015)</title>
+<link media="all" rel="stylesheet" type="text/css" href="isabelle.css"/>
+</head>
+
+<body>
+<div class="head"><h1>Theory THF_Arith</h1>
+
+<span class="command">theory</span> <span class="name">THF_Arith</span><br/>
+<span class="keyword">imports</span> <a href="../../HOL/HOL/Complex_Main.html"><span class="name">Complex_Main</span></a><br/>
+
+</div>
+<div class="source">
+<pre><span class="comment">(*  Title:      HOL/TPTP/THF_Arith.thy
+    Author:     Jasmin Blanchette
+    Copyright   2011, 2012
+
+Experimental setup for THF arithmetic. This is not connected with the TPTP
+parser yet.
+*)</span>
+
+<span class="keyword1">theory</span> THF_Arith
+<span class="keyword2">imports</span> Complex_Main
+<span class="keyword2">begin</span>
+
+<span class="keyword1">consts</span>
+  is_int <span class="delimiter">::</span> <span class="string">&quot;&#39;a =&gt; bool&quot;</span>
+  is_rat <span class="delimiter">::</span> <span class="string">&quot;&#39;a =&gt; bool&quot;</span>
+
+<span class="keyword1">overloading</span> rat_is_int <span class="delimiter">&equiv;</span> <span class="string">&quot;is_int :: rat =&gt; bool&quot;</span>
+<span class="keyword2">begin</span>
+  <span class="keyword1">definition</span> <span class="string">&quot;rat_is_int (q::rat) &lt;-&gt; (&exist;n::int. q = of_int n)&quot;</span>
+<span class="keyword2">end</span>
+
+<span class="keyword1">overloading</span> real_is_int <span class="delimiter">&equiv;</span> <span class="string">&quot;is_int :: real =&gt; bool&quot;</span>
+<span class="keyword2">begin</span>
+  <span class="keyword1">definition</span> <span class="string">&quot;real_is_int (x::real) &lt;-&gt; x &isin; \&lt;int&gt;&quot;</span>
+<span class="keyword2">end</span>
+
+<span class="keyword1">overloading</span> real_is_rat <span class="delimiter">&equiv;</span> <span class="string">&quot;is_rat :: real =&gt; bool&quot;</span>
+<span class="keyword2">begin</span>
+  <span class="keyword1">definition</span> <span class="string">&quot;real_is_rat (x::real) &lt;-&gt; x &isin; \&lt;rat&gt;&quot;</span>
+<span class="keyword2">end</span>
+
+<span class="keyword1">consts</span>
+  to_int <span class="delimiter">::</span> <span class="string">&quot;&#39;a =&gt; int&quot;</span>
+  to_rat <span class="delimiter">::</span> <span class="string">&quot;&#39;a =&gt; rat&quot;</span>
+  to_real <span class="delimiter">::</span> <span class="string">&quot;&#39;a =&gt; real&quot;</span>
+
+<span class="keyword1">overloading</span> rat_to_int <span class="delimiter">&equiv;</span> <span class="string">&quot;to_int :: rat =&gt; int&quot;</span>
+<span class="keyword2">begin</span>
+  <span class="keyword1">definition</span> <span class="string">&quot;rat_to_int (q::rat) = floor q&quot;</span>
+<span class="keyword2">end</span>
+
+<span class="keyword1">overloading</span> real_to_int <span class="delimiter">&equiv;</span> <span class="string">&quot;to_int :: real =&gt; int&quot;</span>
+<span class="keyword2">begin</span>
+  <span class="keyword1">definition</span> <span class="string">&quot;real_to_int (x::real) = floor x&quot;</span>
+<span class="keyword2">end</span>
+
+<span class="keyword1">overloading</span> int_to_rat <span class="delimiter">&equiv;</span> <span class="string">&quot;to_rat :: int =&gt; rat&quot;</span>
+<span class="keyword2">begin</span>
+  <span class="keyword1">definition</span> <span class="string">&quot;int_to_rat (n::int) = (of_int n::rat)&quot;</span>
+<span class="keyword2">end</span>
+
+<span class="keyword1">overloading</span> real_to_rat <span class="delimiter">&equiv;</span> <span class="string">&quot;to_rat :: real =&gt; rat&quot;</span>
+<span class="keyword2">begin</span>
+  <span class="keyword1">definition</span> <span class="string">&quot;real_to_rat (x::real) = (inv of_rat x::rat)&quot;</span>
+<span class="keyword2">end</span>
+
+<span class="keyword1">overloading</span> int_to_real <span class="delimiter">&equiv;</span> <span class="string">&quot;to_real :: int =&gt; real&quot;</span>
+<span class="keyword2">begin</span>
+  <span class="keyword1">definition</span> <span class="string">&quot;int_to_real (n::int) = real n&quot;</span>
+<span class="keyword2">end</span>
+
+<span class="keyword1">overloading</span> rat_to_real <span class="delimiter">&equiv;</span> <span class="string">&quot;to_real :: rat =&gt; real&quot;</span>
+<span class="keyword2">begin</span>
+  <span class="keyword1">definition</span> <span class="string">&quot;rat_to_real (x::rat) = (of_rat x::real)&quot;</span>
+<span class="keyword2">end</span>
+
+<span class="keyword1">declare</span>
+  rat_is_int_def <span class="delimiter">[</span>simp<span class="delimiter">]</span>
+  real_is_int_def <span class="delimiter">[</span>simp<span class="delimiter">]</span>
+  real_is_rat_def <span class="delimiter">[</span>simp<span class="delimiter">]</span>
+  rat_to_int_def <span class="delimiter">[</span>simp<span class="delimiter">]</span>
+  real_to_int_def <span class="delimiter">[</span>simp<span class="delimiter">]</span>
+  int_to_rat_def <span class="delimiter">[</span>simp<span class="delimiter">]</span>
+  real_to_rat_def <span class="delimiter">[</span>simp<span class="delimiter">]</span>
+  int_to_real_def <span class="delimiter">[</span>simp<span class="delimiter">]</span>
+  rat_to_real_def <span class="delimiter">[</span>simp<span class="delimiter">]</span>
+
+<span class="keyword1">lemma</span> to_rat_is_int <span class="delimiter">[</span>intro<span class="delimiter">,</span> simp<span class="delimiter">]</span><span class="delimiter">:</span> <span class="string">&quot;is_int (to_rat (n::int))&quot;</span>
+<span class="keyword1">by</span> <span class="delimiter">(</span>metis int_to_rat_def rat_is_int_def<span class="delimiter">)</span>
+
+<span class="keyword1">lemma</span> to_real_is_int <span class="delimiter">[</span>intro<span class="delimiter">,</span> simp<span class="delimiter">]</span><span class="delimiter">:</span> <span class="string">&quot;is_int (to_real (n::int))&quot;</span>
+<span class="keyword1">by</span> <span class="delimiter">(</span>metis Ints_real_of_int int_to_real_def real_is_int_def<span class="delimiter">)</span>
+
+<span class="keyword1">lemma</span> to_real_is_rat <span class="delimiter">[</span>intro<span class="delimiter">,</span> simp<span class="delimiter">]</span><span class="delimiter">:</span> <span class="string">&quot;is_rat (to_real (q::rat))&quot;</span>
+<span class="keyword1">by</span> <span class="delimiter">(</span>metis Rats_of_rat rat_to_real_def real_is_rat_def<span class="delimiter">)</span>
+
+<span class="keyword1">lemma</span> inj_of_rat <span class="delimiter">[</span>intro<span class="delimiter">,</span> simp<span class="delimiter">]</span><span class="delimiter">:</span> <span class="string">&quot;inj (of_rat::rat=&gt;real)&quot;</span>
+<span class="keyword1">by</span> <span class="delimiter">(</span>metis injI of_rat_eq_iff<span class="delimiter">)</span>
+
+<span class="keyword2">end</span>
+</pre>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,13 @@
+chapter IsaLibs
+
+session "IsaLibs" = "HOL" +
+(*  options [document = pdf, document_output = "output"]*)
+  options [document = false]
+  theories [document = false]
+    IsaLibs
+    (* Foo *)
+    (* Bar *)
+  theories
+    (* Baz *)
+(*  document_files
+    "root.tex"*)

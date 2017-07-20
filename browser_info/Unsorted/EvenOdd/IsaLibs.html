@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<title>Theory IsaLibs (Isabelle2015: May 2015)</title>
+<link media="all" rel="stylesheet" type="text/css" href="isabelle.css"/>
+</head>
+
+<body>
+<div class="head"><h1>Theory IsaLibs</h1>
+
+<span class="command">theory</span> <span class="name">IsaLibs</span><br/>
+<span class="keyword">imports</span> <a href="THF_Arith.html"><span class="name">THF_Arith</span></a><br/>
+
+</div>
+<div class="source">
+<pre><span class="keyword1">theory</span> IsaLibs
+<span class="comment">(*imports Complex_Main*)</span>
+<span class="keyword2">imports</span> <span class="string">&quot;~~/src/HOL/TPTP/THF_Arith&quot;</span>
+<span class="keyword2">keywords</span> <span class="string">&quot;rec_complete&quot;</span> <span class="delimiter">::</span> thy_decl <span class="keyword2">and</span>
+         <span class="string">&quot;complete&quot;</span> <span class="delimiter">::</span> thy_goal <span class="keyword2">and</span>
+         <span class="string">&quot;orient_rules&quot;</span> <span class="delimiter">::</span> thy_decl
+<span class="keyword2">begin</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;$ISABELLE_HOME/src/HOL/TPTP/sledgehammer_tactics.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;const_names.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;tables.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;utils.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;latex.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;orders.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;sat_interface.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;dependency_pair.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;counter_example.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;random_terms.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;enumerated_terms.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;induct_tacs4.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;aprove.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;prover.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;ground_completion.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;proof_tools.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;commands.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;oriented_rules.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;meta_gp_hol.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;exhaust.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;gnuplot.ML&quot;</span>
+<span class="keyword1">ML_file</span> <span class="string">&quot;mysql.ML&quot;</span>
+
+<span class="keyword1">setup</span> <span class="verbatim">{*
+DB_Counter_Example.setup_use_quickcheck #&gt;
+DB_Counter_Example.setup_use_nitpick #&gt;
+DB_Counter_Example.setup_simp_before #&gt;
+DB_Counter_Example.setup_max_time_in_counter_ex #&gt;
+
+DB_Prover.setup_max_time_in_proof #&gt;
+DB_Proof_Tools.setup_max_depth_in_meta_induction #&gt;
+DB_Proof_Tools.setup_max_num_generalizations #&gt;
+DB_Proof_Tools.setup_max_consts_in_generalizations #&gt;
+DB_Proof_Tools.setup_max_lambda_size #&gt;
+DB_Proof_Tools.setup_use_metis #&gt;
+
+DB_Aprove.setup_use_aprove #&gt;
+DB_DPair.setup_max_time_in_termination #&gt;
+
+DB_Completion.setup_generate_cps #&gt;
+
+DB_GP.setup_max_time_in_fitness #&gt;
+
+Completion_Rules.setup
+*}</span>
+
+<span class="keyword1">declare</span> <span class="delimiter">[</span><span class="delimiter">[</span>
+  use_quickcheck <span class="delimiter">=</span> true<span class="delimiter">,</span>
+  use_nitpick <span class="delimiter">=</span> false<span class="delimiter">,</span>
+  simp_before <span class="delimiter">=</span> false<span class="delimiter">,</span>
+  max_time_in_counter_ex <span class="delimiter">=</span> 25<span class="delimiter">,</span>
+  max_time_in_proof <span class="delimiter">=</span> 20<span class="delimiter">,</span>
+  max_time_in_fitness <span class="delimiter">=</span> 15<span class="delimiter">,</span>
+  max_depth_in_meta_induction <span class="delimiter">=</span> 10<span class="delimiter">,</span>
+  max_num_generalizations <span class="delimiter">=</span> 3<span class="delimiter">,</span>
+  max_consts_in_generalizations <span class="delimiter">=</span> 4<span class="delimiter">,</span>
+  max_lambda_size <span class="delimiter">=</span> 8<span class="delimiter">,</span>
+  use_metis <span class="delimiter">=</span> false<span class="delimiter">,</span>
+  quickcheck_quiet <span class="delimiter">=</span> true<span class="delimiter">,</span>
+  use_aprove<span class="delimiter">=</span>true<span class="delimiter">,</span>
+  generate_cps<span class="delimiter">=</span>false<span class="delimiter">,</span>
+  max_time_in_termination <span class="delimiter">=</span> 20<span class="delimiter">,</span>
+  linarith_split_limit <span class="delimiter">=</span> 10<span class="delimiter">,</span>
+  eta_contract <span class="delimiter">=</span> false
+  <span class="delimiter">]</span><span class="delimiter">]</span>
+
+<span class="keyword1">text</span> <span class="verbatim">{* Associative operators must be oriented this way to avoid non-termination
+        in case they are also Commutative operators. *}</span>
+<span class="keyword1">orient_rules</span> <span class="string">&quot;?X (?X (?x :: ?&#39;a) (?y :: ?&#39;a)) (?z :: ?&#39;a) = ?X ?x (?X ?y ?z)&quot;</span>
+
+<span class="keyword1">ML</span> <span class="verbatim">{*
+  val p1 = Multithreading.max_threads_value ()
+  val p2 = Thread.numProcessors ()
+  val _ = Future.ML_statistics := false
+*}</span>
+
+<span class="keyword2">end</span>
+</pre>
+
+</div>
+</body>
+</html>

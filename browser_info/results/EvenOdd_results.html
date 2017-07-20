@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<title>Even/Odd Solutions (Isabelle2015: May 2015)</title>
+<link media="all" rel="stylesheet" type="text/css" href="isabelle.css"/>
+</head>
+
+<body>
+<div class="head"><h1>Even/Odd Solutions</h1>
+
+<h3>Destructor style solutions</h3>
+<table border="1"><tr><td><b>No.</b></td>
+<td><b>Individual</b></td>
+<td><b>Schematic Substitution</b></td></tr>
+<tr><td>0</td>
+<td><span class="language"><span class="entity"><span class="delimiter">&exist;</span></span><span class="bound">f</span> <span class="bound">g</span><span class="entity"><span class="delimiter">.</span></span> <span class="entity"><span class="delimiter">&forall;</span></span><span class="bound">x</span><span class="entity"><span class="delimiter">.</span></span> <span class="bound">f</span> <span class="bound">x</span> <span class="entity"><span class="delimiter">=</span></span>
+          (<span class="entity"><span class="literal">if</span></span> <span class="entity"><span class="delimiter">0</span></span> <span class="entity"><span class="delimiter">=</span></span> <span class="bound">x</span> <span class="entity"><span class="delimiter">-</span></span> <span class="entity"><span class="delimiter">1</span></span> <span class="entity"><span class="literal">then</span></span> <span class="entity"><span class="delimiter">0</span></span> <span class="entity"><span class="delimiter">=</span></span> <span class="bound">x</span>
+           <span class="entity"><span class="literal">else</span></span> <span class="entity"><span class="literal">if</span></span> <span class="entity">False</span> <span class="entity"><span class="literal">then</span></span> <span class="entity">False</span>
+                <span class="entity"><span class="literal">else</span></span> <span class="entity"><span class="literal">if</span></span> <span class="entity">False</span> <span class="entity"><span class="literal">then</span></span> <span class="entity">False</span> <span class="entity"><span class="literal">else</span></span> <span class="bound">g</span> (<span class="bound">x</span> <span class="entity"><span class="delimiter">-</span></span> <span class="entity"><span class="delimiter">1</span></span>)) <span class="entity"><span class="delimiter">&and;</span></span>
+          <span class="bound">g</span> <span class="bound">x</span> <span class="entity"><span class="delimiter">=</span></span> (<span class="entity"><span class="literal">if</span></span> <span class="bound">x</span> <span class="entity"><span class="delimiter">-</span></span> <span class="entity"><span class="delimiter">1</span></span> <span class="entity"><span class="delimiter">=</span></span> <span class="bound">x</span> <span class="entity"><span class="literal">then</span></span> <span class="entity">False</span> <span class="entity"><span class="literal">else</span></span> <span class="bound">f</span> (<span class="bound">x</span> <span class="entity"><span class="delimiter">-</span></span> <span class="entity"><span class="delimiter">1</span></span>))</span></td>
+<td>{<span class="language"><span class="var">N</span></span>&map;<span class="language"><span class="delimiter">&lambda;</span><span class="bound">x</span> <span class="bound">xa</span> <span class="bound">xb</span> <span class="bound">xc</span> <span class="bound">xd</span> <span class="bound">xe</span> <span class="bound">xf</span> <span class="bound">xg</span><span class="delimiter">.</span> <span class="bound">xe</span> (<span class="bound">xf</span> (<span class="bound">xd</span> <span class="bound">x</span>) <span class="bound">x</span>) <span class="bound">xc</span> (<span class="bound">xg</span> (<span class="bound">xd</span> <span class="bound">x</span>))</span>, <span class="language"><span class="var">M</span></span>&map;<span class="language"><span class="delimiter">&lambda;</span><span class="bound">x</span> <span class="bound">xa</span> <span class="bound">xb</span> <span class="bound">xc</span> <span class="bound">xd</span> <span class="bound">xe</span> <span class="bound">xf</span> <span class="bound">xg</span><span class="delimiter">.</span>
+   <span class="bound">xe</span> (<span class="bound">xf</span> <span class="bound">xa</span> (<span class="bound">xd</span> <span class="bound">x</span>)) (<span class="bound">xf</span> <span class="bound">xa</span> <span class="bound">x</span>) (<span class="bound">xe</span> <span class="bound">xc</span> <span class="bound">xc</span> (<span class="bound">xe</span> <span class="bound">xc</span> <span class="bound">xc</span> (<span class="bound">xg</span> (<span class="bound">xd</span> <span class="bound">x</span>))))</span>}</td></tr></table>
+<h3>Contructor style solutions</h3>
+<table border="1"><tr><td><b>No.</b></td>
+<td><b>Individual</b></td>
+<td><b>Schematic Substitution</b></td></tr>
+<tr><td>0</td>
+<td><span class="language"><span class="entity"><span class="delimiter">&exist;</span></span><span class="bound">f</span><span class="entity"><span class="delimiter">.</span></span> <span class="bound">f</span> <span class="entity"><span class="delimiter">0</span></span> <span class="entity"><span class="delimiter">&and;</span></span> (<span class="entity"><span class="delimiter">&exist;</span></span><span class="bound">g</span><span class="entity"><span class="delimiter">.</span></span> <span class="entity"><span class="delimiter">&forall;</span></span><span class="bound">x</span><span class="entity"><span class="delimiter">.</span></span> <span class="bound">f</span> (<span class="entity">Suc</span> <span class="bound">x</span>) <span class="entity"><span class="delimiter">=</span></span> <span class="bound">g</span> <span class="bound">x</span> <span class="entity"><span class="delimiter">&and;</span></span> <span class="entity"><span class="delimiter">&not;</span></span> <span class="bound">g</span> <span class="entity"><span class="delimiter">0</span></span> <span class="entity"><span class="delimiter">&and;</span></span> <span class="bound">g</span> (<span class="entity">Suc</span> <span class="bound">x</span>) <span class="entity"><span class="delimiter">=</span></span> <span class="bound">f</span> <span class="bound">x</span>)</span></td>
+<td>{<span class="language"><span class="var">N</span></span>&map;<span class="language"><span class="delimiter">&lambda;</span><span class="bound">x</span> <span class="bound">xa</span> <span class="bound">xb</span> <span class="bound">xc</span><span class="delimiter">.</span> <span class="bound">xc</span> <span class="bound">x</span></span>, <span class="language"><span class="var">M</span></span>&map;<span class="language"><span class="delimiter">&lambda;</span><span class="bound">x</span> <span class="bound">xa</span> <span class="bound">xb</span> <span class="bound">xc</span><span class="delimiter">.</span> <span class="bound">xc</span> <span class="bound">x</span></span>}</td></tr></table>
+
+</div>
+</body>
+</html>
+

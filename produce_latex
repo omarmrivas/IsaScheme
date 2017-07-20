@@ -1,0 +1,11 @@
+#!/bin/bash
+#
+
+for FILE in *.plot
+do
+    echo "Converting $FILE to tex"
+    gnuplot $FILE
+    ROOT=`echo ${FILE%.*}`
+    sed -i '.bak' "s:$ROOT:gnuplot/$ROOT:g" $ROOT.tex
+done
+

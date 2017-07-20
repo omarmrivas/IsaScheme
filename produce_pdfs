@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+
+for FILE in *.plot
+do
+    echo "Converting $FILE to eps"
+    gnuplot $FILE
+done
+
+for FILE in *.eps
+do
+    echo "Converting $FILE to pdf"
+    ps2pdf -dEPSCrop $FILE
+done
+

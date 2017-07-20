@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+
+FULLFILE=$1
+
+LOGIC=$2
+
+LOGIC_DIR=$3
+
+DIR=$(dirname "$FULLFILE")
+
+FILE=`echo ${FULLFILE%.*}`
+THEORY=`echo ${FILE##*/}`
+
+echo $FILE
+echo $THEORY
+echo $DIR
+
+# Change to directory containing theory file
+cd $DIR
+
+# Calling the isabelle process
+# timeout -t 120 isabelle_process -e "use_thy \"$THEORY\";" -q -r $LOGIC
+# isabelle process -T nat_acc_plus_same -d /Users/omarmrivas/Programs/IsaLibs/IsaLibs -l IsaLibs
+
+isabelle process -T $THEORY -d $LOGIC_DIR -l $LOGIC

@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+
+# Change to experiments/inductive_proofs directory
+cd experiments/inductive_proofs
+
+LOGIC1=$1
+LOGIC2=$2
+
+for f in *.thy; do
+    echo "Processing $f file..";
+
+    # Changing oops to by $PROVER
+    sed -i '.bak' "s/imports $LOGIC1/imports $LOGIC2/g" $f
+done
+

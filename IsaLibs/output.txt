@@ -1,0 +1,354 @@
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma (suma (mult nat 0) 0) (suma (mult nat 0) 0) = suma (mult nat 0) 0 
+Proving: suma (suma (mult nat 0) 0) (suma (mult nat 0) 0) = suma (mult nat 0) 0 
+Proving: suma (suma (mult nat 0) 0) (suma (mult nat 0) 0) = suma (mult nat 0) 0 
+Result: suma y 0 = y 
+Proving: suma y 0 = y 
+Proving: suma y 0 = y 
+Proved!: suma y 0 = y 
+Proving: suma (suma (mult nat 0) 0) (suma (mult nat 0) 0) = suma (mult nat 0) 0 
+Proving: suma (suma (mult nat 0) 0) (suma (mult nat 0) 0) = suma (mult nat 0) 0 
+Proved!: suma (suma (mult nat 0) 0) (suma (mult nat 0) 0) = suma (mult nat 0) 0 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma (suma (mult x y) y) (suma xa z) = suma (suma (mult x y) xa) (suma y z) 
+Proving: suma (suma (mult x y) y) (suma xa z) = suma (suma (mult x y) xa) (suma y z) 
+Proving: suma (suma (mult x y) y) (suma xa z) = suma (suma (mult x y) xa) (suma y z) 
+Result: suma nata (Suc nat) = suma nat (Suc nata) 
+Proving: suma nata (Suc nat) = suma nat (Suc nata) 
+Proving: suma nata (Suc nat) = suma nat (Suc nata) 
+Result: suma y (Suc 0) = Suc y 
+Proving: suma y (Suc 0) = Suc y 
+Proving: suma y (Suc 0) = Suc y 
+Proved!: suma y (Suc 0) = Suc y 
+Proving: suma nata (Suc nat) = suma nat (Suc nata) 
+Proving: suma nata (Suc nat) = suma nat (Suc nata) 
+Result: suma nat (Suc xa) = Suc (suma nat xa) 
+Proving: suma nat (Suc xa) = Suc (suma nat xa) 
+Proving: suma nat (Suc xa) = Suc (suma nat xa) 
+Proved!: suma nat (Suc xa) = Suc (suma nat xa) 
+Proving: suma nata (Suc nat) = suma nat (Suc nata) 
+Proving: suma nata (Suc nat) = suma nat (Suc nata) 
+Proved!: suma nata (Suc nat) = suma nat (Suc nata) 
+Proving: suma (suma (mult x y) y) (suma xa z) = suma (suma (mult x y) xa) (suma y z) 
+Proving: suma (suma (mult x y) y) (suma xa z) = suma (suma (mult x y) xa) (suma y z) 
+Result: suma ya (suma y z) = suma y (suma ya z) 
+Proving: suma ya (suma y z) = suma y (suma ya z) 
+Proving: suma ya (suma y z) = suma y (suma ya z) 
+Proved!: suma ya (suma y z) = suma y (suma ya z) 
+Proving: suma (suma (mult x y) y) (suma xa z) = suma (suma (mult x y) xa) (suma y z) 
+Proving: suma (suma (mult x y) y) (suma xa z) = suma (suma (mult x y) xa) (suma y z) 
+Proved!: suma (suma (mult x y) y) (suma xa z) = suma (suma (mult x y) xa) (suma y z) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proved!: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proved!: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proved!: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proved!: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proved!: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proved!: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proved!: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proved!: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Result: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Proved!: suma y (suma (suma (mult x y) xa) z) = suma xa (suma (suma (mult x y) y) z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Ignoring duplicate rewrite rule:
+suma ?y1 (suma (suma (mult ?x1 ?y1) ?xa1) ?z1) \<equiv> suma ?xa1 (suma (suma (mult ?x1 ?y1) ?y1) ?z1) 
+Proving: mult x (suma y z) = suma (mult x y) (mult x z)

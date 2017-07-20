@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+
+DIR=$1
+
+
+# Change to experiments/inductive_proofs directory
+cd $DIR
+
+PROVER1=$2
+PROVER2=$3
+
+for f in *.thy; do
+    echo "Processing $f file..";
+
+    # Changing oops to by $PROVER
+    sed -i '.bak' "s/by $PROVER1/by $PROVER2/g" $f
+done
+
