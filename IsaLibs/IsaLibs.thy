@@ -293,7 +293,7 @@ lemma R: "plusa (OneAnd One) (plusa y (ZeroAnd (ZeroAnd z))) \<equiv> plusa (s y
   sorry
     
 ML {*
-  val _ = DB_Completion.completion_debug := true
+  val _ = DB_Completion.completion_debug := false
   val thy = @{theory}
   val prop = @{prop "((timesa x (plusa y z)) = (plusa (timesa x y) (timesa x z)))"}
   val def_lemmas = Utils.get_definitional_rewrites thy prop
