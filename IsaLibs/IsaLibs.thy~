@@ -293,15 +293,11 @@ lemma R: "plusa (OneAnd One) (plusa y (ZeroAnd (ZeroAnd z))) \<equiv> plusa (s y
   sorry
     
 ML {*
-  val _ = DB_Completion.completion_debug := true
   val thy = @{theory}
   val prop = @{prop "((timesa x (plusa y z)) = (plusa (timesa x y) (timesa x z)))"}
   val def_lemmas = Utils.get_definitional_rewrites thy prop
   val ctxt_nodefs = @{context} delsimps def_lemmas
   val terminates = Aprove.memoized_terminates ctxt_nodefs
-  val TRS = @{thms TRS}
-  val e = @{thm R}
-  val result = Ground_Completion.run_completion [] ctxt_nodefs terminates TRS e
 *}
   
 end
