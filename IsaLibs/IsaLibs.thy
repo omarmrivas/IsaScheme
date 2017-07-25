@@ -295,6 +295,7 @@ lemma R: "plusa (OneAnd One) (plusa y (ZeroAnd (ZeroAnd z))) \<equiv> plusa (s y
   sorry
     
 ML {*
+  val start = Timing.start ()
   val _ = DB_Completion.completion_debug := false
   val thy = @{theory}
   val prop = @{prop "((timesa x (plusa y z)) = (plusa (timesa x y) (timesa x z)))"}
@@ -308,6 +309,10 @@ ML {*
   val TRS = @{thms TRS}
   val e = @{thm R}
   val result = Ground_Completion.run_completion [] ctxt_nodefs terminates TRS e
+      val elapsed = start |> Timing.result
+                          |> #elapsed
+                          |> Time.toReal
+      val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
 *}
   
 end

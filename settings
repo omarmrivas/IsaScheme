@@ -1,3 +1,5 @@
 Z3_NON_COMMERCIAL=yes
-APROVE_PATH=/Users/omarmrivas/ownCloud/Programs/AProVE
-TIMEAOUT_PATH=/Users/omarmrivas/Programs/IsaLibs
+APROVE_PATH=/Users/omarmrivas/Programs/AProVE
+TIMEAOUT_PATH=/Users/omarmrivas/Programs/IsaScheme
+APROVE_SERVER=localhost
+APROVE_SERVER_PORT=5250
