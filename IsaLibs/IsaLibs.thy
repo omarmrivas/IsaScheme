@@ -239,6 +239,12 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
+datatype n = c | z n
+
+fun f where
+"f c y = y"|
+"f (z x) y = z (f x y)"
+  
 datatype Bin = One | ZeroAnd (ZeroAnd_0: "Bin") | OneAnd (OneAnd_0: "Bin")
 
 fun s :: "Bin => Bin" where
@@ -299,9 +305,12 @@ ML {*
   val def_lemmas = Utils.get_definitional_rewrites thy prop
   val ctxt_nodefs = @{context} delsimps def_lemmas
   val terminates = Aprove.memoized_terminates ctxt_nodefs
-  val TRS = @{thms TRS}
+  val TRS = @{thms f.simps} |> map Utils.obj_to_meta
+  val _ = tracing (Aprove.trs_to_wst TRS)
+  val foo = Aprove.aprove_path_ok @{context}
+(*  val TRS = @{thms TRS}
   val e = @{thm R}
-  val result = Ground_Completion.run_completion [] ctxt_nodefs terminates TRS e
+  val result = Ground_Completion.run_completion [] ctxt_nodefs terminates TRS e*)
 *}
   
 end

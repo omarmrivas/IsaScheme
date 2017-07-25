@@ -118,7 +118,7 @@ fun terminates ctxt TRS =
                                         Isabelle_System.bash_output ("$TIMEAOUT_PATH/timeout -t " ^ (string_of_int (timeOut+5)) ^ " java -Xmx512m -jar $APROVE_PATH/aprove.jar " ^ timeOut_threads ^ " -m wst " ^ (Path.implode path) ^ " 2> /dev/null")))
           val foo = String.isSubstring "YES" out
         in if foo
-           then (tracing "aprove true!"; true)
+           then (tracing wst; true)
            else false
         (*then (tracing "aprove true!"; true)
     else (tracing "aprove false!"; false)*)
