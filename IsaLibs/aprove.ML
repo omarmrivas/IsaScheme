@@ -13,6 +13,7 @@ sig
   val terminates             : Proof.context -> thm list -> bool
   val memoized_terminates    : Proof.context -> thm list -> bool
   val aprove_path_ok         : Proof.context -> bool
+  val aprove_server_ok       : Proof.context -> bool
 
   val use_aprove             : bool Config.T
 end
@@ -22,6 +23,7 @@ structure DB_Aprove
 = struct
 
 val (use_aprove, setup_use_aprove) = Attrib.config_bool @{binding "use_aprove"} (K true)
+val (use_aprove_srv, setup_use_aprove_srv) = Attrib.config_bool @{binding "use_aprove_srv"} (K false)
 
 val test_trs = "(VAR xs1 ys2 y3 y4 x5 x6 xa7 y8 y9 y10 x10 xs11 y11 xa12 x12 y13 y14 x14 ys15 x16 ya16 x17 y17 xa18 x18 y19 xs19 z20 y20 y21 ys21 zs22 x222 ys23 z23) (RULES s(One) -> ZeroAnd(One) s(ZeroAnd(xs1)) -> OneAnd(xs1) s(OneAnd(ys2)) -> ZeroAnd(s(ys2)) timesa(One,y3) -> y3 plusa(One,y4) -> s(y4) timesa(x5,One) -> x5 plusa(x6,One) -> s(x6) plusa(xa7,xa7) -> ZeroAnd(xa7) plusa(y8,ZeroAnd(One)) -> s(s(y8)) timesa(y9,OneAnd(One)) -> plusa(y9,ZeroAnd(y9)) plusa(x10,s(y10)) -> s(plusa(x10,y10)) timesa(y11,ZeroAnd(xs11)) -> ZeroAnd(timesa(y11,xs11)) plusa(x12,OneAnd(xa12)) -> s(plusa(x12,ZeroAnd(xa12))) timesa(y13,OneAnd(ZeroAnd(One))) -> plusa(y13,ZeroAnd(ZeroAnd(y13))) plusa(x14,ZeroAnd(s(y14))) -> s(s(plusa(x14,ZeroAnd(y14)))) timesa(ys15,OneAnd(ZeroAnd(ZeroAnd(One)))) -> plusa(ys15,ZeroAnd(ZeroAnd(ZeroAnd(ys15)))) plusa(ya16,plusa(x16,ya16)) -> plusa(x16,ZeroAnd(ya16)) plusa(y17,plusa(y17,ZeroAnd(x17))) -> ZeroAnd(plusa(x17,y17)) plusa(ZeroAnd(One),plusa(x18,ZeroAnd(ZeroAnd(xa18)))) -> plusa(x18,ZeroAnd(OneAnd(xa18))) timesa(ZeroAnd(xs19),y19) -> ZeroAnd(timesa(xs19,y19)) timesa(s(y20),z20) -> plusa(z20,timesa(y20,z20)) timesa(OneAnd(ys21),y21) -> plusa(ZeroAnd(timesa(ys21,y21)),y21) plusa(OneAnd(x222),ZeroAnd(zs22)) -> OneAnd(plusa(x222,zs22)) plusa(ZeroAnd(z23),ZeroAnd(ys23)) -> ZeroAnd(plusa(z23,ys23)))"
 
@@ -116,9 +118,12 @@ fun terminates ctxt TRS =
                          Isabelle_System.with_tmp_file
                            "aprove" "trs"
                            (fn path => (File.write path wst;
-(*                                        tracing ("$TIMEAOUT_PATH/timeout -t " ^ (string_of_int (timeOut+5)) ^ " java -Xmx512m -jar $APROVE_PATH/aprove.jar " ^ timeOut_threads ^ " -m wst " ^ (Path.implode path));*)
-(*                                        Isabelle_System.bash_output ("$TIMEAOUT_PATH/timeout -t " ^ (string_of_int (timeOut+5)) ^ " java -Xmx512m -jar $APROVE_PATH/aprove.jar " ^ timeOut_threads ^ " -m wst " ^ (Path.implode path))))*)
-                                        Isabelle_System.bash_output ("$TIMEAOUT_PATH/timeout -t " ^ (string_of_int (timeOut+5)) ^ " java -Xmx512m -jar $APROVE_PATH/aprove.jar " ^ timeOut_threads ^ " -m wst " ^ (Path.implode path) ^ " 2> /dev/null")))
+                                        if Config.get ctxt use_aprove_srv
+                                        then Isabelle_System.bash_output ("printf \"2\\n" ^
+                                                      Path.implode path ^
+                                                      "\\n" ^ string_of_int timeOut ^
+                                                      "\" | nc $APROVE_SERVER $APROVE_SERVER_PORT 2> /dev/null")
+                                        else Isabelle_System.bash_output ("$TIMEAOUT_PATH/timeout -t " ^ (string_of_int (timeOut+5)) ^ " java -Xmx512m -jar $APROVE_PATH/aprove.jar " ^ timeOut_threads ^ " -m wst " ^ (Path.implode path) ^ " 2> /dev/null")))
           val foo = String.isSubstring "YES" out
         in if foo
            then (tracing wst; true)
@@ -154,6 +159,24 @@ fun aprove_path_ok ctxt =
                          timeOut_threads ^ 
                          " -m wst " ^ 
                          (Path.implode path) ^ " 2> /dev/null")))
+      val foo = String.isSubstring "YES" out
+    in if foo
+       then true
+       else false
+    end
+
+fun aprove_server_ok ctxt =
+  let val timeOut =  Config.get ctxt DPair.max_time_in_termination
+      val (out, _) = 
+        Isabelle_System.with_tmp_file
+              "aprove" "trs"
+              (fn path =>
+                (File.write path "(VAR y0 y1 x1) (RULES f(c,y0) -> y0 f(z(x1),y1) -> z(f(x1,y1)))";
+                 Isabelle_System.bash_output
+                        ("printf \"2\\n" ^
+                         Path.implode path ^
+                         "\\n" ^ string_of_int timeOut ^
+                         "\" | nc $APROVE_SERVER $APROVE_SERVER_PORT 2> /dev/null")))
       val foo = String.isSubstring "YES" out
     in if foo
        then true

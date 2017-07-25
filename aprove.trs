@@ -1,0 +1,1 @@
+(VAR y0 y1 x1) (RULES f(c,y0) -> y0 f(z(x1),y1) -> z(f(x1,y1))) 

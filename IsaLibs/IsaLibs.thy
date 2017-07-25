@@ -82,6 +82,7 @@ DB_Random_Terms.setup_max_lambda_size #>
 DB_Proof_Tools.setup_use_metis #>
 
 DB_Aprove.setup_use_aprove #>
+DB_Aprove.setup_use_aprove_srv #>
 DB_DPair.setup_max_time_in_termination #>
 
 DB_Completion.setup_generate_cps #>
@@ -108,6 +109,7 @@ declare [[
   use_metis = false,
   quickcheck_quiet = true,
   use_aprove=true,
+  use_aprove_srv=true,
   
   generate_cps=false,
   linarith_split_limit = 10,
@@ -239,12 +241,6 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
-datatype n = c | z n
-
-fun f where
-"f c y = y"|
-"f (z x) y = z (f x y)"
-  
 datatype Bin = One | ZeroAnd (ZeroAnd_0: "Bin") | OneAnd (OneAnd_0: "Bin")
 
 fun s :: "Bin => Bin" where
@@ -305,12 +301,13 @@ ML {*
   val def_lemmas = Utils.get_definitional_rewrites thy prop
   val ctxt_nodefs = @{context} delsimps def_lemmas
   val terminates = Aprove.memoized_terminates ctxt_nodefs
-  val TRS = @{thms f.simps} |> map Utils.obj_to_meta
+(*  val TRS = @{thms f.simps} |> map Utils.obj_to_meta
   val _ = tracing (Aprove.trs_to_wst TRS)
-  val foo = Aprove.aprove_path_ok @{context}
-(*  val TRS = @{thms TRS}
+  val foo1 = Aprove.aprove_path_ok @{context}
+  val foo2 = Aprove.aprove_server_ok @{context}*)
+  val TRS = @{thms TRS}
   val e = @{thm R}
-  val result = Ground_Completion.run_completion [] ctxt_nodefs terminates TRS e*)
+  val result = Ground_Completion.run_completion [] ctxt_nodefs terminates TRS e
 *}
   
 end

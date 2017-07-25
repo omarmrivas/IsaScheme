@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE log SYSTEM "logger.dtd">
+<log>
+<record>
+  <date>2017-07-25T17:45:05</date>
+  <millis>1501022705836</millis>
+  <sequence>0</sequence>
+  <logger>aprove.Strategies.Abortions.TrackProcess</logger>
+  <level>WARNING</level>
+  <class>aprove.Strategies.Abortions.TrackProcess</class>
+  <method>checkLinuxSupport</method>
+  <thread>15</thread>
+  <message>Cannot find out cpu time on external processes, falling back to wall time!</message>
+</record>
+</log>
