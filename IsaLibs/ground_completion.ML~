@@ -299,14 +299,7 @@ val discriminate_rules_var
       = Synchronized.var "discriminate_rules"
                          (Thm_List_Tab.empty : (thm list * thm list) Thm_List_Tab.table)
 
-fun memoized_discriminate_rules ctxt terminates thms =
-  let val thms = thms |> Utils.make_theorem_set
-                      |> sort Thm.thm_ord
-  in Utils.memoize_function Thm_List_Tab.lookup Thm_List_Tab.update discriminate_rules_var
-                            (discriminate_rules ctxt terminates) thms
-  end
-
-(*fun memoized_discriminate_rules ctxt terminates (thms as th :: _) =
+fun memoized_discriminate_rules ctxt terminates (thms as th :: _) =
   let val thms = thms |> Utils.make_theorem_set
                       |> sort Thm.thm_ord
       val (eqs, rules) = Utils.memoize_function Thm_List_Tab.lookup Thm_List_Tab.update discriminate_rules_var
@@ -319,7 +312,7 @@ fun memoized_discriminate_rules ctxt terminates thms =
                                                then (eqs', th :: rules')
                                                else (eqs', rules')) (([], []), thms)
   end
-| memoized_discriminate_rules _ _ [] = ([], [])*)
+| memoized_discriminate_rules _ _ [] = ([], [])
 
 fun ordered_simpset_without_simprocs ctxt terminates thms =
     let val ctxt = empty_simpset ctxt

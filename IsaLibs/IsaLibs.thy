@@ -241,7 +241,7 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
-datatype Bin = One | ZeroAnd (ZeroAnd_0: "Bin") | OneAnd (OneAnd_0: "Bin")
+(*datatype Bin = One | ZeroAnd (ZeroAnd_0: "Bin") | OneAnd (OneAnd_0: "Bin")
 
 fun s :: "Bin => Bin" where
 "(s One) = (ZeroAnd One)"|
@@ -255,7 +255,7 @@ fun plusa :: "Bin => Bin => Bin" where
 "(plusa (ZeroAnd z) (OneAnd xs)) = (OneAnd (plusa z xs))"|
 "(plusa (OneAnd x2) One) = (s (OneAnd x2))"|
 "(plusa (OneAnd x2) (ZeroAnd zs)) = (OneAnd (plusa x2 zs))"|
-"(plusa (OneAnd x2) (OneAnd ys2)) = (ZeroAnd (s (plusa x2 ys2)))"  
+"(plusa (OneAnd x2) (OneAnd ys2)) = (ZeroAnd (s (plusa x2 ys2)))"
 
 fun timesa :: "Bin => Bin => Bin" where
 "(timesa One y) = y"|
@@ -313,6 +313,9 @@ ML {*
                           |> #elapsed
                           |> Time.toReal
       val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
-*}
+(* Aprove server call val elapsed = 786.469063: real *)
+(* Aprove java call val elapsed = 980.483295: real *)
+(* Momoizing ground joinability tests val elapsed = 764.239419: real *)
+*}*)
   
 end

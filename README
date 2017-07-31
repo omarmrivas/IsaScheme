@@ -57,3 +57,6 @@ isabelle build -d /Users/omarmrivas/Programs/IsaLibs/IsaLibs -b IsaLibs
 
 ./isabelle_build experiments/inductive_proofs3/nat_acc_plus_same.thy IsaLibs ../../../IsaLibs/IsaLibs
 
+- start AProVE server
+
+java -ea jar aprove.jar -u srv
