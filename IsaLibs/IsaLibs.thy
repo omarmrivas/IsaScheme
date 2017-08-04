@@ -36,6 +36,7 @@ ML_file "prover.ML"
 ML_file "ground_completion.ML"
 ML_file "induct_tacs4.ML"
 ML_file "proof_tools.ML"
+ML_file "divergence.ML"
 ML_file "induct_tacs.ML"
 ML_file "commands.ML"
 ML_file "meta_gp_hol.ML"
@@ -131,8 +132,8 @@ definition associativity where
 definition commutativity where
   [prop_scheme]: "commutativity R \<equiv> \<forall>x y. R x y = R y x"
 
-definition sssociativity_commutativity where
-  [prop_scheme]: "sssociativity_commutativity R \<equiv> \<forall>x y z. R x (R y z) = R y (R x z)"
+definition associativity_commutativity where
+  [prop_scheme]: "associativity_commutativity R \<equiv> \<forall>x y z. R x (R y z) = R y (R x z)"
 
 definition left_identity where
   [prop_scheme]: "left_identity R e \<equiv> \<forall>x. R e x = x"

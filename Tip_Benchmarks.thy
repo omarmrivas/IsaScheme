@@ -3,8 +3,8 @@ imports IsaLibs
 begin
   
 ML {*
-  val smt2_dir = "/Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks"
-  val destiny = "experiments/inductive_proofs2"
+  val smt2_dir = "/Users/omarmrivas/Programs/benchmarks"
+  val destiny = "experiments/inductive_proofs"
   val smt2_files = smt2_dir |> SMT_Converter.get_smt2_files destiny
                             |> filter (fn "" => false
                                       | _ => true)
@@ -13,11 +13,12 @@ ML {*
 (*  val smt2_files = ["/Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks/tip2015/sort_BubSortIsSort.smt2"]*)
   val names = SMT_Converter.smt2bash_to_isabelle @{context} destiny "IsaLibs" "../../IsaLibs" "by inductive_prover" smt2_files
 *}
-
+  
 ML {*.
-  val res = Par_List.map (fn (smt2, (foo, thy)) => 
+  val res = map (fn (smt2, (foo, thy)) => 
         if not foo then NONE
         else let val thy_file = destiny ^ "/" ^ thy ^ ".thy"
+                 val _ = tracing ("Processing " ^ thy_file)
                  val command = " ./isabelle_build " ^ thy_file ^ " IsaLibs ../../../IsaLibs/IsaLibs 2>&1"
                  val (output, _) = Isabelle_System.bash_output command
              in SOME (smt2, (output, thy)) end) names

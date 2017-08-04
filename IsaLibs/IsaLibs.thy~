@@ -255,7 +255,7 @@ fun plusa :: "Bin => Bin => Bin" where
 "(plusa (ZeroAnd z) (OneAnd xs)) = (OneAnd (plusa z xs))"|
 "(plusa (OneAnd x2) One) = (s (OneAnd x2))"|
 "(plusa (OneAnd x2) (ZeroAnd zs)) = (OneAnd (plusa x2 zs))"|
-"(plusa (OneAnd x2) (OneAnd ys2)) = (ZeroAnd (s (plusa x2 ys2)))"  
+"(plusa (OneAnd x2) (OneAnd ys2)) = (ZeroAnd (s (plusa x2 ys2)))"
 
 fun timesa :: "Bin => Bin => Bin" where
 "(timesa One y) = y"|
