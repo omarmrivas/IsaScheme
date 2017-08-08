@@ -586,9 +586,9 @@ fun obj_to_meta thm = Conv.fconv_rule (Conv.concl_conv (Thm.nprems_of thm) (Conv
                       handle CTERM _ => thm
 
 val my_eq_commute = obj_to_meta @{thm "HOL.eq_commute"}
-val commute_obj_eq = Conv.fconv_rule (Conv.arg_conv (Conv.rewr_conv my_eq_commute))
+fun commute_obj_eq thm = Conv.fconv_rule (Conv.concl_conv (Thm.nprems_of thm) (Conv.arg_conv (Conv.rewr_conv my_eq_commute))) thm
 fun commute_meta_eq th = th |> meta_to_obj
-                            |> Conv.fconv_rule (Conv.arg_conv (Conv.rewr_conv my_eq_commute))
+                            |> Conv.fconv_rule (Conv.concl_conv (Thm.nprems_of th) (Conv.arg_conv (Conv.rewr_conv my_eq_commute)))
                             |> obj_to_meta
 
 (* obtains the left and right hand sides of a meta-equation *)
