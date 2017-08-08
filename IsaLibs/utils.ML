@@ -579,12 +579,11 @@ val mi_meta_eq_to_obj_eq = @{lemma "(x == y) ==> (x=y)"
 val m_to_o_thm = Thm.equal_intr mi_meta_eq_to_obj_eq my_eq_reflection
 val o_to_m_thm = Thm.equal_intr my_eq_reflection mi_meta_eq_to_obj_eq
 
-fun meta_to_obj thm = Conv.fconv_rule (Conv.rewr_conv m_to_o_thm) thm
+fun meta_to_obj thm = Conv.fconv_rule (Conv.concl_conv (Thm.nprems_of thm) (Conv.rewr_conv m_to_o_thm)) thm
                       handle CTERM _ => thm
 
-fun obj_to_meta thm = Conv.fconv_rule (Conv.rewr_conv o_to_m_thm) thm
+fun obj_to_meta thm = Conv.fconv_rule (Conv.concl_conv (Thm.nprems_of thm) (Conv.rewr_conv o_to_m_thm)) thm
                       handle CTERM _ => thm
-
 
 val my_eq_commute = obj_to_meta @{thm "HOL.eq_commute"}
 val commute_obj_eq = Conv.fconv_rule (Conv.arg_conv (Conv.rewr_conv my_eq_commute))

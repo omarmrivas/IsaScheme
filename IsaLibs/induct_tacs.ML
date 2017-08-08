@@ -347,12 +347,18 @@ val _ = Context.>> (Context.map_theory method_setup_breadth_first)
 
 datatype result = Theorem of thm | Failure of term list
 
+(*datatype rtype =
+  Equation
+  | Rule
+  | Conditional
+  | Other
+
 datatype conjecture_type =
   Main of term (* Main goal *)
   | Equation of string * term (* An equation *)
   | Rule of string * term (* A rule *)
   | ConditionalEquation of string * term (* A conditional equation *)
-  | ConditionalRule of string * term (* A conditional rule *)
+  | ConditionalRule of string * term (* A conditional rule *)*)
 
 type conjecture_store =
   {laws : (string * term) Seq.seq,

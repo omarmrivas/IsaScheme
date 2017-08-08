@@ -390,6 +390,10 @@ fun equational_theory_exploration ctxt (table, typsub) size n lambda_size simps 
       val target = hd target_typs
       val typ = typ_args ---> target
       val args = map Const consts @ map Free frees
+      val _ = args |> map (Syntax.string_of_term ctxt)
+                   |> commas
+                   |> enclose "<" ">"
+                   |> tracing
       val lambdas = Random_Terms.lazy_all_lambda_terms typ (lambda_size + length typ_args)
       val terms = lambdas |> Seq.map (fn t => betapplys (t, args))
                           |> Seq.list_of

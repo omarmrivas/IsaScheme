@@ -34,6 +34,7 @@ ML_file "enumerated_terms.ML"
 ML_file "aprove.ML"
 ML_file "prover.ML"
 ML_file "ground_completion.ML"
+ML_file "conditional_completion.ML"
 ML_file "induct_tacs4.ML"
 ML_file "proof_tools.ML"
 ML_file "divergence.ML"
@@ -318,5 +319,19 @@ ML {*
 (* Aprove java call val elapsed = 980.483295: real *)
 (* Momoizing ground joinability tests val elapsed = 764.239419: real *)
 *}*)
+  
+lemma test: "A\<Longrightarrow>B\<Longrightarrow>C=D"
+  sorry
+
+lemma test2: "C=D"
+  sorry
+    
+ML {*
+  fun ttt thm = Conv.concl_conv (Thm.nprems_of thm)
+  fun obj_to_meta thm = Conv.fconv_rule (Conv.concl_conv (Thm.nprems_of thm) (Conv.rewr_conv DB_Utils.o_to_m_thm)) thm
+                      handle CTERM _ => thm
+  val thm = @{thm test2}
+  val thm' = obj_to_meta thm
+*}
   
 end

@@ -8,115 +8,16 @@ and Leo Bachmair, Nachum Dershowwitz and David A. Plaisted's "Completion without
 Completion Algorithm for Isabelle.
 *)
 
-signature COMPLETION =
+signature CONDITIONAL_COMPLETION =
 sig
-  exception ORIENTATION of string * thm
 
-  val max_time_in_completion        : int Config.T
 
-  val generate_cps                  : bool Config.T
 
-  val unify_inst                    : Proof.context -> Envir.env -> 
-                                      ((indexname * sort) * ctyp) list * ((indexname * typ) * cterm) list
-
-  val discriminate_rules            : Proof.context -> (thm list -> bool) -> 
-                                      thm list -> thm list * thm list
-  val scpairs                       : theory -> (thm * thm) -> thm list
-  val semi_critical_pairs           : theory -> order -> thm list -> thm list -> thm list
-  val memoized_joinable'            : Proof.context -> (thm list -> bool) -> (term * int) list -> 
-                                      thm list -> term -> bool
-  val memoized_joinable             : Proof.context -> (thm list -> bool) -> (term * int) list -> 
-                                      thm list -> thm -> bool
-
-  val run_completion                : thm list -> Proof.context -> (thm list -> bool) ->
-                                      thm list -> thm -> thm list
-  val run_completion'               : thm list -> Proof.context -> (thm list -> bool) ->
-                                      thm list -> thm -> thm list * thm list
-  val ac_termination                : Proof.context -> thm list * thm list -> thm -> bool
-  val ac_termination_obj            : Proof.context -> thm list -> thm -> bool
-(*  val perform_unfailing_completion  : Attrib.binding -> Method.text -> thm list -> thm -> (thm list * thm list) option
-  val get_any_ordering              : Attrib.binding -> Method.text -> thm list -> thm -> (thm list * thm list) option*)
 end
 
-structure DB_Completion
-(* : COMPLETION *)
+structure DB_Conditional_Completion
+(* : CONDITIONAL_COMPLETION *)
 = struct
-
-(* Error generated when an ordering cannot orient an equation *)
-(* during completion.                                         *)
-
-exception ORIENTATION of string * thm
-exception RESTART_COMPLETION of string * thm list
-
-val (max_time_in_completion, setup_max_time_in_completion) = Attrib.config_int @{binding "max_time_in_completion"} (K 180)
-val (generate_cps, setup_generate_cps) = Attrib.config_bool @{binding "generate_cps"} (K true)
-
-(*fun ord_to_str l = 
-    l |> map (fn (Const (n,_),i) => n ^ string_of_int i
-               | (Var ((n,idx),_),i) => n ^ string_of_int idx ^ string_of_int i
-               | _ => "")
-      |> space_implode ""*)
-
-(*(* Power set of a set. Sets are implemented as lists *)
-fun subsets s =
-    let 
-      val s' = map (fn e => [[],[e]]) s
-      fun subsets_ t l = 
-          case l of
-            (h::[]) :: [] => [t @ h]
-          | (h::t1) :: [] => (t @ h) :: subsets_ t [t1]
-          | (h::t1) :: t2 => ((subsets_ (t @ h) t2) @
-                              (subsets_ t (t1 :: t2)))
-          | _ => []
-    in subsets_ [] s' end*)
-
-(* instantiation utilities *)
-fun prep_trm thy env (x, (T, _)) =
-    ((x, Envir.norm_type (Envir.type_env env) T), Thm.cterm_of thy (Envir.norm_term env (Var (x, T))))
-
-fun prep_ty thy env (x, (S, _)) =
-      ((x, S), Thm.ctyp_of thy (Envir.norm_type (Envir.type_env env) (TVar (x, S))))
-
-fun unify_inst ctxt env = 
-    let
-      val ctenv = env |> Envir.term_env
-                      |> Vartab.dest
-                      |> map (prep_trm ctxt env)
-      val ctyenv = env |> Envir.type_env
-                       |> Vartab.dest
-                       |> map (prep_ty ctxt env)
-    in
-      (ctyenv,ctenv)
-    end
-
-(* left-linear equations are preferred when any orientation is terminating *)
-fun is_linear thm =
-    let val (_, args) = (strip_comb o fst o Logic.dest_equals o Thm.plain_prop_of) thm
-    in not (has_duplicates (op =) ((fold o fold_aterms)
-                                     (fn Var (v, _) => cons v | _ => I) args [])) end
-
-(* gives a left-linear orientation if possible *)
-fun linear_if_possible R = if is_linear R then R else Utils.commute_meta_eq R
-
-val my_abs_conv = fn ctxt => fn conv => Conv.abs_conv (fn _ => conv) ctxt
-
-fun varify_global ctxt thm =
-    let
-      val frees = [] |> Term.add_frees (Thm.full_prop_of thm) |> map fst
-    in [thm] |> Variable.export (snd (Variable.add_fixes frees ctxt)) ctxt
-             |> hd end
-
-fun rewrite_rule_extra_vars prems elhs erhs =
-  let
-    val elhss = elhs :: prems
-    val tvars = fold Term.add_tvars elhss []
-    val vars = fold Term.add_vars elhss []
-  in
-    erhs |> Term.exists_type (Term.exists_subtype
-      (fn TVar v => not (member (op =) tvars v) | _ => false)) orelse
-    erhs |> Term.exists_subterm
-      (fn Var v => not (member (op =) vars v) | _ => false)
-  end
 
 (* Semi-Critical pairs of th1 and th2 *)
 fun scpairs thy (th1, th2) =
@@ -131,8 +32,8 @@ fun scpairs thy (th1, th2) =
       val maxidx_typ = Term.maxidx_typ paty 0
       val valid_rewrites = Pattern.pattern pat andalso Pattern.pattern obj (* Higher-order patterns *)
                            andalso not (is_Var pat) andalso not (is_Var obj) (* Not a var on lhs *)
-                           andalso not (rewrite_rule_extra_vars [] pat rhs1)
-                           andalso not (rewrite_rule_extra_vars [] obj rhs2) (* does not introduce new Vars or TVars *)
+                           andalso not (Ground_Completion.rewrite_rule_extra_vars [] pat rhs1)
+                           andalso not (Ground_Completion.rewrite_rule_extra_vars [] obj rhs2) (* does not introduce new Vars or TVars *)
       (* Does pat match a subterm of obj? *)
       fun msub bounds frees obj f =
           (case obj of
@@ -146,7 +47,7 @@ fun scpairs thy (th1, th2) =
              in Seq.append (Seq.map (pair f) unifier)
                            (msub (bounds + 1) (new_free :: frees)
                                  new_abs
-                                 (f o (my_abs_conv ctxt))) end
+                                 (f o (Ground_Completion.my_abs_conv ctxt))) end
            | t $ u => (case (fst o Term.strip_comb) obj of
                          (* According to Nipkow's definition of critical pairs, the head must not be a variable *)
                          Var _ =>  Seq.append (msub bounds frees t (f o Conv.fun_conv)) (msub bounds frees u (f o Conv.arg_conv))
@@ -161,9 +62,9 @@ fun scpairs thy (th1, th2) =
     in if valid_rewrites then
          msub 0 [] obj I
               |> Seq.list_of
-              |> map_filter (fn (conv,(env,_)) => SOME (conv,unify_inst ctxt env))
+              |> map_filter (fn (conv,(env,_)) => SOME (conv, Ground_Completion.unify_inst ctxt env))
               |> map (fn (conv,inst) => (conv,apply2 (Drule.instantiate_normalize inst) (th1,th2')))
-              |> map (fn (conv,(r1,r2)) => Conv.fconv_rule ((Conv.fun_conv o Conv.arg_conv o conv) (Conv.rewr_conv (varify_global ctxt r1))) r2)
+              |> map (fn (conv,(r1,r2)) => Conv.fconv_rule ((Conv.fun_conv o Conv.arg_conv o conv) (Conv.rewr_conv (Ground_Completion.varify_global ctxt r1))) r2)
               |> filter_out (fn th => EQUAL = (Term_Ord.term_ord o Utils.dest_equation) th)
        else []
     end
@@ -485,7 +386,7 @@ fun orient ctxt global_meta_rws ord terminates f_map =
             let
               val thy = Thm.theory_of_thm th
               (*val _ = tracing ("Before simplification: " ^ Syntax.string_of_term_global thy (Thm.full_prop_of th))*)
-              val th' = rewrite_rule ctxt terminates (S @ R) (linear_if_possible th)
+              val th' = rewrite_rule ctxt terminates (S @ R) (Ground_Completion.linear_if_possible th)
               (*val _ = tracing ("Antes: " ^ str_of_thms_raw [th'])*)
               val th' = th' |> Utils.meta_to_obj
 (*                            |> Raw_Simplifier.rewrite_rule ctxt global_meta_rws*)
@@ -570,7 +471,7 @@ fun run_completion global_meta_rws ctxt terminates E e =
       val ctxt = if can Local_Theory.target_of ctxt
                  then Local_Theory.target_of ctxt
                  else ctxt
-      val generate_cps = Config.get ctxt generate_cps
+      val generate_cps = Config.get ctxt Ground_Completion.generate_cps
       val _ = tracing ("Completing: " ^ Utils.str_of_thms E)
       val _ = tracing ("with: " ^ Utils.str_of_thms [e])
       val deps = Utils.definitional_dependencies thy ([], Thm.full_prop_of e)
@@ -595,4 +496,4 @@ fun run_completion' global_meta_rws ctxt terminates E e =
 
 end
 
-structure Ground_Completion : COMPLETION = DB_Completion
+structure Conditional_Completion : CONDITIONAL_COMPLETION = DB_Conditional_Completion
