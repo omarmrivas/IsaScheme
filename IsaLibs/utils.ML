@@ -91,7 +91,7 @@ sig
   val obj_to_meta                      : thm -> thm
   val commute_obj_eq                   : thm -> thm
   val commute_meta_eq                  : thm -> thm
-  val dest_equation                    : thm -> (term * term)
+  val dest_meta_equation               : thm -> (term * term)
   val dest_object_equation             : thm -> (term * term)
   val rule_int_ord                     : thm -> int list
   
@@ -592,13 +592,19 @@ fun commute_meta_eq th = th |> meta_to_obj
                             |> obj_to_meta
 
 (* obtains the left and right hand sides of a meta-equation *)
-fun dest_equation thm = 
+fun dest_meta_equation thm = 
     thm |> Thm.cprop_of
         |> Drule.strip_imp_concl
         |> Thm.term_of
         |> Logic.dest_equals
 
-val permutative_rule = permutative_eq o dest_equation
+val permutative_rule = permutative_eq o dest_meta_equation
+
+(*fun dest_equation thm = 
+    thm |> Thm.cprop_of
+        |> Drule.strip_imp_concl
+        |> Thm.term_of
+        |> HOLogic.dest_eq o HOLogic.dest_Trueprop*)
 
 fun dest_object_equation thm = 
     thm |> Thm.full_prop_of
@@ -1227,7 +1233,7 @@ fun variable_differences_raw (l, r) =
                           |> Library.foldl (fn (var_map, vp) => variable_vector var_map r vp)
     in difference_vectors vec_l vec_r end
 
-val variable_differences = variable_differences_raw o dest_equation
+val variable_differences = variable_differences_raw o dest_meta_equation
 
 fun order_ints_raw t =
     let val n_vars = length (Term.add_vars t [])

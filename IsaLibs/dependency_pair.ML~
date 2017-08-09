@@ -761,7 +761,7 @@ fun terminates ctxt TRS =
   let val timeOut = Config.get ctxt max_time_in_termination
   in Timeout.apply (Time.fromSeconds timeOut) (terminates' ctxt) TRS
         handle Timeout.TIMEOUT _ => false
-             | Complexity consts => (tracing ("Consts: " ^ Utils.str_of_terms ctxt consts);
+             | Complexity consts => ((*tracing ("Consts: " ^ Utils.str_of_terms ctxt consts);*)
                                      (*tracing ("TRS: " ^ Utils.str_of_thms TRS);*)
                                      false)
   end

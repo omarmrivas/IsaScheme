@@ -19,6 +19,11 @@ sig
   val unify_inst                    : Proof.context -> Envir.env -> 
                                       ((indexname * sort) * ctyp) list * ((indexname * typ) * cterm) list
 
+  val linear_if_possible            :  thm -> thm
+  val varify_global                 :  Proof.context -> thm -> thm
+  val my_abs_conv                   :  Proof.context -> conv -> conv
+  val rewrite_rule_extra_vars       :  term list -> term -> term -> bool
+
   val discriminate_rules            : Proof.context -> (thm list -> bool) -> 
                                       thm list -> thm list * thm list
   val scpairs                       : theory -> (thm * thm) -> thm list

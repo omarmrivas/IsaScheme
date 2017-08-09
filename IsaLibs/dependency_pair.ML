@@ -43,7 +43,7 @@ fun rename_top suffix t =
 
 fun dependency_pairs TRS = 
     let
-      val sides = TRS |> map Utils.dest_equation
+      val sides = TRS |> map Utils.dest_meta_equation
       val defined = sides |> map (Term.head_of o fst)
       fun pairs (l,r) = fold_subterms (fn t => fn ps => 
                                                   let
@@ -101,7 +101,7 @@ fun afs thy (Const (name, typ)) =
 
 fun argument_filtering thy TRS = 
     let
-      val consts = TRS |> map Utils.dest_equation
+      val consts = TRS |> map Utils.dest_meta_equation
                        |> pair []
                        |> Library.foldl (fn (cs, (c1, c2)) =>
                                             cs |> Term.add_consts c1
@@ -179,7 +179,7 @@ fun subterms (Abs (x, T, s)) = distinct (is_equal o (fn tms => if Term.aconv tms
 fun eta_long u = the_default u (try (fn u => (*Pattern.eta_long*)Envir.eta_long (snd (dest_Type (type_of u))) u) u)
 
 fun plain_function_passing ctxt R =
-    let val (l, r) = Utils.dest_equation R
+    let val (l, r) = Utils.dest_meta_equation R
         (*val _ = tracing ("l = " ^ Syntax.string_of_term ctxt l)
         val _ = tracing ("r = " ^ Syntax.string_of_term ctxt r)*)
         val safe_l = l |> safe
@@ -227,7 +227,7 @@ fun prints ctxt prefix ts =
        |> (fn txt => tracing (prefix ^ txt))
 
 fun static_dependency_pairs DefinedSymbols R =
-    let val (l, r) = Utils.dest_equation R
+    let val (l, r) = Utils.dest_meta_equation R
         val cand_terms = candidate_terms r
         val safe_l = l |> safe
 (*                       |> TSet.fromList*)
@@ -577,8 +577,8 @@ fun usable_rules TRS D mp t =
                         |> filter (fn s => STRSet.defined D s)
     in ([], TRS)
          |> Library.foldl (fn (rules, rule) =>
-                              if (is_Const o head_of o fst o Utils.dest_equation) rule then
-                                let val top_l = (fst o dest_Const o head_of o fst o Utils.dest_equation) rule handle TERM msg => (tracing "610"; raise TERM msg)
+                              if (is_Const o head_of o fst o Utils.dest_meta_equation) rule then
+                                let val top_l = (fst o dest_Const o head_of o fst o Utils.dest_meta_equation) rule handle TERM msg => (tracing "610"; raise TERM msg)
                                 in if exists (fn f => definitional_order (STRSet.make_set [f]) mp f top_l) consts
                                    then rule :: rules
                                    else rules end
@@ -601,7 +601,7 @@ fun critic_function_symbols thy TRS D mp component =
                                  |> filter_out (fn (cname, _) => "==" = cname)
                                  |> map Const
         val usable = usable_rules_component thy TRS D mp component
-        val consts_invalid_rules = usable |> maps ((fn (l,r) => [l,r]) o Utils.dest_equation)
+        val consts_invalid_rules = usable |> maps ((fn (l,r) => [l,r]) o Utils.dest_meta_equation)
                                           |> pair []
                                           |> Library.foldl (fn (consts, t) => Term.add_consts t consts)
                                           |> distinct (fn ((n,_),(m,_)) => n = m)
@@ -662,7 +662,7 @@ fun extract_compatible_orders pi component =
 (*    in (consts, compatible_orders consts_orders) end*)
 
 fun construct_definitional_order TRS =
-    let val trs = map Utils.dest_equation TRS
+    let val trs = map Utils.dest_meta_equation TRS
     in
       (PIMap.empty, trs)
         |> Library.foldl (fn (mp, (l, r)) =>
@@ -706,7 +706,7 @@ fun find_ord pi component TRS =
   end
 
 fun non_terminating_subterm th =
-    let val (lhs, rhs) = Utils.dest_equation th
+    let val (lhs, rhs) = Utils.dest_meta_equation th
     in Term.exists_subterm (fn t => (is_equal o Term_Ord.term_ord) (t, lhs)) rhs end
 
 fun terminates' ctxt TRS =
@@ -718,7 +718,7 @@ fun terminates' ctxt TRS =
       else if not (plain_function_passing_hrs ctxt TRS) then (tracing ("Not plain function passing: " ^ Utils.str_of_thms TRS); false)
       else
         let
-          val D = TRS |> map (head_of o fst o Utils.dest_equation)
+          val D = TRS |> map (head_of o fst o Utils.dest_meta_equation)
                       |> filter is_Const
                       |> distinct (fn (Const (n,_),Const (m,_)) => n = m | _ => raise ERROR "terminates")
           val components = TRS |> maps (static_dependency_pairs D)

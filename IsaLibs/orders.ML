@@ -106,12 +106,12 @@ fun lpo_g f_ord (s, t) =
 
 fun extract_compatible_orders_rpo lpo th =
     let
-      val (s,t) = Utils.dest_equation th
+      val (s,t) = Utils.dest_meta_equation th
 (*      val _ = tracing ("Computing orders: " ^ Syntax.string_of_term_global (Thm.theory_of_thm th) (Thm.full_prop_of th))*)
       val consts = [] |> Term.add_consts s
                       |> Term.add_consts t
                       |> distinct (fn ((n,_),(m,_)) => n = m)
-                      |> filter_out (fn (cname, _) => "==" = cname)
+                      |> filter_out (fn (cname, _) => Const_Names.meta_eq = cname)
                       |> map Const
       val _ = if length consts > 5
               then tracing ("extract_compatible_orders_rpo Consts: " ^ (string_of_int (length consts)))

@@ -29,7 +29,7 @@ val test_trs = "(VAR xs1 ys2 y3 y4 x5 x6 xa7 y8 y9 y10 x10 xs11 y11 xa12 x12 y13
 
 fun thm_to_wst (s,t) =
     let
-      (*val (s,t) = dest_equation thm*)
+      (*val (s,t) = dest_meta_equation thm*)
       fun to_wst (t $ u) = 
           (*"app(" ^ (to_wst t) ^ "," ^ (to_wst u) ^ ")"*)
           let val (head, args) = strip_comb (t $ u)
@@ -85,14 +85,14 @@ fun trs_to_wst TRS =
                      |> (fn vs => "(VAR " ^ vs ^ ")")
       val eqs_ref = Unsynchronized.ref []
       val consts_ref = Unsynchronized.ref []
-      val rules = trs |> map (thm_to_wst o (apply2 (eliminate_lambdas eqs_ref consts_ref)) o Utils.dest_equation)
+      val rules = trs |> map (thm_to_wst o (apply2 (eliminate_lambdas eqs_ref consts_ref)) o Utils.dest_meta_equation)
                       |> (fn eqs => map thm_to_wst (!eqs_ref) @ eqs)
                       |> space_implode " "
                       |> (fn rs => "(RULES " ^ rs ^ ")")
     in vars ^ " " ^ rules end
 
 fun non_terminating_subterm th =
-    let val (lhs, rhs) = Utils.dest_equation th
+    let val (lhs, rhs) = Utils.dest_meta_equation th
     in Term.exists_subterm (fn t => (is_equal o Term_Ord.term_ord) (t, lhs)) rhs end
 
 fun terminates ctxt TRS =

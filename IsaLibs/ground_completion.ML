@@ -129,9 +129,9 @@ fun scpairs thy (th1, th2) =
 (*      val _ = tracing ("th1: " ^ Syntax.string_of_term_global thy (Thm.full_prop_of th1))
       val _ = tracing ("th2: " ^ Syntax.string_of_term_global thy (Thm.full_prop_of th2))*)
       val ctxt = Context.proof_of (Context.Theory thy)
-      val (pat, rhs1) = Utils.dest_equation th1
+      val (pat, rhs1) = Utils.dest_meta_equation th1
       val th2' = Drule.incr_indexes th1 th2
-      val (obj, rhs2) = Utils.dest_equation th2'
+      val (obj, rhs2) = Utils.dest_meta_equation th2'
       val paty = type_of pat
       val maxidx_typ = Term.maxidx_typ paty 0
       val valid_rewrites = Pattern.pattern pat andalso Pattern.pattern obj (* Higher-order patterns *)
@@ -169,7 +169,7 @@ fun scpairs thy (th1, th2) =
               |> map_filter (fn (conv,(env,_)) => SOME (conv,unify_inst ctxt env))
               |> map (fn (conv,inst) => (conv,apply2 (Drule.instantiate_normalize inst) (th1,th2')))
               |> map (fn (conv,(r1,r2)) => Conv.fconv_rule ((Conv.fun_conv o Conv.arg_conv o conv) (Conv.rewr_conv (varify_global ctxt r1))) r2)
-              |> filter_out (fn th => EQUAL = (Term_Ord.term_ord o Utils.dest_equation) th)
+              |> filter_out (fn th => EQUAL = (Term_Ord.term_ord o Utils.dest_meta_equation) th)
        else []
     end
 
@@ -259,7 +259,7 @@ fun discriminate_rules ctxt terminates thms =
   let val thy = Proof_Context.theory_of ctxt
       val schemes = Utils.get_orientation_schemes ()
       fun orient_scheme equation =
-        let val eq =  (HOLogic.mk_eq o Utils.dest_equation) equation
+        let val eq =  (HOLogic.mk_eq o Utils.dest_meta_equation) equation
             val eq' = (HOLogic.mk_eq o swap o HOLogic.dest_eq) eq
         in case get_first (fn scheme => 
               if Pattern.matchess thy ([scheme], [eq])
@@ -391,7 +391,7 @@ fun ground_joinable ctxt terminates f_map (e, E) =
                                                 |> (fn ctxt => ctxt addsimps (equations @ rules))
                             in
                             e |> simplify ctxt
-                              |> Utils.dest_equation
+                              |> Utils.dest_meta_equation
                               |> (op =)
 (*                              |> (is_equal o g_ord)*)
                             end)) f_map
@@ -439,9 +439,9 @@ fun add_rule ctxt terminates (th,E,S,R) =
       fun simpl ([],E',R') = (E',R')
         | simpl (u :: U,E',U') = 
           let
-            val (g,_) = Utils.dest_equation u
+            val (g,_) = Utils.dest_meta_equation u
             val u' = normalize_part ctxt terminates (Conv.fun_conv o Conv.arg_conv) [th] u
-            val (g',_) = Utils.dest_equation u'
+            val (g',_) = Utils.dest_meta_equation u'
           in
             if EQUAL = Term_Ord.term_ord (g,g') then
               let val u'' = normalize_part ctxt terminates Conv.arg_conv (th :: R @ S) u
@@ -507,7 +507,7 @@ fun orient ctxt global_meta_rws ord terminates f_map =
                             tracing ("From: " ^ Utils.str_of_thms (S @ R)))
                       else ()*)
               fun restart () = NONE
-              val (s,t) = Utils.dest_equation th'
+              val (s,t) = Utils.dest_meta_equation th'
               val comm_th' = Utils.commute_meta_eq th'
             in
               case restart () of
