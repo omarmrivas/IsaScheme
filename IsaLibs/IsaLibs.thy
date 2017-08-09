@@ -320,41 +320,34 @@ ML {*
 (* Momoizing ground joinability tests val elapsed = 764.239419: real *)
 *}*)
   
-function gcd where
+(*function gcd where
   "gcd x 0 = x"|
   "gcd 0 y = y"|
   "x<y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (Suc x) (y-x)"|
   "\<not> x < y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (x-y) (Suc y)"
   by (atomize_elim, auto, arith)
 termination by lexicographic_order
-
+    
 ML {*
+  val start = Timing.start ()
+  val _ = DB_Completion.completion_debug := false
   val thy = @{theory}
-  val ctxt = @{context}
-  val TRS = @{thms gcd.simps} |> map Utils.obj_to_meta
-  val terminates1 = DPair.terminates ctxt TRS
-  val terminates2 = Aprove.terminates ctxt TRS
-*}
-  
-lemma r1: "x\<ge>0 \<Longrightarrow> 0+x \<equiv> (x::nat)"
-  by simp
-  
-lemma r2: "x \<ge> 0 \<Longrightarrow> x+y \<equiv> y+(x::nat)"
-  by (induction x, auto)
-    
-lemma r2': "x \<ge> 0 \<Longrightarrow> x+y = y+(x::nat)"
-  by (induction x, auto)
-(*
-  val RSN: thm * (int * thm) -> thm
-  val RS: thm * thm -> thm
-  val RLN: thm list * (int * thm list) -> thm list
-  val RL: thm list * thm list -> thm list
-  val MRS: thm list * thm -> thm
-  val OF: thm * thm list -> thm
-  val COMP: thm * thm -> thm
-  val INCR_COMP: thm * thm -> thm
-  val COMP_INCR: thm * thm -> thm
-*)
-    
+  val prop = @{prop "gcd x y = gcd x y"}
+  val def_lemmas = Utils.get_definitional_rewrites thy prop
+  val ctxt_nodefs = @{context} delsimps def_lemmas
+  val terminates = Aprove.memoized_terminates ctxt_nodefs
+(*  val TRS = @{thms f.simps} |> map Utils.obj_to_meta
+  val _ = tracing (Aprove.trs_to_wst TRS)
+  val foo1 = Aprove.aprove_path_ok @{context}
+  val foo2 = Aprove.aprove_server_ok @{context}*)
+  val TRS = [@{thm gcd.simps(1)}, @{thm gcd.simps(2)}, @{thm gcd.simps(3)}] |> map Utils.obj_to_meta
+  val e = Utils.obj_to_meta @{thm gcd.simps(4)}
+  val e' = @{thm sorted_sort}
+  val result = DB_Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS e'
+      val elapsed = start |> Timing.result
+                          |> #elapsed
+                          |> Time.toReal
+      val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
+*}*)
  
 end

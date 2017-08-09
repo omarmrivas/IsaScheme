@@ -10,8 +10,12 @@ Completion Algorithm for Isabelle.
 
 signature CONDITIONAL_COMPLETION =
 sig
-
-
+  val run_completion                : thm list -> Proof.context -> (thm list -> bool) ->
+                                      thm list -> thm -> thm list
+  val run_completion'               : thm list -> Proof.context -> (thm list -> bool) ->
+                                      thm list -> thm -> thm list * thm list
+  
+  val modify   : thm -> thm
 
 end
 
@@ -239,16 +243,16 @@ fun memoized_discriminate_rules ctxt terminates thms =
 | memoized_discriminate_rules _ _ [] = ([], [])*)
 
 fun ordered_simpset_without_simprocs ctxt terminates thms =
-    let val ctxt = empty_simpset ctxt
+    let val ctxt = clear_simpset ctxt
         val (_,rules) = memoized_discriminate_rules ctxt terminates thms
     in ctxt addsimps rules
     end
 
-fun ordered_simpset ctxt terminates thms =
-    let val ctxt = empty_simpset ctxt
+(*fun ordered_simpset ctxt terminates thms =
+    let val ctxt = clear_simpset ctxt
         val (equations, rules) = memoized_discriminate_rules ctxt terminates thms
     in ctxt addsimps (equations @ rules)
-    end
+    end*)
 
 fun rewrite_rule ctxt terminates thms =
   let val ctxt = ordered_simpset_without_simprocs ctxt terminates thms
@@ -275,7 +279,7 @@ fun print_orders ctxt orders = ([], orders)
 fun ground_joinable ctxt terminates f_map (e, E) = 
   let (*val s_t = Thm.full_prop_of e
       val thy = Thm.theory_of_thm e*)
-      val ctxt = empty_simpset ctxt
+      val ctxt = clear_simpset ctxt
       val (equations, rules) = memoized_discriminate_rules ctxt terminates E
 (*      val _ = tracing ("E: " ^ Utils.str_of_thms E)
       val _ = tracing ("Equations: " ^ Utils.str_of_thms equations)
@@ -404,10 +408,10 @@ fun orient ctxt global_meta_rws ord terminates f_map =
               (*val _ = tracing ("Before simplification: " ^ Syntax.string_of_term_global thy (Thm.full_prop_of th))*)
               val th' = rewrite_rule ctxt terminates (S @ R) (Ground_Completion.linear_if_possible th)
               (*val _ = tracing ("Antes: " ^ str_of_thms_raw [th'])*)
-              val th' = th' |> Utils.meta_to_obj
+              val th' = th' (*|> Utils.meta_to_obj*)
 (*                            |> Raw_Simplifier.rewrite_rule ctxt global_meta_rws*)
-                            |> Utils.orient_rule thy ord
-                            |> Utils.obj_to_meta
+                            |> Utils.orient_meta_rule thy ord
+(*                            |> Utils.obj_to_meta*)
                             |> (fn th => if Thm.equiv_thm thy (@{thm "TrueI"},th)
                                          then Utils.obj_to_meta @{thm "refl"}
                                          else th)
@@ -482,8 +486,30 @@ fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
                 |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms TRS))
     end
 
+val rule_false = @{lemma "\<not>P \<equiv> (P = False)" by simp}
+val rule_true = @{lemma "P \<equiv> (P = True)" by simp}
+fun modify th =
+  if can Utils.dest_meta_equation th
+  then th
+  else
+  case Thm.concl_of th of
+     Const _ $ ((Const (top, _) $ _) $ _) =>
+          if Const_Names.hol_eq = top
+          then Utils.obj_to_meta th
+          else th |> Conv.fconv_rule (Conv.arg_conv (Conv.rewr_conv rule_true))
+                  |> Utils.obj_to_meta
+    | Const _ $ (Const (top, _) $ _) =>
+          if Const_Names.hol_not = top
+          then th |> Conv.fconv_rule (Conv.arg_conv (Conv.rewr_conv rule_false))
+                  |> Utils.obj_to_meta
+          else th |> Conv.fconv_rule (Conv.arg_conv (Conv.rewr_conv rule_true))
+                  |> Utils.obj_to_meta
+    | _ => th |> Conv.fconv_rule (Conv.arg_conv (Conv.rewr_conv rule_true))
+              |> Utils.obj_to_meta
+
 fun run_completion global_meta_rws ctxt terminates E e =
-  let val thy = ctxt |> Proof_Context.theory_of
+  let val e = modify e
+      val thy = ctxt |> Proof_Context.theory_of
       val ctxt = if can Local_Theory.target_of ctxt
                  then Local_Theory.target_of ctxt
                  else ctxt

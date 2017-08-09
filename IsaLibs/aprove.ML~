@@ -27,9 +27,26 @@ val (use_aprove_srv, setup_use_aprove_srv) = Attrib.config_bool @{binding "use_a
 
 val test_trs = "(VAR xs1 ys2 y3 y4 x5 x6 xa7 y8 y9 y10 x10 xs11 y11 xa12 x12 y13 y14 x14 ys15 x16 ya16 x17 y17 xa18 x18 y19 xs19 z20 y20 y21 ys21 zs22 x222 ys23 z23) (RULES s(One) -> ZeroAnd(One) s(ZeroAnd(xs1)) -> OneAnd(xs1) s(OneAnd(ys2)) -> ZeroAnd(s(ys2)) timesa(One,y3) -> y3 plusa(One,y4) -> s(y4) timesa(x5,One) -> x5 plusa(x6,One) -> s(x6) plusa(xa7,xa7) -> ZeroAnd(xa7) plusa(y8,ZeroAnd(One)) -> s(s(y8)) timesa(y9,OneAnd(One)) -> plusa(y9,ZeroAnd(y9)) plusa(x10,s(y10)) -> s(plusa(x10,y10)) timesa(y11,ZeroAnd(xs11)) -> ZeroAnd(timesa(y11,xs11)) plusa(x12,OneAnd(xa12)) -> s(plusa(x12,ZeroAnd(xa12))) timesa(y13,OneAnd(ZeroAnd(One))) -> plusa(y13,ZeroAnd(ZeroAnd(y13))) plusa(x14,ZeroAnd(s(y14))) -> s(s(plusa(x14,ZeroAnd(y14)))) timesa(ys15,OneAnd(ZeroAnd(ZeroAnd(One)))) -> plusa(ys15,ZeroAnd(ZeroAnd(ZeroAnd(ys15)))) plusa(ya16,plusa(x16,ya16)) -> plusa(x16,ZeroAnd(ya16)) plusa(y17,plusa(y17,ZeroAnd(x17))) -> ZeroAnd(plusa(x17,y17)) plusa(ZeroAnd(One),plusa(x18,ZeroAnd(ZeroAnd(xa18)))) -> plusa(x18,ZeroAnd(OneAnd(xa18))) timesa(ZeroAnd(xs19),y19) -> ZeroAnd(timesa(xs19,y19)) timesa(s(y20),z20) -> plusa(z20,timesa(y20,z20)) timesa(OneAnd(ys21),y21) -> plusa(ZeroAnd(timesa(ys21,y21)),y21) plusa(OneAnd(x222),ZeroAnd(zs22)) -> OneAnd(plusa(x222,zs22)) plusa(ZeroAnd(z23),ZeroAnd(ys23)) -> ZeroAnd(plusa(z23,ys23)))"
 
+val rule_false = @{lemma "\<not>P \<equiv> (P = False)" by simp}
+val rule_true = @{lemma "P \<equiv> (P = True)" by simp}
+fun modify th =
+      fold (fn i => fn th => 
+                  let val prem = Thm.term_of (Thm.cprem_of th i)
+                  in case prem of
+                       Const (_, _) $ ((Const (top, _) $ _) $ _) => 
+                                             if Const_Names.hol_eq = top
+                                             then th
+                                             else Conv.gconv_rule (Conv.arg_conv (Conv.rewr_conv rule_true)) i th
+                     | Const (_, _) $ (Const (top, _) $ _) =>
+                                             if Const_Names.hol_not = top
+                                             then Conv.gconv_rule (Conv.arg_conv (Conv.rewr_conv rule_false)) i th
+                                             else th
+                     | _ => Conv.gconv_rule (Conv.arg_conv (Conv.rewr_conv rule_true)) i th end) (1 upto Thm.nprems_of th) th
+
+
 fun thm_to_wst (s,t) =
     let
-      (*val (s,t) = dest_equation thm*)
+      (*val (s,t) = dest_meta_equation thm*)
       fun to_wst (t $ u) = 
           (*"app(" ^ (to_wst t) ^ "," ^ (to_wst u) ^ ")"*)
           let val (head, args) = strip_comb (t $ u)
@@ -85,14 +102,21 @@ fun trs_to_wst TRS =
                      |> (fn vs => "(VAR " ^ vs ^ ")")
       val eqs_ref = Unsynchronized.ref []
       val consts_ref = Unsynchronized.ref []
-      val rules = trs |> map (thm_to_wst o (apply2 (eliminate_lambdas eqs_ref consts_ref)) o Utils.dest_equation)
+      val conditions = trs |> map (map (HOLogic.dest_eq o HOLogic.dest_Trueprop) o Thm.prems_of o modify)
+                           |> map (map (thm_to_wst o (apply2 (eliminate_lambdas eqs_ref consts_ref))))
+                           |> map commas
+      val rules = trs |> map (thm_to_wst o (apply2 (eliminate_lambdas eqs_ref consts_ref)) o Utils.dest_meta_equation)
+                      |> (fn eqs => eqs ~~ conditions
+                                      |> map (fn (eq, cond) => if cond = ""
+                                                               then eq
+                                                               else eq ^ " | " ^ cond))
                       |> (fn eqs => map thm_to_wst (!eqs_ref) @ eqs)
                       |> space_implode " "
                       |> (fn rs => "(RULES " ^ rs ^ ")")
     in vars ^ " " ^ rules end
 
 fun non_terminating_subterm th =
-    let val (lhs, rhs) = Utils.dest_equation th
+    let val (lhs, rhs) = Utils.dest_meta_equation th
     in Term.exists_subterm (fn t => (is_equal o Term_Ord.term_ord) (t, lhs)) rhs end
 
 fun terminates ctxt TRS =

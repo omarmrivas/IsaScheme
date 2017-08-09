@@ -1,6 +1,1 @@
-(VAR x0 y1 y2 x2 y3 x3)
-(RULES
-gcd(x0,zero) -> x0
-gcd(zero,y1) -> y1
-gcd(Suc(x2),Suc(y2)) -> gcd(Suc(x2),minus(y2,x2)) | less(x,y) -> true
-gcd(Suc(x3),Suc(y3)) -> gcd(minus(x3,y3),Suc(y3))) | less(x,y) -> false
+(VAR x0 y1 y2 x2 y3 x3) (RULES gcd(x0,zero) -> x0 gcd(zero,y1) -> y1 gcd(Suc(x2),Suc(y2)) -> gcd(Suc(x2),minus(y2,x2)) | less(x2,y2) -> True gcd(Suc(x3),Suc(y3)) -> gcd(minus(x3,y3),Suc(y3)) | less(x3,y3) -> False) 

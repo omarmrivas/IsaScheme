@@ -203,9 +203,9 @@ fun plain_function_passing ctxt R =
             let val u = eta_long u
             in member (is_equal o (fn tms => if Term.aconv tms then EQUAL else Term_Ord.term_ord tms)) safe_l u end
         val foo = forall check subterms_r
-        val _ = if not foo
+(*        val _ = if not foo
                 then tracing ("Not plain function passing: " ^ Syntax.string_of_term ctxt (Thm.full_prop_of R))
-                else ()
+                else ()*)
     in foo end
 
 fun plain_function_passing_hrs ctxt TRS = forall (plain_function_passing ctxt) TRS
@@ -719,7 +719,7 @@ fun terminates' ctxt TRS =
       if exists Utils.permutative_rule TRS then false (*tracing "dp false!"; false*)
       else if exists conditional_rule TRS then false
       else if exists non_terminating_subterm TRS then false (*tracing "dp false!"; false*)
-      else if not (plain_function_passing_hrs ctxt TRS) then (tracing ("Not plain function passing: " ^ Utils.str_of_thms TRS); false)
+      else if not (plain_function_passing_hrs ctxt TRS) then false
       else
         let
           val D = TRS |> map (head_of o fst o Utils.dest_meta_equation)

@@ -591,7 +591,7 @@ fun inductive_prover ctxt tactic timeOut prop =
           if can Utils.dest_object_equation rule
           then let val TRS = map Utils.obj_to_meta lemmas
                    val e = Utils.obj_to_meta rule
-               in e |> Ground_Completion.run_completion [] ctxt_nodefs terminates TRS
+               in e |> Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS
                     |> map Utils.meta_to_obj end
                (*if Ground_Completion.ac_termination_obj ctxt lemmas rule
                then (lemmas,rule)
@@ -600,7 +600,10 @@ fun inductive_prover ctxt tactic timeOut prop =
                        then (lemmas,rule')
                        else raise ERROR "Non-terminating rewrite system"
                     end*)
-          else raise ERROR "Not equation"
+          else let val TRS = map Utils.obj_to_meta lemmas
+                   val e = Conditional_Completion.modify rule
+               in e |> Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS
+                    |> map Utils.meta_to_obj end
       val lambda_size = Config.get ctxt Random_Terms.max_lambda_size
       val _ = tracing "Calculating equational theory exploration sequence..."
       val eq_tx = DB_EQ_Terms.equational_theory_exploration ctxt_nodefs (table, typsub) size n lambda_size lemmas_ref prop

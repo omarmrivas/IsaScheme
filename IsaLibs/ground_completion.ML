@@ -96,7 +96,7 @@ fun unify_inst ctxt env =
 
 (* left-linear equations are preferred when any orientation is terminating *)
 fun is_linear thm =
-    let val (_, args) = (strip_comb o fst o Logic.dest_equals o Thm.plain_prop_of) thm
+    let val (_, args) = (strip_comb o fst o Utils.dest_meta_equation) thm
     in not (has_duplicates (op =) ((fold o fold_aterms)
                                      (fn Var (v, _) => cons v | _ => I) args [])) end
 
