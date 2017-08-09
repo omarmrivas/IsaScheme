@@ -34,8 +34,10 @@ ML_file "enumerated_terms.ML"
 ML_file "aprove.ML"
 ML_file "prover.ML"
 ML_file "ground_completion.ML"
+ML_file "conditional_completion.ML"
 ML_file "induct_tacs4.ML"
 ML_file "proof_tools.ML"
+ML_file "divergence.ML"
 ML_file "induct_tacs.ML"
 ML_file "commands.ML"
 ML_file "meta_gp_hol.ML"
@@ -131,8 +133,8 @@ definition associativity where
 definition commutativity where
   [prop_scheme]: "commutativity R \<equiv> \<forall>x y. R x y = R y x"
 
-definition sssociativity_commutativity where
-  [prop_scheme]: "sssociativity_commutativity R \<equiv> \<forall>x y z. R x (R y z) = R y (R x z)"
+definition associativity_commutativity where
+  [prop_scheme]: "associativity_commutativity R \<equiv> \<forall>x y z. R x (R y z) = R y (R x z)"
 
 definition left_identity where
   [prop_scheme]: "left_identity R e \<equiv> \<forall>x. R e x = x"
@@ -318,4 +320,40 @@ ML {*
 (* Momoizing ground joinability tests val elapsed = 764.239419: real *)
 *}*)
   
+function gcd where
+  "gcd x 0 = x"|
+  "gcd 0 y = y"|
+  "x<y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (Suc x) (y-x)"|
+  "\<not> x < y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (x-y) (Suc y)"
+  by (atomize_elim, auto, arith)
+termination by lexicographic_order
+
+ML {*
+  val thy = @{theory}
+  val ctxt = @{context}
+  val TRS = @{thms gcd.simps} |> map Utils.obj_to_meta
+  val terminates = Aprove.terminates ctxt TRS
+*}
+  
+lemma r1: "x\<ge>0 \<Longrightarrow> 0+x \<equiv> (x::nat)"
+  by simp
+  
+lemma r2: "x \<ge> 0 \<Longrightarrow> x+y \<equiv> y+(x::nat)"
+  by (induction x, auto)
+    
+lemma r2': "x \<ge> 0 \<Longrightarrow> x+y = y+(x::nat)"
+  by (induction x, auto)
+(*
+  val RSN: thm * (int * thm) -> thm
+  val RS: thm * thm -> thm
+  val RLN: thm list * (int * thm list) -> thm list
+  val RL: thm list * thm list -> thm list
+  val MRS: thm list * thm -> thm
+  val OF: thm * thm list -> thm
+  val COMP: thm * thm -> thm
+  val INCR_COMP: thm * thm -> thm
+  val COMP_INCR: thm * thm -> thm
+*)
+    
+ 
 end

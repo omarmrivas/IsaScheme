@@ -20,6 +20,9 @@ TIMEAOUT_PATH=/cygdrive/c/Users/Omar/Programs/IsaLibs
 
 http://aprove.informatik.rwth-aachen.de/
 
+3.1) Install dependencies:
+     CeTa: http://cl-informatik.uibk.ac.at/software/ceta/#downloads
+
 4) Run the following command to build the heap image and work with your theory
 
 isabelle jedit -d path_to_IsaLibs_root_file -l IsaLibs your_theory.thy
@@ -59,4 +62,4 @@ isabelle build -d /Users/omarmrivas/Programs/IsaLibs/IsaLibs -b IsaLibs
 
 - start AProVE server
 
-java -ea jar aprove.jar -u srv
+java -ea -jar aprove.jar -u srv

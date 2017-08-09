@@ -709,11 +709,15 @@ fun non_terminating_subterm th =
     let val (lhs, rhs) = Utils.dest_meta_equation th
     in Term.exists_subterm (fn t => (is_equal o Term_Ord.term_ord) (t, lhs)) rhs end
 
+fun conditional_rule th =
+  Thm.nprems_of th > 0
+
 fun terminates' ctxt TRS =
     let val TRS = TRS |> Utils.make_theorem_set
         val thy = Proof_Context.theory_of ctxt
     in
       if exists Utils.permutative_rule TRS then false (*tracing "dp false!"; false*)
+      else if exists conditional_rule TRS then false
       else if exists non_terminating_subterm TRS then false (*tracing "dp false!"; false*)
       else if not (plain_function_passing_hrs ctxt TRS) then (tracing ("Not plain function passing: " ^ Utils.str_of_thms TRS); false)
       else

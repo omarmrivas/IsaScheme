@@ -600,16 +600,11 @@ fun dest_meta_equation thm =
 
 val permutative_rule = permutative_eq o dest_meta_equation
 
-(*fun dest_equation thm = 
+fun dest_object_equation thm = 
     thm |> Thm.cprop_of
         |> Drule.strip_imp_concl
         |> Thm.term_of
-        |> HOLogic.dest_eq o HOLogic.dest_Trueprop*)
-
-fun dest_object_equation thm = 
-    thm |> Thm.full_prop_of
-        |> HOLogic.dest_Trueprop
-        |> HOLogic.dest_eq
+        |> HOLogic.dest_eq o HOLogic.dest_Trueprop
 
 fun rhs_is_trivial (_, rhs) =
     is_equal (Term_Ord.term_ord (@{const "True"}, rhs))

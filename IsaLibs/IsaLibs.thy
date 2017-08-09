@@ -320,6 +320,22 @@ ML {*
 (* Momoizing ground joinability tests val elapsed = 764.239419: real *)
 *}*)
   
+function gcd where
+  "gcd x 0 = x"|
+  "gcd 0 y = y"|
+  "x<y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (Suc x) (y-x)"|
+  "\<not> x < y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (x-y) (Suc y)"
+  by (atomize_elim, auto, arith)
+termination by lexicographic_order
+
+ML {*
+  val thy = @{theory}
+  val ctxt = @{context}
+  val TRS = @{thms gcd.simps} |> map Utils.obj_to_meta
+  val terminates1 = DPair.terminates ctxt TRS
+  val terminates2 = Aprove.terminates ctxt TRS
+*}
+  
 lemma r1: "x\<ge>0 \<Longrightarrow> 0+x \<equiv> (x::nat)"
   by simp
   
@@ -340,34 +356,5 @@ lemma r2': "x \<ge> 0 \<Longrightarrow> x+y = y+(x::nat)"
   val COMP_INCR: thm * thm -> thm
 *)
     
-ML {*
-  (* obtains the left and right hand sides of a meta-equation *)
-fun dest_equation thm = 
-    thm |> Thm.cprop_of
-        |> Drule.strip_imp_concl
-        |> Thm.term_of
-        |> HOLogic.dest_eq o HOLogic.dest_Trueprop
-  val (lhs, rhs) = dest_equation @{thm r2'}
-  val _ = tracing ("lhs: " ^ Syntax.string_of_term @{context} lhs)
-  val _ = tracing ("rhs: " ^ Syntax.string_of_term @{context} rhs)
-
-*}
-    
-ML {*
-  val rule = @{thm r2}
-  val ctxt = Simplifier.set_termless (fn (x,y) =>
-        let val _ = tracing ("x: " ^ Syntax.string_of_term @{context} x)
-            val _ = tracing ("y: " ^ Syntax.string_of_term @{context} y)
-        in y = @{term_pat "?x+(0::nat)"} andalso
-           x <> y end) (clear_simpset @{context}) addsimps [rule]
-  val th = @{thm r1}
-  val r = DB_Conditional_Completion.scpairs @{theory} (rule, th)
-(*  val r1 = Conv.fconv_rule ((Conv.concl_conv (Thm.nprems_of rule) o Conv.fun_conv o Conv.fun_conv) (Raw_Simplifier.rewrite ctxt true [rule])) th*)
-(*  val r2 = Conv.fconv_rule ((Conv.concl_conv (Thm.nprems_of th) o Conv.fun_conv o Conv.arg_conv) (Simplifier.rewrite ctxt)) th*)
-(*  val r3 = Conv.fconv_rule ((Conv.concl_conv (Thm.nprems_of th) o Conv.arg_conv) (Simplifier.rewrite ctxt)) th*)
-(*  val r3 = Conv.fconv_rule ((Conv.concl_conv (Thm.nprems_of th) o Conv.fun_conv o Conv.fun_conv) (Simplifier.rewrite ctxt)) th*)
-(*  val rr4 = simplify ctxt r1
-  val rr5 = Conv.rewr_conv r2*)
-*}
-  
+ 
 end
