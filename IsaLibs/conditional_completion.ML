@@ -243,7 +243,7 @@ fun memoized_discriminate_rules ctxt terminates thms =
 | memoized_discriminate_rules _ _ [] = ([], [])*)
 
 fun ordered_simpset_without_simprocs ctxt terminates thms =
-    let val ctxt = clear_simpset ctxt
+    let (*val ctxt = clear_simpset ctxt*)
         val (_,rules) = memoized_discriminate_rules ctxt terminates thms
     in ctxt addsimps rules
     end

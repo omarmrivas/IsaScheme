@@ -126,6 +126,7 @@ orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?y (?X ?x ?z)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?y (?X ?z ?x)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?z (?X ?x ?y)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?z (?X ?y ?x)"
+orient_rules "?X (?x :: ?'a) (?y :: ?'a) = (?x = ?y)"
   
 definition associativity where
   [prop_scheme]: "associativity R \<equiv> \<forall>x y z. R (R x y) z = R x (R y z)"
@@ -162,6 +163,9 @@ definition left_distributive where
   
 definition right_distributive where
   [prop_scheme]: "right_distributive f g h i \<equiv> \<forall>x y z. f (g x y) z = h (i x z) (i y z)"
+
+definition equivalence_relation where
+  [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"
   
 ML {*
 (*  val p1 = Multithreading.max_threads_value ()*)
@@ -349,5 +353,7 @@ ML {*
                           |> Time.toReal
       val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
 *}*)
- 
+
+  
+
 end
