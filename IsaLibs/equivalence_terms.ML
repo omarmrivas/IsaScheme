@@ -10,6 +10,7 @@ signature EQ_TERMS =
 sig
 
 val max_random_terms   : int Config.T
+val max_vars_in_tx     : int Config.T
 
 val equation : Proof.context -> int -> int -> int -> term list Type_Tab.table ->
               (term -> term) -> thm list -> (term -> bool) -> term list -> term option
@@ -25,6 +26,7 @@ structure DB_EQ_Terms
 = struct
 
 val (max_random_terms, setup_max_random_terms) = Attrib.config_int @{binding "max_random_terms"} (K 10)
+val (max_vars_in_tx, setup_max_vars_in_tx) = Attrib.config_int @{binding "max_vars_in_tx"} (K 3)
 
 fun substitutions ctxt size n tab term =
   let val thy = Proof_Context.theory_of ctxt
@@ -378,7 +380,18 @@ fun extend_frees (tab, typsub) prop =
 *)
 fun equational_theory_exploration ctxt (table, typsub) size n lambda_size simps prop =
   let val thy = Proof_Context.theory_of ctxt
-      val frees = extend_frees (table, typsub) prop
+      val frees = 
+          [] |> Term.add_frees prop
+             |> map snd
+             |> Type_Tab.make_set
+             |> Type_Tab.keys
+             |> maps (fn typ => map (fn _ => typ) (1 upto Config.get ctxt max_vars_in_tx))
+             |> pair ([],[])
+             |> Library.foldl (fn ((names, frees), typ) =>
+                  let val name = singleton (Name.variant_list names) "x"
+                  in (name :: names, (name, typ) :: frees) end)
+             |> snd
+(*      val frees = extend_frees (table, typsub) prop*)
       fun monomorphize typ = (type_of o typsub) (Free ("x", typ))
       val tsubsts = frees
                      |> map (fn (n,ty) => (n, monomorphize ty))
@@ -400,28 +413,6 @@ fun equational_theory_exploration ctxt (table, typsub) size n lambda_size simps 
                           |> Utils.make_term_set thy
                           |> Utils.sort_by_general thy
                           |> Seq.of_list
-(*      fun check t s =
-        let val eq = (t, s) |> HOLogic.mk_eq
-                            |> HOLogic.mk_Trueprop
-                            |> Utils.normalise_term ctxt (!simps)
-        in if eq <> @{prop "True"}
-           then SOME eq
-           else NONE
-        end
-      fun check_eqs tab terms =
-        case Seq.pull terms of
-          SOME (t, terms) => 
-              let val t' = typsub t
-                  val key = map (fn subst => Utils.normalise_term ctxt (!simps) (subst t')) tsubsts
-              in case Term_List_Tab.lookup tab key of
-                  SOME ss => (case map_filter (check t) ss of
-                              [] => check_eqs (Term_List_Tab.update (key, t::ss) tab) terms
-                            | eqs  => let val (eqs,last) = split_last eqs
-                             in Seq.append (Seq.of_list eqs)
-                                      (Seq.make (fn () => SOME (last, check_eqs (Term_List_Tab.update (key, t::ss) tab) terms))) end)
-                 | NONE => check_eqs (Term_List_Tab.update (key, [t]) tab) terms
-              end
-        | NONE => Seq.empty*)
   in discover_equations ctxt simps typsub tsubsts terms end
 (*  in check_eqs Term_List_Tab.empty terms end*)
 

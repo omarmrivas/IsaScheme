@@ -75,6 +75,7 @@ DB_Counter_Example.setup_simp_before #>
 DB_Counter_Example.setup_max_time_in_counter_ex #>
 DB_Utils.setup_max_time_normalization #>
 DB_EQ_Terms.setup_max_random_terms #>
+DB_EQ_Terms.setup_max_vars_in_tx #>
 
 DB_Prover.setup_max_time_in_proof #>
 DB_Proof_Tools.setup_max_depth_in_meta_induction #>
@@ -103,6 +104,7 @@ declare [[
   max_time_normalization = 5,
   max_lambda_size = 5,
   max_random_terms = 10,
+  max_vars_in_tx = 3,
   max_time_in_termination = 20,
   max_time_in_fitness = 15,
   max_depth_in_meta_induction = 10,
