@@ -902,7 +902,7 @@ fun from_to (a, b) =
 
 fun lazy_subsets set =
   let val n = length set
-      val n_list = Seq.map (fn k => (k, binomial_coefficient n k)) (from_to (1,n))
+      val n_list = Seq.map (fn k => (k, binomial_coefficient n k)) (from_to (0,n))
   in n_list |> Seq.maps (fn (k, binomial) => from_to (0, binomial - 1)
                                                 |> Seq.map (fn kk => choose set k kk))
   end

@@ -449,7 +449,7 @@ fun equation_from_subgoals ctxt size n table typsub failures subsumed =
            |> Seq.filter (not o EQ_Terms.counter_example ctxt size n table typsub [])
   end
 
-fun generalized_eq ctxt timeOut size n gn table typsub lemmas subsumed failures subgoals =
+(*fun generalized_eq ctxt timeOut size n gn table typsub lemmas subsumed failures subgoals =
   let val thy =  Proof_Context.theory_of ctxt
   in
     subgoals @ failures
@@ -463,7 +463,7 @@ fun generalized_eq ctxt timeOut size n gn table typsub lemmas subsumed failures 
       |> tap (fn _ => tracing "#Generalizations")*)
       |> EQ_Terms.equation ctxt timeOut size n table typsub lemmas subsumed
 (*      |> tap (print_some ctxt "generalized_eq: ")*)
-  end
+  end*)
 
 fun inductive_prover ctxt tactic timeOut prop =
   let val start = Timing.start ()

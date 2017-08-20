@@ -75,6 +75,7 @@ DB_Counter_Example.setup_simp_before #>
 DB_Counter_Example.setup_max_time_in_counter_ex #>
 DB_Utils.setup_max_time_normalization #>
 DB_EQ_Terms.setup_max_random_terms #>
+DB_EQ_Terms.setup_max_vars_in_tx #>
 
 DB_Prover.setup_max_time_in_proof #>
 DB_Proof_Tools.setup_max_depth_in_meta_induction #>
@@ -101,8 +102,9 @@ declare [[
   max_time_in_counter_ex = 25,
   max_time_in_proof = 30,
   max_time_normalization = 5,
-  max_lambda_size = 5,
+  max_lambda_size = 8,
   max_random_terms = 10,
+  max_vars_in_tx = 3,
   max_time_in_termination = 20,
   max_time_in_fitness = 15,
   max_depth_in_meta_induction = 10,
@@ -126,6 +128,7 @@ orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?y (?X ?x ?z)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?y (?X ?z ?x)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?z (?X ?x ?y)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?z (?X ?y ?x)"
+orient_rules "?X (?x :: ?'a) (?y :: ?'a) = (?x = ?y)"
   
 definition associativity where
   [prop_scheme]: "associativity R \<equiv> \<forall>x y z. R (R x y) z = R x (R y z)"
@@ -162,6 +165,9 @@ definition left_distributive where
   
 definition right_distributive where
   [prop_scheme]: "right_distributive f g h i \<equiv> \<forall>x y z. f (g x y) z = h (i x z) (i y z)"
+
+definition equivalence_relation where
+  [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"
   
 ML {*
 (*  val p1 = Multithreading.max_threads_value ()*)
@@ -320,7 +326,7 @@ ML {*
 (* Momoizing ground joinability tests val elapsed = 764.239419: real *)
 *}*)
   
-function gcd where
+(*function gcd where
   "gcd x 0 = x"|
   "gcd 0 y = y"|
   "x<y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (Suc x) (y-x)"|
@@ -348,38 +354,30 @@ ML {*
                           |> #elapsed
                           |> Time.toReal
       val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
-*}
-    
-    
-ML {*
-  val thy = @{theory}
-  val ctxt = @{context}
-  val TRS = @{thms gcd.simps} |> map Utils.obj_to_meta
-  val terminates1 = DPair.terminates ctxt TRS
-  val terminates2 = Aprove.terminates ctxt TRS
-  val prems = Thm.prems_of (nth TRS 3)
-  val _ = map (tracing o Syntax.string_of_term @{context}) prems
-*}
-  
-lemma r1: "x\<ge>0 \<Longrightarrow> 0+x \<equiv> (x::nat)"
-  by simp
-  
-lemma r2: "x \<ge> 0 \<Longrightarrow> x+y \<equiv> y+(x::nat)"
-  by (induction x, auto)
-    
-lemma r2': "x \<ge> 0 \<Longrightarrow> x+y = y+(x::nat)"
-  by (induction x, auto)
-(*
-  val RSN: thm * (int * thm) -> thm
-  val RS: thm * thm -> thm
-  val RLN: thm list * (int * thm list) -> thm list
-  val RL: thm list * thm list -> thm list
-  val MRS: thm list * thm -> thm
-  val OF: thm * thm list -> thm
-  val COMP: thm * thm -> thm
-  val INCR_COMP: thm * thm -> thm
-  val COMP_INCR: thm * thm -> thm
-*)
-    
+*}*)
+
  
+fun suma where
+"suma 0 y = y"|
+"suma (Suc x) y = Suc (suma x y)"
+
+ML{*
+  val prop = @{prop " suma x y = suma y x \<Longrightarrow> Suc (suma y x) = suma y (Suc x)"}
+  val r = DB_EQ_Terms.generalize_cond_eq @{context} prop
+  val _ =  (tracing o Syntax.string_of_term @{context}) r
+*}
+  
+ML {*
+  val seq = Utils.lazy_subsets [1,2,3]
+  val r = Seq.list_of seq
+*}
+
+
+lemma "suma x y = suma y x"
+  apply (induction x, auto)
+
+lemma "suma x y = suma y x"
+  apply inductive_prove
+
+
 end

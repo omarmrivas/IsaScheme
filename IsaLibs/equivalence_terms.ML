@@ -106,20 +106,6 @@ fun discover_equations ctxt simps typsub tsubsts terms =
            then SOME eq
            else NONE
         end
-(*      fun check_eqs tab terms =
-        case Seq.pull terms of
-          SOME (t, terms) => 
-              let val t' = typsub t
-                  val key = map (fn subst => Utils.normalise_term ctxt (!simps) (subst t')) tsubsts
-              in case Term_List_Tab.lookup tab key of
-                  SOME ss => (case map_filter (check t) ss of
-                              [] => check_eqs (Term_List_Tab.update (key, t::ss) tab) terms
-                            | eqs  => let val (eqs,last) = split_last eqs
-                             in Seq.append (Seq.of_list eqs)
-                                      (Seq.make (fn () => SOME (last, check_eqs (Term_List_Tab.update (key, t::ss) tab) terms))) end)
-                 | NONE => check_eqs (Term_List_Tab.update (key, [t]) tab) terms
-              end
-        | NONE => Seq.empty*)
       fun check_eqs tab [] seq = 
             (case Seq.chop buff seq of
               ([], _) => Seq.empty
@@ -127,6 +113,7 @@ fun discover_equations ctxt simps typsub tsubsts terms =
                 let val terms = Par_List.map (fn t =>
                         let val t' = typsub t
                             val key = map (fn subst => Utils.normalise_term ctxt (!simps) (subst t')) tsubsts
+                            val _ = map (tracing o Syntax.string_of_term ctxt) key
                         in (t, key) end) terms
                 in check_eqs tab terms seq end)
         | check_eqs tab ((t,key) :: terms) seq =
@@ -412,6 +399,7 @@ fun equational_theory_exploration ctxt (table, typsub) size n lambda_size simps 
                           |> Seq.list_of
                           |> Utils.make_term_set thy
                           |> Utils.sort_by_general thy
+                          |> tap (tracing o Utils.str_of_terms ctxt)
                           |> Seq.of_list
   in discover_equations ctxt simps typsub tsubsts terms end
 (*  in check_eqs Term_List_Tab.empty terms end*)
@@ -452,6 +440,54 @@ fun gen_equations ctxt typsub simps subsumed tsubsts terms_lhs terms_rhs =
             end)
              |> maps I
   end
+
+fun generalize_cond_eq ctxt conj =
+  let fun make_table positions =
+            positions |> pair Term_Tab.empty
+                      |> Library.foldl (fn (tab, (t,typ,pos)) =>
+                            case Term_Tab.lookup tab t of
+                                SOME l => Term_Tab.update (t, (typ,pos) :: l) tab
+                              | NONE => Term_Tab.update (t, [(typ,pos)]) tab)
+      val names = Term.add_free_names conj []
+(*      val positions = conj |> Utils.positions
+                           |> filter (not o is_Const o (fn (t, _, _) => t))
+                           |> make_table*)
+      val positions = conj |> Utils.positions
+                           |> filter (not o is_Const o (fn (t, _, _) => t))
+                           |> make_table
+                           |> Term_Tab.dest
+                           |> filter (fn (_, l) => length l > 1)
+                           |> sort (prod_ord int_ord int_ord o apply2 (fn (t, l) => (~ (length l),  ~(size_of_term t))))
+                           |> pair []
+                           |> Library.foldl (fn (positions, (t,l)) =>
+                                   if exists (fn (_, poss) => exists (fn (_, l) => 
+                                          exists (fn (_,l) => is_prefix (op =) l poss) l) positions) l
+                                   then positions
+                                   else (t,l) :: positions)
+                           |> rev
+                           |> map snd
+  in ((conj,names), positions)
+                    |> Library.foldl (fn ((conj,names), l) => 
+                          let val name = singleton (Name.variant_list names) "x"
+                              val typ = (fst o hd) l
+                              val poss = map snd l
+                          in (Library.foldl (fn (conj, pos) => 
+                                Utils.substitute (Free (name,typ),pos) conj) (conj,poss), 
+                                name :: names) end)
+                    |> fst
+  end
+
+fun generalize_assumptions ctxt conj =
+  let val prems = Logic.strip_imp_prems conj
+      val concl = Logic.strip_imp_concl conj
+      val prems_seq = Utils.lazy_subsets prems
+      val conjs = prems_seq |> Seq.map (Logic.list_implies o rpair concl)
+                            |> Seq.list_of
+      val timeOut = Config.get ctxt Counter_Example.max_time_in_counter_ex
+  in Par_List.get_some (fn conj =>
+      if Counter_Example.memoized_counter_example ctxt timeOut conj
+      then NONE
+      else SOME conj) conjs end
 
 fun generalize_eq' ctxt size n (tab, typsub) simps subsumed eq =
   let val thy = Proof_Context.theory_of ctxt
@@ -504,15 +540,6 @@ fun generalize_eq' ctxt size n (tab, typsub) simps subsumed eq =
                        val ts' = poss rhs t rhs_positions|> Seq.list_of
                    in gen_equations ctxt typsub simps subsumed' tsubsts ts ts' end)
            |> Utils.make_term_set' thy
-(*           |> (fn set => if null set
-                         then [eq]
-                         else 
-                         let val set' = map Logic.varify_global set
-                             fun subsumed'' eq =
-                                exists (Pattern.matchess thy o pair [eq] o single) set' orelse
-                                subsumed' eq
-                         in maps (generalize_eq thy size n (tab, typsub) simps subsumed'') set end)
-           |> Utils.make_term_set' thy*)
   end
 
 fun generalize_eq i ctxt size n (tab, typsub) simps subsumed eq =
