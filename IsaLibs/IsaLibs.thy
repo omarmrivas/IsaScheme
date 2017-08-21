@@ -169,6 +169,10 @@ definition right_distributive where
 definition equivalence_relation where
   [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"
   
+definition test_scheme where
+  [prop_scheme]: "test_scheme f \<equiv> (\<And>x y. size x < size y \<Longrightarrow> f x y = f y x)"
+  
+  
 ML {*
 (*  val p1 = Multithreading.max_threads_value ()*)
   val p2 = Thread.numProcessors ()
@@ -365,20 +369,13 @@ ML {*
   val ctxt = @{context}
   val thy = @{theory}
   val prop = @{prop "suma x y = suma y x"}
-  val def_lemmas = Utils.get_definitional_rewrites thy prop
-  val lemmas_ref = Unsynchronized.ref def_lemmas
-  val ctxt_nodefs = ctxt delsimps def_lemmas
-  val lthy_nodefs = ctxt delsimps def_lemmas
-  val size = Config.get ctxt Random_Terms.max_lambda_size
-  val n = Config.get ctxt EQ_Terms.max_random_terms
-  val (table, typsub) =
-          DB_EQ_Terms.preprocess_conjecture ctxt size n prop
-  val known_laws = DB_EQ_Terms.known_eq_laws ctxt_nodefs (table, typsub) size n lemmas_ref prop
+  val known_laws = DB_EQ_Terms.known_laws ctxt prop
                   |> Seq.map (pair "EQ_KNOWN")
 *}
   
 ML {*
-  Seq.pull known_laws
+  val terms = Seq.list_of known_laws
+  val _ = map (tracing o Syntax.string_of_term ctxt o snd) terms
 *}
 
 ML{*

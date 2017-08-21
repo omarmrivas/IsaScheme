@@ -361,17 +361,39 @@ fun suma where
 "suma 0 y = y"|
 "suma (Suc x) y = Suc (suma x y)"
 
+ML {*
+  val ctxt = @{context}
+  val thy = @{theory}
+  val prop = @{prop "suma x y = suma y x"}
+  val def_lemmas = Utils.get_definitional_rewrites thy prop
+  val lemmas_ref = Unsynchronized.ref def_lemmas
+  val ctxt_nodefs = ctxt delsimps def_lemmas
+  val lthy_nodefs = ctxt delsimps def_lemmas
+  val size = Config.get ctxt Random_Terms.max_lambda_size
+  val n = Config.get ctxt EQ_Terms.max_random_terms
+  val (table, typsub) =
+          DB_EQ_Terms.preprocess_conjecture ctxt size n prop
+  val known_laws = DB_EQ_Terms.known_eq_laws ctxt_nodefs (table, typsub) size n lemmas_ref prop
+                  |> Seq.map (pair "EQ_KNOWN")
+*}
+  
+ML {*
+  Seq.pull known_laws
+*}
+
 ML{*
-  val prop = @{prop " suma x y = suma y x \<Longrightarrow> Suc (suma y x) = suma y (Suc x)"}
+  val prop = @{prop "Suc x = Suc y \<Longrightarrow> Suc x < Suc y \<Longrightarrow> suma (Suc x) (Suc y) = suma (Suc y) (Suc x)"}
   val r = DB_EQ_Terms.generalize_cond_eq @{context} prop
   val _ =  (tracing o Syntax.string_of_term @{context}) r
+  val res = DB_EQ_Terms.generalize_assumptions @{context} r
+  val _ =  (tracing o Syntax.string_of_term @{context} o the) res
 *}
   
 ML {*
   val seq = Utils.lazy_subsets [1,2,3]
   val r = Seq.list_of seq
+  val _ = Par_List.map
 *}
-
 
 lemma "suma x y = suma y x"
   apply (induction x, auto)

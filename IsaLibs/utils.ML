@@ -93,6 +93,9 @@ sig
   val commute_meta_eq                  : thm -> thm
   val dest_meta_equation               : thm -> (term * term)
   val dest_object_equation             : thm -> (term * term)
+  val dest_meta_eq                     : term -> term * term
+  val dest_object_eq                   : term -> term * term
+  val dest_eq                          : term -> term * term
   val rule_int_ord                     : thm -> int list
   
   (* Others *)
@@ -605,6 +608,21 @@ fun dest_object_equation thm =
         |> Drule.strip_imp_concl
         |> Thm.term_of
         |> HOLogic.dest_eq o HOLogic.dest_Trueprop
+
+fun dest_meta_eq prop =
+  prop |> Logic.strip_imp_concl
+       |> Logic.dest_equals
+
+fun dest_object_eq prop =
+  prop |> Logic.strip_imp_concl
+       |> HOLogic.dest_eq o HOLogic.dest_Trueprop
+
+fun dest_eq prop =
+  case try dest_object_eq prop of
+    SOME (lhs, rhs) => (lhs, rhs)
+    | NONE => (case try dest_meta_eq prop of
+                SOME (lhs, rhs) => (lhs, rhs)
+              | NONE => raise ERROR "Not an equation!")
 
 fun rhs_is_trivial (_, rhs) =
     is_equal (Term_Ord.term_ord (@{const "True"}, rhs))
@@ -1179,9 +1197,13 @@ fun variable_vector var_map t (var, (i :: Pos)) =
        Abs (_, _, t) => variable_vector var_map t (var, Pos)
      | t => let val (h, args) = Term.strip_comb t
                 val var_map = add_turn var_map h i var
+(*                val _ = tracing (string_of_int i ^ ":" ^ string_of_int (length args))*)
             in
+            if i < length args
+            then
               args |> (fn l => nth l i)
                    |> (fn t => variable_vector var_map t (var, Pos))
+            else var_map
             end)
   | variable_vector var_map _ (_, []) = var_map
 
@@ -1240,10 +1262,15 @@ end
 
 fun sort_by_general thy terms =
   let fun ord (s, t) =
+        let val ctxt = Context.proof_of (Context.Theory thy)
+(*            val _ = tracing (Syntax.string_of_term ctxt s ^ ":" ^ Syntax.string_of_term ctxt t)
+            val _ = tracing (ML_Syntax.print_term s)
+            val _ = tracing (ML_Syntax.print_term t)*)
+        in
         case (Pattern.matches thy (s, t), Pattern.matches thy (t, s)) of
           (false, true) => GREATER
         | (true, false) => LESS
-        | _ => (list_ord int_ord o apply2 order_ints_raw) (s,t)
+        | _ => (list_ord int_ord o apply2 order_ints_raw) (s,t) end
 (*        | _ => (int_ord o (apply2 size_of_term)) (s, t)*)
   in terms |> map_index (fn (i, t) => t |> Logic.varify_global
                                         |> Logic.incr_indexes ([], [], i))

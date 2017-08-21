@@ -291,6 +291,43 @@ fun known_eq_laws ctxt (table, typsub) size n simps prop =
         |> discover_equations ctxt simps typsub tsubsts
   end
 
+fun known_laws ctxt prop =
+  let val thy = Proof_Context.theory_of ctxt
+      val prop_schemes = PropSchemes.get ctxt
+      val consts = Utils.definitional_dependencies thy ([], prop)
+                    |> filter_out (fn (name, _) => name = Const_Names.hol_eq)
+                    |> map (Inst_Utils.dummyTvfy o Const)
+      val terms = prop_schemes
+        |> maps (fn scheme =>
+            let val (_,scheme_lhs,vars_ord) = Inst_Utils.vars_ordered ctxt scheme
+                val compatib = Inst_Utils.compatible_arguments ctxt scheme_lhs consts vars_ord
+            in [] |> Inst_Utils.combine ctxt scheme (fn t => fn l => t :: l) scheme_lhs compatib
+                  |> map (Utils.normalise_term ctxt [scheme])
+                  |> map (fn to_prove =>
+                         to_prove |> Utils.binder_elimination Const_Names.hol_forall []
+                                  |> fst handle Match => to_prove)
+            end)
+        |> Utils.make_term_set thy
+        |> Utils.sort_by_general thy
+      val timeOut = Config.get ctxt Counter_Example.max_time_in_counter_ex
+  in terms
+        |> map (fn t => let val typ = type_of t
+                        in if typ = @{typ "prop"}
+                           then t
+                           else if typ = @{typ "bool"}
+                           then HOLogic.mk_Trueprop t
+                           else raise ERROR "Term not of valid type. Invalid scheme?"
+                        end)
+        |> filter (fn t => t <> @{prop "True"})
+        |> filter (fn t => t <> @{prop "False"})
+        |> Par_List.map (fn prop =>
+            if Counter_Example.memoized_counter_example ctxt timeOut prop
+            then NONE
+            else SOME prop)
+        |> map_filter I
+        |> Seq.of_list
+  end
+
 fun extend_frees (tab, typsub) prop =
   let fun monomorphize typ = (type_of o typsub) (Free ("x", typ))
       fun group_by frees =
@@ -399,7 +436,7 @@ fun equational_theory_exploration ctxt (table, typsub) size n lambda_size simps 
                           |> Seq.list_of
                           |> Utils.make_term_set thy
                           |> Utils.sort_by_general thy
-                          |> tap (tracing o Utils.str_of_terms ctxt)
+(*                          |> tap (tracing o Utils.str_of_terms ctxt)*)
                           |> Seq.of_list
   in discover_equations ctxt simps typsub tsubsts terms end
 (*  in check_eqs Term_List_Tab.empty terms end*)
