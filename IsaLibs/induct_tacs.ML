@@ -484,7 +484,7 @@ fun inductive_prover ctxt tactic timeOut prop =
       val _ = tracing (Utils.latex_string_of_term ctxt prop)
       val _ = tracing "Goal: "
       val _ = tracing (Utils.string_of_term ctxt prop)
-      val size = Config.get ctxt Random_Terms.max_lambda_size
+      val lambda_size = Config.get ctxt Random_Terms.max_lambda_size
       val n = Config.get ctxt EQ_Terms.max_random_terms
 (*      fun print_some ctxt msj sconj =
         case sconj of
@@ -492,7 +492,7 @@ fun inductive_prover ctxt tactic timeOut prop =
         | NONE => ()*)
       val _ = tracing "Preprocessing conjecture..."
       val (table, typsub) =
-          DB_EQ_Terms.preprocess_conjecture ctxt size n prop
+          DB_EQ_Terms.preprocess_conjecture ctxt lambda_size n prop
       val _ = tracing "Done"
 (*      val _ = tracing ("Substitutions: " ^string_of_int (length tsubsts))*)
       fun try_prove simps conj =
@@ -604,13 +604,12 @@ fun inductive_prover ctxt tactic timeOut prop =
                    val e = Conditional_Completion.modify rule
                in e |> Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS
                     |> map Utils.meta_to_obj end
-      val lambda_size = Config.get ctxt Random_Terms.max_lambda_size
       val _ = tracing "Calculating equational theory exploration sequence..."
-      val eq_tx = DB_EQ_Terms.equational_theory_exploration ctxt_nodefs (table, typsub) size n lambda_size lemmas_ref prop
+      val eq_tx = DB_EQ_Terms.equational_theory_exploration ctxt_nodefs (table, typsub) lambda_size n lambda_size lemmas_ref prop
                   |> Seq.map (pair "EQ_TX")
       val _ = tracing "Done"
       val _ = tracing "Calculating known equational laws sequence..."
-      val known_laws = DB_EQ_Terms.known_eq_laws ctxt_nodefs (table, typsub) size n lemmas_ref prop
+      val known_laws = DB_EQ_Terms.known_eq_laws ctxt_nodefs (table, typsub) lambda_size n lemmas_ref prop
                   |> Seq.map (pair "EQ_KNOWN")
       val _ = tracing "Done"
       val conj_store = mk_conjecture_store (known_laws, eq_tx, [])
@@ -628,7 +627,7 @@ fun inductive_prover ctxt tactic timeOut prop =
                                      |> map Logic.unvarify_global
                 val eq_from_goals =
                        (subsumed_in_net net)
-                          |> equation_from_subgoals (lthy_nodefs addsimps lemmas) size n table typsub trms
+                          |> equation_from_subgoals (lthy_nodefs addsimps lemmas) lambda_size n table typsub trms
                           |> Seq.map (pair "eq_from_goals")
                 val walsh =
                        (subgoals@lemmas')
@@ -636,7 +635,7 @@ fun inductive_prover ctxt tactic timeOut prop =
                           |> Seq.maps (fn subgoal =>
                                     [subgoal, conj] |> map HOLogic.dest_Trueprop
                                                     |> Divergence.walsh_critic ctxt_nodefs lemmas
-                                                    |> Seq.filter (not o EQ_Terms.counter_example lthy_nodefs size n table typsub lemmas))
+                                                    |> Seq.filter (not o EQ_Terms.counter_example lthy_nodefs lambda_size n table typsub lemmas))
                           |> Seq.map (pair "Walsh")
                 val transverse =
                       (subgoals@lemmas')
@@ -657,8 +656,8 @@ fun inductive_prover ctxt tactic timeOut prop =
                          |> Seq.append transverse
                          |> add_heuristics thy store
                 fun generalization (meth, conj) =
-                      conj |> DB_EQ_Terms.equation' lthy_nodefs (table, typsub) size n lemmas (subsumed_in_net net)
-                           |> DB_EQ_Terms.generalize_eq 1 lthy_nodefs size n (table, typsub) lemmas (subsumed_in_net net)
+                      conj |> DB_EQ_Terms.equation' lthy_nodefs (table, typsub) lambda_size n lemmas (subsumed_in_net net)
+                           |> DB_EQ_Terms.generalize_eq 1 lthy_nodefs lambda_size n (table, typsub) lemmas (subsumed_in_net net)
                            |> Utils.sort_by_general thy o map orient
                            |> map (pair meth)
 (*                val generalisation =

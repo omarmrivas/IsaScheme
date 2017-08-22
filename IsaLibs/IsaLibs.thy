@@ -360,10 +360,28 @@ ML {*
       val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
 *}*)
 
- 
 fun suma where
 "suma 0 y = y"|
 "suma (Suc x) y = Suc (suma x y)"
+
+ML {*
+  val t1 = @{prop "x < y \<Longrightarrow> Suc (Suc (suma x y)) = suma (Suc x) y"}
+  val t2 = @{prop "x < y \<Longrightarrow> Suc (Suc (suma x y)) = suma (Suc (Suc x)) y"}
+  val s1 = @{term "Suc (Suc (suma x y)) = suma (Suc x) y"}
+  val s2 = @{term "Suc (Suc (suma x y)) = suma (Suc (Suc x)) y"}
+  val res1 = DB_Divergence.conditional_walsh_critic @{context} [] [t1,t2]
+  val res2 = Divergence.walsh_critic @{context} [] [s1,s2]
+(*  val res1' = Utils.filter_seq 1 (not o (fn _ => false)) res1*)
+  fun print t = let val _ = tracing (Syntax.string_of_term @{context} t)
+                in t end
+  val res1' = Utils.filter_seq (Thread.numProcessors () * 2) (not o Counter_Example.memoized_counter_example @{context} 10 o print) res1
+*}
+  
+ML {*
+  val terms = Seq.list_of res1'
+  val _ = map (tracing o Syntax.string_of_term @{context}) terms
+*}
+
 
 ML {*
   val ctxt = @{context}

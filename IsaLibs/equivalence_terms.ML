@@ -113,7 +113,6 @@ fun discover_equations ctxt simps typsub tsubsts terms =
                 let val terms = Par_List.map (fn t =>
                         let val t' = typsub t
                             val key = map (fn subst => Utils.normalise_term ctxt (!simps) (subst t')) tsubsts
-                            val _ = map (tracing o Syntax.string_of_term ctxt) key
                         in (t, key) end) terms
                 in check_eqs tab terms seq end)
         | check_eqs tab ((t,key) :: terms) seq =

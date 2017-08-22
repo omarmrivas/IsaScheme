@@ -18,6 +18,19 @@ structure DB_Divergence
 (* : DIVERGENCE *)
 = struct
 
+fun conditional critic ctxt simps props =
+  let val eqs = map (HOLogic.dest_Trueprop o Logic.strip_imp_concl) props
+      val prems = map (Logic.strip_imp_prems) props
+      val prem = hd prems
+      fun prems_equals [] = true
+        | prems_equals [_] = true
+        | prems_equals (x :: y :: prems) = x = y andalso prems_equals (y :: prems)
+  in if prems_equals prems
+     then eqs |> critic ctxt simps
+              |> Seq.map (Logic.list_implies o pair prem)
+     else Seq.empty
+  end
+
 (* Preconditions of Walsh's divergence critic *)
 fun precondictions_divergence_critic thy eqs =
     let fun pairs (h :: l) =
@@ -83,6 +96,8 @@ fun walsh_critic ctxt simps eqs =
   else Seq.empty
   end
 
+val conditional_walsh_critic = conditional walsh_critic
+
 (* Preconditions of transverse wave rules *)
 fun precondictions_transverse thy eqs =
   let fun pairs (h :: l) =
@@ -136,7 +151,7 @@ fun transverse_critic' ctxt thy simps eqs =
   eqs |> precondictions_transverse thy
       |> postconditions_transverse thy
       |> map (Utils.normalise_term ctxt simps)
-      |> filter (fn eq => eq <> @{prop "True"} andalso 
+      |> filter (fn eq => eq <> @{prop "True"} andalso
                           eq <> @{prop "False"} andalso
                           exists_subterm (fn Var _ => true
                                             | _ => false) eq)
@@ -151,6 +166,8 @@ fun transverse_critic ctxt simps eqs =
          |> Seq.of_list
     else Seq.empty
   end
+
+val conditional_transverse_critic = conditional transverse_critic
 
 end
 

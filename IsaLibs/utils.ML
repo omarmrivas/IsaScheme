@@ -130,6 +130,7 @@ sig
   val weighted_choose    : ('a * int) list -> 'a
   val repeat_until       : ('a -> bool) -> ('b -> 'a) -> 'b -> 'a
   val trim               : string -> string
+  val filter_seq         : int -> ('a -> bool) -> 'a Seq.seq -> 'a Seq.seq
 end
 
 structure DB_Utils
@@ -1262,15 +1263,10 @@ end
 
 fun sort_by_general thy terms =
   let fun ord (s, t) =
-        let val ctxt = Context.proof_of (Context.Theory thy)
-(*            val _ = tracing (Syntax.string_of_term ctxt s ^ ":" ^ Syntax.string_of_term ctxt t)
-            val _ = tracing (ML_Syntax.print_term s)
-            val _ = tracing (ML_Syntax.print_term t)*)
-        in
         case (Pattern.matches thy (s, t), Pattern.matches thy (t, s)) of
           (false, true) => GREATER
         | (true, false) => LESS
-        | _ => (list_ord int_ord o apply2 order_ints_raw) (s,t) end
+        | _ => (list_ord int_ord o apply2 order_ints_raw) (s,t)
 (*        | _ => (int_ord o (apply2 size_of_term)) (s, t)*)
   in terms |> map_index (fn (i, t) => t |> Logic.varify_global
                                         |> Logic.incr_indexes ([], [], i))
@@ -1291,6 +1287,25 @@ fun sort_by_general' thy by terms =
            |> sort (ord o apply2 snd)
            |> map fst
   end
+
+fun filter_seq bufsize f seq =
+  let fun process [] seq = 
+            (case Seq.chop bufsize seq of
+              ([], _) => Seq.empty
+            | (xs, seq) => process xs seq)
+        | process xs seq =
+              let val xs' = Par_List.map f xs
+                  val ys = xs ~~ xs'
+                            |> filter (fn (_,true) => true | _ => false)
+                            |> map fst
+              in case ys of
+                  y :: ys => let val (eqs,last) = split_last (y :: ys)
+                             in Seq.append (Seq.of_list eqs)
+                                           (Seq.make (fn () => SOME (last, process [] seq)))
+                             end
+                     | [] => process [] seq
+              end
+  in process [] seq end
 
 fun str_of_terms ctxt terms =
   terms |> map (string_of_term ctxt)
