@@ -140,8 +140,20 @@ fun prepare (data : gp_data) ((typs, terms) : subst) =
     |> (fn csubst => Drule.instantiate_normalize csubst (#scheme data))
 (*    |> tap (tracing o Utils.str_of_thms o single)*)
     |> (fn thm => if (#empty_simpset data)
-                  then Proof_Tools.normalise_thm_empty_simpset (#ctxt data) (#simps data) thm
-                  else Proof_Tools.normalise_thm (#ctxt data) (#simps data) thm)
+                  then let val clear_ctxt = (clear_simpset (#ctxt data)) addsimps (#simps data)
+                           val timeOut = Config.get clear_ctxt Utils.max_time_normalization
+                       in Timeout.apply 
+                                  (Time.fromSeconds timeOut)
+                                  (simplify clear_ctxt)
+                                  thm
+                       end
+                  else let val ctxt = (#ctxt data) addsimps (#simps data)
+                           val timeOut = Config.get ctxt Utils.max_time_normalization
+                       in Timeout.apply 
+                                  (Time.fromSeconds timeOut)
+                                  (simplify ctxt)
+                                  thm
+                       end)
 (*    |> tap (tracing o Utils.str_of_thms o single)*)
     |> snd o Logic.dest_equals o Thm.full_prop_of
 

@@ -1,7 +1,7 @@
 theory IsaLibs
 (*imports Complex_Main*)
 imports "~~/src/HOL/TPTP/THF_Arith"
-keywords "rec_complete" :: thy_decl and
+keywords (*"rec_complete" :: thy_decl and*)
          "complete" :: thy_goal and
          "orient_rules" :: thy_decl and
          "schematic_lemma" :: thy_decl
@@ -36,9 +36,9 @@ ML_file "prover.ML"
 ML_file "ground_completion.ML"
 ML_file "conditional_completion.ML"
 ML_file "induct_tacs4.ML"
-ML_file "proof_tools.ML"
 ML_file "divergence.ML"
 ML_file "induct_tacs.ML"
+ML_file "proof_tools.ML"
 ML_file "commands.ML"
 ML_file "meta_gp_hol.ML"
 ML_file "exhaust.ML"
@@ -78,11 +78,11 @@ DB_EQ_Terms.setup_max_random_terms #>
 DB_EQ_Terms.setup_max_vars_in_tx #>
 
 DB_Prover.setup_max_time_in_proof #>
-DB_Proof_Tools.setup_max_depth_in_meta_induction #>
+(*DB_Proof_Tools.setup_max_depth_in_meta_induction #>
 DB_Proof_Tools.setup_max_num_generalizations #>
-DB_Proof_Tools.setup_max_consts_in_generalizations #>
+DB_Proof_Tools.setup_max_consts_in_generalizations #>*)
 DB_Random_Terms.setup_max_lambda_size #>
-DB_Proof_Tools.setup_use_metis #>
+(*DB_Proof_Tools.setup_use_metis #>*)
 
 DB_Aprove.setup_use_aprove #>
 DB_Aprove.setup_use_aprove_srv #>
@@ -107,10 +107,10 @@ declare [[
   max_vars_in_tx = 3,
   max_time_in_termination = 20,
   max_time_in_fitness = 15,
-  max_depth_in_meta_induction = 10,
-  max_num_generalizations = 3,
-  max_consts_in_generalizations = 4,
-  use_metis = false,
+(*  max_depth_in_meta_induction = 10,*)
+(*  max_num_generalizations = 3,*)
+(*  max_consts_in_generalizations = 4,*)
+(*  use_metis = false,*)
   quickcheck_quiet = true,
   use_aprove=true,
   use_aprove_srv=true,
@@ -253,168 +253,4 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
-(*datatype Bin = One | ZeroAnd (ZeroAnd_0: "Bin") | OneAnd (OneAnd_0: "Bin")
-
-fun s :: "Bin => Bin" where
-"(s One) = (ZeroAnd One)"|
-"(s (ZeroAnd xs)) = (OneAnd xs)"|
-"(s (OneAnd ys)) = (ZeroAnd (s ys))"
-
-fun plusa :: "Bin => Bin => Bin" where
-"(plusa One y) = (s y)"|
-"(plusa (ZeroAnd z) One) = (s (ZeroAnd z))"|
-"(plusa (ZeroAnd z) (ZeroAnd ys)) = (ZeroAnd (plusa z ys))"|
-"(plusa (ZeroAnd z) (OneAnd xs)) = (OneAnd (plusa z xs))"|
-"(plusa (OneAnd x2) One) = (s (OneAnd x2))"|
-"(plusa (OneAnd x2) (ZeroAnd zs)) = (OneAnd (plusa x2 zs))"|
-"(plusa (OneAnd x2) (OneAnd ys2)) = (ZeroAnd (s (plusa x2 ys2)))"
-
-fun timesa :: "Bin => Bin => Bin" where
-"(timesa One y) = y"|
-"(timesa (ZeroAnd xs) y) = (ZeroAnd (timesa xs y))"|
-"(timesa (OneAnd ys) y) = (plusa (ZeroAnd (timesa ys y)) y)"
-
-lemma TRS: 
-  "timesa One y \<equiv> y"
-  "timesa x One \<equiv> x"
-  "s One \<equiv> ZeroAnd One"
-  "plusa One y \<equiv> s y"
-  "plusa x One \<equiv> s x"
-  "plusa xa xa \<equiv> ZeroAnd xa"
-  "s (ZeroAnd xs) \<equiv> OneAnd xs"
-  "plusa y x \<equiv> plusa x y"
-  "s (OneAnd ys) \<equiv> ZeroAnd (s ys)"
-  "plusa y (ZeroAnd One) \<equiv> s (s y)"
-  "timesa (ZeroAnd xs) y \<equiv> ZeroAnd (timesa xs y)"
-  "timesa y (ZeroAnd xs) \<equiv> ZeroAnd (timesa y xs)"
-  "plusa x (s y) \<equiv> s (plusa x y)"
-  "timesa y (OneAnd One) \<equiv> plusa y (ZeroAnd y)"
-  "timesa (s y) z \<equiv> plusa z (timesa y z)"
-  "plusa (ZeroAnd z) (ZeroAnd ys) \<equiv> ZeroAnd (plusa z ys)"
-  "plusa x (OneAnd xa) \<equiv> s (plusa x (ZeroAnd xa))"
-  "plusa ya (plusa x ya) \<equiv> plusa x (ZeroAnd ya)"
-  "plusa (OneAnd x2) (ZeroAnd zs) \<equiv> OneAnd (plusa x2 zs)"
-  "timesa (OneAnd ys) y \<equiv> plusa (ZeroAnd (timesa ys y)) y"
-  "plusa y (plusa y (ZeroAnd x)) \<equiv> ZeroAnd (plusa x y)"
-  "timesa y (OneAnd (ZeroAnd One)) \<equiv> plusa y (ZeroAnd (ZeroAnd y))"
-  "plusa x (ZeroAnd (s y)) \<equiv> s (s (plusa x (ZeroAnd y)))"
-  "timesa ys (OneAnd (ZeroAnd (ZeroAnd One))) \<equiv> plusa ys (ZeroAnd (ZeroAnd (ZeroAnd ys)))"
-  "plusa (ZeroAnd One) (plusa x (ZeroAnd (ZeroAnd xa))) \<equiv> plusa x (ZeroAnd (OneAnd xa))"
-  "plusa (ZeroAnd (ZeroAnd One)) (plusa x (ZeroAnd (ZeroAnd (ZeroAnd xa)))) \<equiv> plusa x (ZeroAnd (ZeroAnd (OneAnd xa)))"
-  sorry
-  
-lemma R: "plusa (OneAnd One) (plusa y (ZeroAnd (ZeroAnd z))) \<equiv> plusa (s y) (ZeroAnd (OneAnd z))"
-  sorry
-    
-ML {*
-  val start = Timing.start ()
-  val _ = DB_Completion.completion_debug := false
-  val thy = @{theory}
-  val prop = @{prop "((timesa x (plusa y z)) = (plusa (timesa x y) (timesa x z)))"}
-  val def_lemmas = Utils.get_definitional_rewrites thy prop
-  val ctxt_nodefs = @{context} delsimps def_lemmas
-  val terminates = Aprove.memoized_terminates ctxt_nodefs
-(*  val TRS = @{thms f.simps} |> map Utils.obj_to_meta
-  val _ = tracing (Aprove.trs_to_wst TRS)
-  val foo1 = Aprove.aprove_path_ok @{context}
-  val foo2 = Aprove.aprove_server_ok @{context}*)
-  val TRS = @{thms TRS}
-  val e = @{thm R}
-  val result = Ground_Completion.run_completion [] ctxt_nodefs terminates TRS e
-      val elapsed = start |> Timing.result
-                          |> #elapsed
-                          |> Time.toReal
-      val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
-(* Aprove server call val elapsed = 786.469063: real *)
-(* Aprove java call val elapsed = 980.483295: real *)
-(* Momoizing ground joinability tests val elapsed = 764.239419: real *)
-*}*)
-  
-(*function gcd where
-  "gcd x 0 = x"|
-  "gcd 0 y = y"|
-  "x<y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (Suc x) (y-x)"|
-  "\<not> x < y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (x-y) (Suc y)"
-  by (atomize_elim, auto, arith)
-termination by lexicographic_order
-    
-ML {*
-  val start = Timing.start ()
-  val _ = DB_Completion.completion_debug := false
-  val thy = @{theory}
-  val prop = @{prop "gcd x y = gcd x y"}
-  val def_lemmas = Utils.get_definitional_rewrites thy prop
-  val ctxt_nodefs = @{context} delsimps def_lemmas
-  val terminates = Aprove.memoized_terminates ctxt_nodefs
-(*  val TRS = @{thms f.simps} |> map Utils.obj_to_meta
-  val _ = tracing (Aprove.trs_to_wst TRS)
-  val foo1 = Aprove.aprove_path_ok @{context}
-  val foo2 = Aprove.aprove_server_ok @{context}*)
-  val TRS = [@{thm gcd.simps(1)}, @{thm gcd.simps(2)}, @{thm gcd.simps(3)}] |> map Utils.obj_to_meta
-  val e = Utils.obj_to_meta @{thm gcd.simps(4)}
-  val e' = @{thm sorted_sort}
-  val result = DB_Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS e'
-      val elapsed = start |> Timing.result
-                          |> #elapsed
-                          |> Time.toReal
-      val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
-*}*)
-
-fun suma where
-"suma 0 y = y"|
-"suma (Suc x) y = Suc (suma x y)"
-
-ML {*
-  val t1 = @{prop "x < y \<Longrightarrow> Suc (Suc (suma x y)) = suma (Suc x) y"}
-  val t2 = @{prop "x < y \<Longrightarrow> Suc (Suc (suma x y)) = suma (Suc (Suc x)) y"}
-  val s1 = @{term "Suc (Suc (suma x y)) = suma (Suc x) y"}
-  val s2 = @{term "Suc (Suc (suma x y)) = suma (Suc (Suc x)) y"}
-  val res1 = DB_Divergence.conditional_walsh_critic @{context} [] [t1,t2]
-  val res2 = Divergence.walsh_critic @{context} [] [s1,s2]
-(*  val res1' = Utils.filter_seq 1 (not o (fn _ => false)) res1*)
-  fun print t = let val _ = tracing (Syntax.string_of_term @{context} t)
-                in t end
-  val res1' = Utils.filter_seq (Thread.numProcessors () * 2) (not o Counter_Example.memoized_counter_example @{context} 10 o print) res1
-*}
-  
-ML {*
-  val terms = Seq.list_of res1'
-  val _ = map (tracing o Syntax.string_of_term @{context}) terms
-*}
-
-
-ML {*
-  val ctxt = @{context}
-  val thy = @{theory}
-  val prop = @{prop "suma x y = suma y x"}
-  val known_laws = DB_EQ_Terms.known_laws ctxt prop
-                  |> Seq.map (pair "EQ_KNOWN")
-*}
-  
-ML {*
-  val terms = Seq.list_of known_laws
-  val _ = map (tracing o Syntax.string_of_term ctxt o snd) terms
-*}
-
-ML{*
-  val prop = @{prop "Suc x = Suc y \<Longrightarrow> Suc x < Suc y \<Longrightarrow> suma (Suc x) (Suc y) = suma (Suc y) (Suc x)"}
-  val r = DB_EQ_Terms.generalize_cond_eq @{context} prop
-  val _ =  (tracing o Syntax.string_of_term @{context}) r
-  val res = DB_EQ_Terms.generalize_assumptions @{context} r
-  val _ =  (tracing o Syntax.string_of_term @{context} o the) res
-*}
-  
-ML {*
-  val seq = Utils.lazy_subsets [1,2,3]
-  val r = Seq.list_of seq
-  val _ = Par_List.map
-*}
-
-lemma "suma x y = suma y x"
-  apply (induction x, auto)
-
-lemma "suma x y = suma y x"
-  apply inductive_prove
-
-
 end

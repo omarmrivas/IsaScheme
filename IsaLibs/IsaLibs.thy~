@@ -36,9 +36,9 @@ ML_file "prover.ML"
 ML_file "ground_completion.ML"
 ML_file "conditional_completion.ML"
 ML_file "induct_tacs4.ML"
-ML_file "proof_tools.ML"
 ML_file "divergence.ML"
 ML_file "induct_tacs.ML"
+ML_file "proof_tools.ML"
 ML_file "commands.ML"
 ML_file "meta_gp_hol.ML"
 ML_file "exhaust.ML"
@@ -78,11 +78,11 @@ DB_EQ_Terms.setup_max_random_terms #>
 DB_EQ_Terms.setup_max_vars_in_tx #>
 
 DB_Prover.setup_max_time_in_proof #>
-DB_Proof_Tools.setup_max_depth_in_meta_induction #>
+(*DB_Proof_Tools.setup_max_depth_in_meta_induction #>
 DB_Proof_Tools.setup_max_num_generalizations #>
-DB_Proof_Tools.setup_max_consts_in_generalizations #>
+DB_Proof_Tools.setup_max_consts_in_generalizations #>*)
 DB_Random_Terms.setup_max_lambda_size #>
-DB_Proof_Tools.setup_use_metis #>
+(*DB_Proof_Tools.setup_use_metis #>*)
 
 DB_Aprove.setup_use_aprove #>
 DB_Aprove.setup_use_aprove_srv #>
@@ -107,10 +107,10 @@ declare [[
   max_vars_in_tx = 3,
   max_time_in_termination = 20,
   max_time_in_fitness = 15,
-  max_depth_in_meta_induction = 10,
-  max_num_generalizations = 3,
-  max_consts_in_generalizations = 4,
-  use_metis = false,
+(*  max_depth_in_meta_induction = 10,*)
+(*  max_num_generalizations = 3,*)
+(*  max_consts_in_generalizations = 4,*)
+(*  use_metis = false,*)
   quickcheck_quiet = true,
   use_aprove=true,
   use_aprove_srv=true,
@@ -168,6 +168,10 @@ definition right_distributive where
 
 definition equivalence_relation where
   [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"
+  
+definition test_scheme where
+  [prop_scheme]: "test_scheme f \<equiv> (\<And>x y. size x < size y \<Longrightarrow> f x y = f y x)"
+  
   
 ML {*
 (*  val p1 = Multithreading.max_threads_value ()*)
@@ -356,47 +360,11 @@ ML {*
       val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
 *}*)
 
- 
+datatype n = cero | suc n
+  
 fun suma where
-"suma 0 y = y"|
-"suma (Suc x) y = Suc (suma x y)"
-
-ML {*
-  val ctxt = @{context}
-  val thy = @{theory}
-  val prop = @{prop "suma x y = suma y x"}
-  val def_lemmas = Utils.get_definitional_rewrites thy prop
-  val lemmas_ref = Unsynchronized.ref def_lemmas
-  val ctxt_nodefs = ctxt delsimps def_lemmas
-  val lthy_nodefs = ctxt delsimps def_lemmas
-  val size = Config.get ctxt Random_Terms.max_lambda_size
-  val n = Config.get ctxt EQ_Terms.max_random_terms
-  val (table, typsub) =
-          DB_EQ_Terms.preprocess_conjecture ctxt size n prop
-  val known_laws = DB_EQ_Terms.known_eq_laws ctxt_nodefs (table, typsub) size n lemmas_ref prop
-                  |> Seq.map (pair "EQ_KNOWN")
-*}
-  
-ML {*
-  Seq.pull known_laws
-*}
-
-ML{*
-  val prop = @{prop "Suc x = Suc y \<Longrightarrow> Suc x < Suc y \<Longrightarrow> suma (Suc x) (Suc y) = suma (Suc y) (Suc x)"}
-  val r = DB_EQ_Terms.generalize_cond_eq @{context} prop
-  val _ =  (tracing o Syntax.string_of_term @{context}) r
-  val res = DB_EQ_Terms.generalize_assumptions @{context} r
-  val _ =  (tracing o Syntax.string_of_term @{context} o the) res
-*}
-  
-ML {*
-  val seq = Utils.lazy_subsets [1,2,3]
-  val r = Seq.list_of seq
-  val _ = Par_List.map
-*}
-
-lemma "suma x y = suma y x"
-  apply (induction x, auto)
+"suma cero y = y"|
+"suma (suc x) y = suc (suma x y)"
 
 lemma "suma x y = suma y x"
   apply inductive_prove

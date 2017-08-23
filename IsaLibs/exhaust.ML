@@ -29,7 +29,14 @@ fun prepare ctxt scheme simps ((typs, terms) : subst) =
   (map (fn (ty, ty') => (dest_TVar ty, Thm.ctyp_of ctxt ty')) typs,
    map (fn (t, t') => (dest_Var t, Thm.cterm_of ctxt t')) terms)
     |> (fn csubst => Drule.instantiate_normalize csubst scheme)
-    |> Proof_Tools.normalise_thm ctxt simps
+    |> (fn thm =>
+          let val ctxt = ctxt addsimps simps
+              val timeOut = Config.get ctxt Utils.max_time_normalization
+          in Timeout.apply 
+                    (Time.fromSeconds timeOut)
+                    (simplify ctxt)
+                    thm
+          end)
     |> snd o Logic.dest_equals o Thm.full_prop_of
 
 val block_size = 1000

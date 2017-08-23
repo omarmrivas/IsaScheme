@@ -11,6 +11,7 @@ sig
   val max_time_normalization : int Config.T
 
   (* Printing *)
+  val print_term         : term -> string
   val str_of_thms        : thm list -> string
   val str_of_terms       : Proof.context -> term list -> string
   val print_ss           : Proof.context -> unit
@@ -64,6 +65,7 @@ sig
   (* Rewrite rules *)
   val lhs                : term -> term
   val rhs                : term -> term
+  val rulify             : Proof.context -> term -> term
   val bad_equation       : theory -> term * term -> bool
   val bad_equation'      : theory -> term -> bool
   val orient_eq          : theory -> order -> term -> term
@@ -91,6 +93,7 @@ sig
   val obj_to_meta                      : thm -> thm
   val commute_obj_eq                   : thm -> thm
   val commute_meta_eq                  : thm -> thm
+  val commute_eq                       : term -> term
   val dest_meta_equation               : thm -> (term * term)
   val dest_object_equation             : thm -> (term * term)
   val dest_meta_eq                     : term -> term * term
@@ -131,6 +134,7 @@ sig
   val repeat_until       : ('a -> bool) -> ('b -> 'a) -> 'b -> 'a
   val trim               : string -> string
   val filter_seq         : int -> ('a -> bool) -> 'a Seq.seq -> 'a Seq.seq
+  val map_filter_seq     : int -> ('a -> 'b option) -> 'a Seq.seq -> 'b Seq.seq
 end
 
 structure DB_Utils
@@ -138,6 +142,8 @@ structure DB_Utils
 = struct
 
 val (max_time_normalization, setup_max_time_normalization) = Attrib.config_int @{binding "max_time_normalization"} (K 5)
+
+val print_term = ML_Syntax.print_term
 
 fun str_of_thms thms = 
   let fun str_of_cterm thy t = Syntax.string_of_term_global thy (Thm.term_of t)
@@ -625,6 +631,31 @@ fun dest_eq prop =
                 SOME (lhs, rhs) => (lhs, rhs)
               | NONE => raise ERROR "Not an equation!")
 
+fun commute_eq prop =
+  let val prems = Logic.strip_imp_prems prop
+      fun mk_cond_eq (lhs,rhs) =
+              (rhs,lhs) |> (HOLogic.mk_Trueprop o HOLogic.mk_eq)
+                        |> pair prems
+                        |> Logic.list_implies
+  in
+    case try dest_object_eq prop of
+      SOME p => mk_cond_eq p
+    | NONE => (case try dest_meta_eq prop of
+                SOME p => mk_cond_eq p
+              | NONE => raise ERROR "Not an equation!")
+  end
+
+fun rulify ctxt prop =
+  let val rule_true = @{lemma "P \<equiv> (P = True)" by simp}
+  in if can dest_eq prop
+     then prop
+     else prop |> tap (tracing o print_term)
+               |> Thm.cterm_of ctxt
+               |> (Conv.concl_conv (Logic.count_prems prop) (Conv.arg_conv (Conv.rewr_conv rule_true)))
+               |> (snd o dest_meta_equation)
+  end
+
+
 fun rhs_is_trivial (_, rhs) =
     is_equal (Term_Ord.term_ord (@{const "True"}, rhs))
 
@@ -762,7 +793,7 @@ fun orient_eq thy ord eq =
     let val eq = ac_orient ord eq
     in if not (bad_equation' thy eq) then eq
        else if not (bad_equation' thy (swap_eq eq)) then swap_eq eq
-       else ac_orient ord eq
+       else eq
     end
 
 (*fun orient_eq thy ord eq =
@@ -1289,22 +1320,37 @@ fun sort_by_general' thy by terms =
   end
 
 fun filter_seq bufsize f seq =
-  let fun process [] seq = 
-            (case Seq.chop bufsize seq of
-              ([], _) => Seq.empty
-            | (xs, seq) => process xs seq)
+  let fun process [] seq =
+            Seq.make (fn () =>
+              (case Seq.chop bufsize seq of
+                ([], _) => NONE
+              | (xs, seq) => Seq.pull (process xs seq)))
         | process xs seq =
+            Seq.make (fn () =>
               let val xs' = Par_List.map f xs
                   val ys = xs ~~ xs'
                             |> filter (fn (_,true) => true | _ => false)
                             |> map fst
               in case ys of
-                  y :: ys => let val (eqs,last) = split_last (y :: ys)
-                             in Seq.append (Seq.of_list eqs)
-                                           (Seq.make (fn () => SOME (last, process [] seq)))
-                             end
-                     | [] => process [] seq
-              end
+                  y :: ys => SOME (y, Seq.append (Seq.of_list ys) (process [] seq))
+                | [] => Seq.pull (process [] seq)
+             end)
+  in process [] seq end
+
+fun map_filter_seq bufsize f seq =
+  let fun process [] seq =
+            Seq.make (fn () =>
+              (case Seq.chop bufsize seq of
+                ([], _) => NONE
+              | (xs, seq) => Seq.pull (process xs seq)))
+        | process xs seq =
+            Seq.make (fn () =>
+              let val ys = xs |> Par_List.map f
+                              |> map_filter I
+              in case ys of
+                  y :: ys => SOME (y, Seq.append (Seq.of_list ys) (process [] seq))
+                | [] => Seq.pull (process [] seq)
+             end)
   in process [] seq end
 
 fun str_of_terms ctxt terms =

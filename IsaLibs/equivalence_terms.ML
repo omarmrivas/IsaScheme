@@ -19,6 +19,11 @@ val counter_example: Proof.context -> int -> int -> term list Type_Tab.table ->
 val generalize : theory -> 'a Type_Tab.table * (term -> term) ->
                   int -> term -> term list
 
+val preprocess_conjecture : Proof.context ->
+      int ->
+        int ->
+          term -> term list Type_Tab.table * (term -> term)
+
 end
 
 structure DB_EQ_Terms
@@ -96,6 +101,7 @@ fun counter_example ctxt size n table typsub simps (conjecture : term) =
       val conjs = map (fn subst => subst t') tsubsts
   in exists (fn conj => Utils.normalise_term ctxt simps conj = @{prop "False"}) conjs end
 
+(* FIXME: improve lazy execution *)
 fun discover_equations ctxt simps typsub tsubsts terms =
   let val buff = Thread.numProcessors () * 2
       fun check t s =
@@ -120,7 +126,7 @@ fun discover_equations ctxt simps typsub tsubsts terms =
                   SOME ss => (case map_filter (check t) ss of
                               [] => check_eqs (Term_List_Tab.update (key, t::ss) tab) terms seq
                             | eqs  => let val (eqs,last) = split_last eqs
-                             in Seq.append (Seq.of_list eqs)
+                                      in Seq.append (Seq.of_list eqs)
                                       (Seq.make (fn () => SOME (last, check_eqs (Term_List_Tab.update (key, t::ss) tab) terms seq))) end)
                  | NONE => check_eqs (Term_List_Tab.update (key, [t]) tab) terms seq
   in check_eqs Term_List_Tab.empty [] terms end
@@ -476,54 +482,6 @@ fun gen_equations ctxt typsub simps subsumed tsubsts terms_lhs terms_rhs =
             end)
              |> maps I
   end
-
-fun generalize_cond_eq ctxt conj =
-  let fun make_table positions =
-            positions |> pair Term_Tab.empty
-                      |> Library.foldl (fn (tab, (t,typ,pos)) =>
-                            case Term_Tab.lookup tab t of
-                                SOME l => Term_Tab.update (t, (typ,pos) :: l) tab
-                              | NONE => Term_Tab.update (t, [(typ,pos)]) tab)
-      val names = Term.add_free_names conj []
-(*      val positions = conj |> Utils.positions
-                           |> filter (not o is_Const o (fn (t, _, _) => t))
-                           |> make_table*)
-      val positions = conj |> Utils.positions
-                           |> filter (not o is_Const o (fn (t, _, _) => t))
-                           |> make_table
-                           |> Term_Tab.dest
-                           |> filter (fn (_, l) => length l > 1)
-                           |> sort (prod_ord int_ord int_ord o apply2 (fn (t, l) => (~ (length l),  ~(size_of_term t))))
-                           |> pair []
-                           |> Library.foldl (fn (positions, (t,l)) =>
-                                   if exists (fn (_, poss) => exists (fn (_, l) => 
-                                          exists (fn (_,l) => is_prefix (op =) l poss) l) positions) l
-                                   then positions
-                                   else (t,l) :: positions)
-                           |> rev
-                           |> map snd
-  in ((conj,names), positions)
-                    |> Library.foldl (fn ((conj,names), l) => 
-                          let val name = singleton (Name.variant_list names) "x"
-                              val typ = (fst o hd) l
-                              val poss = map snd l
-                          in (Library.foldl (fn (conj, pos) => 
-                                Utils.substitute (Free (name,typ),pos) conj) (conj,poss), 
-                                name :: names) end)
-                    |> fst
-  end
-
-fun generalize_assumptions ctxt conj =
-  let val prems = Logic.strip_imp_prems conj
-      val concl = Logic.strip_imp_concl conj
-      val prems_seq = Utils.lazy_subsets prems
-      val conjs = prems_seq |> Seq.map (Logic.list_implies o rpair concl)
-                            |> Seq.list_of
-      val timeOut = Config.get ctxt Counter_Example.max_time_in_counter_ex
-  in Par_List.get_some (fn conj =>
-      if Counter_Example.memoized_counter_example ctxt timeOut conj
-      then NONE
-      else SOME conj) conjs end
 
 fun generalize_eq' ctxt size n (tab, typsub) simps subsumed eq =
   let val thy = Proof_Context.theory_of ctxt

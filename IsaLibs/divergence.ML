@@ -9,8 +9,10 @@ Names for important Pure and HOL constants.
 signature DIVERGENCE =
 sig
 
-val walsh_critic      : Proof.context -> thm list -> term list -> term Seq.seq
-val transverse_critic : Proof.context -> thm list -> term list -> term Seq.seq
+val walsh_critic                  : Proof.context -> thm list -> term list -> term Seq.seq
+val conditional_walsh_critic      : Proof.context -> thm list -> term list -> term Seq.seq
+val transverse_critic             : Proof.context -> thm list -> term list -> term Seq.seq
+val conditional_transverse_critic : Proof.context -> thm list -> term list -> term Seq.seq
 
 end
 

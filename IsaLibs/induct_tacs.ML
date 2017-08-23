@@ -23,6 +23,7 @@ sig
   val astar_ind_auto_tac : Proof.context -> tactic
   val iter_dep_ind_auto_tac : Proof.context -> tactic
   val inductive_prover_tactic: Proof.context -> int -> tactic
+  val ind_auto_failure : term Net.net Unsynchronized.ref -> Proof.context -> tactic
 (*  val induct_auto_tac             : term_set Unsynchronized.ref -> Proof.context -> int -> tactic
   val bef_induct_auto_tac         : term_set Unsynchronized.ref -> Proof.context -> tactic*)
 end
@@ -376,7 +377,7 @@ fun pull_conjecture thy foo gen {laws, tx, heuristics} =
   | NONE =>
   let fun pull_heuristic conjecture heuristics =
         case gen conjecture of
-           conjecture :: gens => 
+           conjecture :: gens =>
                (gens @ heuristics)
                     |> Utils.make_term_set_by' thy snd
                     |> Utils.sort_by_general' thy snd
@@ -704,7 +705,7 @@ fun inductive_prover_tactic ctxt =
   SUBGOAL (inductive_prover_tactic' ctxt)
 
 val method_setup_inductive_prover =
-  Method.setup (Binding.name "inductive_prover")
+  Method.setup (Binding.name "inductive_prover2")
     (Scan.succeed (fn ctxt => SIMPLE_METHOD (inductive_prover_tactic ctxt 1)))
     "Recursive prover with failure analysis. Interleaves induction and auto and check failures."
 

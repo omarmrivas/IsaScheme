@@ -23,7 +23,7 @@ fun map_contexts f =
         Local_Theory.target (Context.proof_map f) #>
         Context.proof_map f
 
-val _ =
+(*val _ =
   let
     fun goal_prop str ctxt =
       let val limit = Config.get ctxt Proof_Tools.max_depth_in_meta_induction
@@ -42,7 +42,7 @@ val _ =
          @{command_keyword "rec_complete"}
          "Proves a new equational lemma and performs ground completion."
          (complete_parser >> goal_prop)
-  end
+  end*)
 
 
 val _ =
