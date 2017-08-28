@@ -158,21 +158,32 @@ fun structural_induction_tac ctxt frees fixes (goal, i) =
                         (* Group sets of vars with the same type *)
                         |> Library.partition_eq (is_equal o Term_Ord.typ_ord o (apply2 (snd o fst)))
                         |> maps (fn l => let val rules = (single o hd o snd o hd) l
-                                             val vs = map (SOME o fst o fst) l
+                                             val vs = map fst l
 (*                                             val vss = Utils.subsets vs*)
                                              val vs_rules = map_product pair vs rules
                                          in vs_rules end)
   in
     (no_tac, var_sets)
-      |> Library.foldl (fn (thms,(v,th)) =>
-           (fn thh => DETERM (Induct_Tacs.induct_tac ctxt [[v]] (SOME [th]) i) thh
+      |> Library.foldl (fn (thms,((v,ty),th)) =>
+           let val _ = ()(*tracing ("Structural on: " ^ v)*)
+           in (fn thh => DETERM (Induct_Tacs.induct_tac ctxt [[SOME v]] (SOME [th]) i) thh
+                            handle ERROR err => (tracing (err ^ " : " ^ Syntax.string_of_term ctxt goal);
+                                               tracing "Frees: ";
+                                               map (tracing o (Syntax.string_of_term ctxt) o Free) frees;
+                                               tracing "Fixes: ";
+                                               map (tracing o (Syntax.string_of_term ctxt) o Free) fixes;
+                                               raise ERROR err)) APPEND
+(*  val induction_tac: Proof.context -> bool -> (binding option * (term * bool)) option list list ->
+    (string * typ) list list -> term option list -> thm list option ->
+    thm list -> int -> tactic *)
+              (fn thh => DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (v, ty), false))]] [] [] NONE [] i) thh
                             handle ERROR err => (tracing (err ^ " : " ^ Syntax.string_of_term ctxt goal);
                                                tracing "Frees: ";
                                                map (tracing o (Syntax.string_of_term ctxt) o Free) frees;
                                                tracing "Fixes: ";
                                                map (tracing o (Syntax.string_of_term ctxt) o Free) fixes;
                                                raise ERROR err))
-              APPEND thms)
+              APPEND thms end)
   end
 
 (* simple auto tac *)

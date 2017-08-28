@@ -84,8 +84,10 @@ fun preprocess_conjecture ctxt size n conjecture =
       val frees = Term.add_frees conjecture []
       val typs = frees |> map snd
                        |> Type_Tab.make_set
-                       |> Type_Tab.dest
-                       |> map fst
+                       |> Type_Tab.keys
+                       |> maps (Utils.datatype_dependencies ctxt)
+                       |> Type_Tab.make_set
+                       |> Type_Tab.keys
       val thy = Proof_Context.theory_of ctxt
       val ts = typs |> map (fn ty => 
                   let val ts = (1 upto n)
@@ -101,7 +103,23 @@ fun counter_example ctxt size n table typsub simps (conjecture : term) =
       val conjs = map (fn subst => subst t') tsubsts
   in exists (fn conj => Utils.normalise_term ctxt simps conj = @{prop "False"}) conjs end
 
-(* FIXME: improve lazy execution *)
+fun maps_filter_seq bufsize v par f seq =
+  let fun process v [] seq =
+            Seq.make (fn () =>
+              (case Seq.chop bufsize seq of
+                ([], _) => NONE
+              | (xs, seq) => let val xs = Par_List.map par xs
+                             in Seq.pull (process v xs seq) end))
+        | process v xs seq =
+            Seq.make (fn () =>
+              case xs of
+                  x :: xs => let val (v, ys) = f v x
+                             in case ys of
+                                  y :: ys => SOME (y, Seq.append (Seq.of_list ys) (process v xs seq))
+                                | [] => Seq.pull (process v xs seq) end
+                | [] => Seq.pull (process v [] seq))
+  in process v [] seq end
+
 fun discover_equations ctxt simps typsub tsubsts terms =
   let val buff = Thread.numProcessors () * 2
       fun check t s =
@@ -112,7 +130,18 @@ fun discover_equations ctxt simps typsub tsubsts terms =
            then SOME eq
            else NONE
         end
-      fun check_eqs tab [] seq = 
+      fun calcule_keys t =
+          let val _ = (tracing o Syntax.string_of_term ctxt) t
+              val t' = typsub t
+              val key = map (fn subst => Utils.normalise_term ctxt (!simps) (subst t')) tsubsts
+              val _ = (tracing o Utils.str_of_terms ctxt) key
+          in (t, key) end
+      fun find_eqs tab (t,key) =
+          case Term_List_Tab.lookup tab key of
+              SOME ss => (Term_List_Tab.update (key, t::ss) tab,  map_filter (check t) ss)
+            | NONE => (Term_List_Tab.update (key, [t]) tab, [])
+  in maps_filter_seq buff Term_List_Tab.empty calcule_keys find_eqs terms end
+(*      fun check_eqs tab [] seq = 
             (case Seq.chop buff seq of
               ([], _) => Seq.empty
             | (terms, seq) =>
@@ -129,8 +158,7 @@ fun discover_equations ctxt simps typsub tsubsts terms =
                                       in Seq.append (Seq.of_list eqs)
                                       (Seq.make (fn () => SOME (last, check_eqs (Term_List_Tab.update (key, t::ss) tab) terms seq))) end)
                  | NONE => check_eqs (Term_List_Tab.update (key, [t]) tab) terms seq
-  in check_eqs Term_List_Tab.empty [] terms end
-
+  in check_eqs Term_List_Tab.empty [] terms end*)
 
 (* Finds a potential valid equation using tests
    terms: must be sorted from more general to less general
@@ -330,6 +358,7 @@ fun known_laws ctxt prop =
             then NONE
             else SOME prop)
         |> map_filter I
+        |> tap (tracing o Utils.str_of_terms ctxt)
         |> Seq.of_list
   end
 
@@ -412,6 +441,9 @@ fun equational_theory_exploration ctxt (table, typsub) size n lambda_size simps 
       val frees = 
           [] |> Term.add_frees prop
              |> map snd
+             |> Type_Tab.make_set
+             |> Type_Tab.keys
+             |> maps (Utils.datatype_dependencies ctxt)
              |> Type_Tab.make_set
              |> Type_Tab.keys
              |> maps (fn typ => map (fn _ => typ) (1 upto Config.get ctxt max_vars_in_tx))

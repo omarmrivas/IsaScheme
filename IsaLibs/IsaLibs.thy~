@@ -1,7 +1,7 @@
 theory IsaLibs
 (*imports Complex_Main*)
 imports "~~/src/HOL/TPTP/THF_Arith"
-keywords "rec_complete" :: thy_decl and
+keywords (*"rec_complete" :: thy_decl and*)
          "complete" :: thy_goal and
          "orient_rules" :: thy_decl and
          "schematic_lemma" :: thy_decl
@@ -15,6 +15,7 @@ ML {*
   
 ML_file "$ISABELLE_HOME/src/HOL/TPTP/sledgehammer_tactics.ML"
 (*ML_file "html.ML"*)
+ML_file "my_nitpick.ML"
 ML_file "const_names.ML"
 ML_file "tables.ML"
 ML_file "utils.ML"
@@ -97,7 +98,7 @@ Completion_Rules.setup
 
 declare [[
   use_quickcheck = true,
-  use_nitpick = false,
+  use_nitpick = true,
   simp_before = false,
   max_time_in_counter_ex = 25,
   max_time_in_proof = 30,
@@ -168,10 +169,6 @@ definition right_distributive where
 
 definition equivalence_relation where
   [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"
-  
-definition test_scheme where
-  [prop_scheme]: "test_scheme f \<equiv> (\<And>x y. size x < size y \<Longrightarrow> f x y = f y x)"
-  
   
 ML {*
 (*  val p1 = Multithreading.max_threads_value ()*)
@@ -253,121 +250,87 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
-(*datatype Bin = One | ZeroAnd (ZeroAnd_0: "Bin") | OneAnd (OneAnd_0: "Bin")
+datatype ('a) list = nil | cons (head: "'a") (tail: "'a list")
 
-fun s :: "Bin => Bin" where
-"(s One) = (ZeroAnd One)"|
-"(s (ZeroAnd xs)) = (OneAnd xs)"|
-"(s (OneAnd ys)) = (ZeroAnd (s ys))"
+datatype Tok = X | Y | Z
 
-fun plusa :: "Bin => Bin => Bin" where
-"(plusa One y) = (s y)"|
-"(plusa (ZeroAnd z) One) = (s (ZeroAnd z))"|
-"(plusa (ZeroAnd z) (ZeroAnd ys)) = (ZeroAnd (plusa z ys))"|
-"(plusa (ZeroAnd z) (OneAnd xs)) = (OneAnd (plusa z xs))"|
-"(plusa (OneAnd x2) One) = (s (OneAnd x2))"|
-"(plusa (OneAnd x2) (ZeroAnd zs)) = (OneAnd (plusa x2 zs))"|
-"(plusa (OneAnd x2) (OneAnd ys2)) = (ZeroAnd (s (plusa x2 ys2)))"
+datatype B2 = SB (SB_0: "B2") | ZB
 
-fun timesa :: "Bin => Bin => Bin" where
-"(timesa One y) = y"|
-"(timesa (ZeroAnd xs) y) = (ZeroAnd (timesa xs y))"|
-"(timesa (OneAnd ys) y) = (plusa (ZeroAnd (timesa ys y)) y)"
+datatype A2 = SA (SA_0: "A2") | ZA
 
-lemma TRS: 
-  "timesa One y \<equiv> y"
-  "timesa x One \<equiv> x"
-  "s One \<equiv> ZeroAnd One"
-  "plusa One y \<equiv> s y"
-  "plusa x One \<equiv> s x"
-  "plusa xa xa \<equiv> ZeroAnd xa"
-  "s (ZeroAnd xs) \<equiv> OneAnd xs"
-  "plusa y x \<equiv> plusa x y"
-  "s (OneAnd ys) \<equiv> ZeroAnd (s ys)"
-  "plusa y (ZeroAnd One) \<equiv> s (s y)"
-  "timesa (ZeroAnd xs) y \<equiv> ZeroAnd (timesa xs y)"
-  "timesa y (ZeroAnd xs) \<equiv> ZeroAnd (timesa y xs)"
-  "plusa x (s y) \<equiv> s (plusa x y)"
-  "timesa y (OneAnd One) \<equiv> plusa y (ZeroAnd y)"
-  "timesa (s y) z \<equiv> plusa z (timesa y z)"
-  "plusa (ZeroAnd z) (ZeroAnd ys) \<equiv> ZeroAnd (plusa z ys)"
-  "plusa x (OneAnd xa) \<equiv> s (plusa x (ZeroAnd xa))"
-  "plusa ya (plusa x ya) \<equiv> plusa x (ZeroAnd ya)"
-  "plusa (OneAnd x2) (ZeroAnd zs) \<equiv> OneAnd (plusa x2 zs)"
-  "timesa (OneAnd ys) y \<equiv> plusa (ZeroAnd (timesa ys y)) y"
-  "plusa y (plusa y (ZeroAnd x)) \<equiv> ZeroAnd (plusa x y)"
-  "timesa y (OneAnd (ZeroAnd One)) \<equiv> plusa y (ZeroAnd (ZeroAnd y))"
-  "plusa x (ZeroAnd (s y)) \<equiv> s (s (plusa x (ZeroAnd y)))"
-  "timesa ys (OneAnd (ZeroAnd (ZeroAnd One))) \<equiv> plusa ys (ZeroAnd (ZeroAnd (ZeroAnd ys)))"
-  "plusa (ZeroAnd One) (plusa x (ZeroAnd (ZeroAnd xa))) \<equiv> plusa x (ZeroAnd (OneAnd xa))"
-  "plusa (ZeroAnd (ZeroAnd One)) (plusa x (ZeroAnd (ZeroAnd (ZeroAnd xa)))) \<equiv> plusa x (ZeroAnd (ZeroAnd (OneAnd xa)))"
-  sorry
-  
-lemma R: "plusa (OneAnd One) (plusa y (ZeroAnd (ZeroAnd z))) \<equiv> plusa (s y) (ZeroAnd (OneAnd z))"
-  sorry
-    
+datatype S = A (A_0: "A2") | B (B_0: "B2")
+
+fun appenda :: "'a list => 'a list => 'a list" where
+"(appenda nil y) = y"|
+"(appenda (cons z xs) y) = (cons z (appenda xs y))"
+
+fun linA :: "A2 => Tok list" where
+"(linA (SA a)) = (appenda (appenda (cons X (nil :: Tok list)) (linA a)) (cons Y (nil :: Tok list)))"|
+"(linA ZA) = (cons X (cons Z (cons Y (nil :: Tok list))))"
+
+fun linB :: "B2 => Tok list" where
+"(linB (SB b)) = (appenda (appenda (cons X (nil :: Tok list)) (linB b)) (cons Y (cons Y (nil :: Tok list))))"|
+"(linB ZB) = (cons X (cons Z (cons Y (cons Y (nil :: Tok list)))))"
+
+fun linS :: "S => Tok list" where
+"(linS (A a)) = (linA a)"|
+"(linS (B b)) = (linB b)"
+
 ML {*
-  val start = Timing.start ()
-  val _ = DB_Completion.completion_debug := false
-  val thy = @{theory}
-  val prop = @{prop "((timesa x (plusa y z)) = (plusa (timesa x y) (timesa x z)))"}
-  val def_lemmas = Utils.get_definitional_rewrites thy prop
-  val ctxt_nodefs = @{context} delsimps def_lemmas
-  val terminates = Aprove.memoized_terminates ctxt_nodefs
-(*  val TRS = @{thms f.simps} |> map Utils.obj_to_meta
-  val _ = tracing (Aprove.trs_to_wst TRS)
-  val foo1 = Aprove.aprove_path_ok @{context}
-  val foo2 = Aprove.aprove_server_ok @{context}*)
-  val TRS = @{thms TRS}
-  val e = @{thm R}
-  val result = Ground_Completion.run_completion [] ctxt_nodefs terminates TRS e
-      val elapsed = start |> Timing.result
-                          |> #elapsed
-                          |> Time.toReal
-      val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
-(* Aprove server call val elapsed = 786.469063: real *)
-(* Aprove java call val elapsed = 980.483295: real *)
-(* Momoizing ground joinability tests val elapsed = 764.239419: real *)
-*}*)
+  val ctxt = @{context}
+  val prop = @{prop "\<not>(x = 0) \<Longrightarrow> \<not>(x = Suc 0) \<Longrightarrow>\<not>(x = 2) \<Longrightarrow>\<not>(x = 3) \<Longrightarrow>\<not>(x = 4) \<Longrightarrow>\<not>(x = 5) \<Longrightarrow>\<not>(x = x)"}
+  val state = ctxt |> Proof.theorem NONE (K I) [[(prop, [])]]
+  val nitpick_params = Nitpick_Commands.default_params @{theory} []
+  val res = Nitpick.pick_nits_in_subgoal state (Counter_Example.get_nitpick_params nitpick_params 10) Nitpick.Normal 1 1
+*}
   
-(*function gcd where
-  "gcd x 0 = x"|
-  "gcd 0 y = y"|
-  "x<y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (Suc x) (y-x)"|
-  "\<not> x < y \<Longrightarrow> gcd (Suc x) (Suc y) = gcd (x-y) (Suc y)"
-  by (atomize_elim, auto, arith)
-termination by lexicographic_order
-    
 ML {*
-  val start = Timing.start ()
-  val _ = DB_Completion.completion_debug := false
-  val thy = @{theory}
-  val prop = @{prop "gcd x y = gcd x y"}
-  val def_lemmas = Utils.get_definitional_rewrites thy prop
-  val ctxt_nodefs = @{context} delsimps def_lemmas
-  val terminates = Aprove.memoized_terminates ctxt_nodefs
-(*  val TRS = @{thms f.simps} |> map Utils.obj_to_meta
-  val _ = tracing (Aprove.trs_to_wst TRS)
-  val foo1 = Aprove.aprove_path_ok @{context}
-  val foo2 = Aprove.aprove_server_ok @{context}*)
-  val TRS = [@{thm gcd.simps(1)}, @{thm gcd.simps(2)}, @{thm gcd.simps(3)}] |> map Utils.obj_to_meta
-  val e = Utils.obj_to_meta @{thm gcd.simps(4)}
-  val e' = @{thm sorted_sort}
-  val result = DB_Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS e'
-      val elapsed = start |> Timing.result
-                          |> #elapsed
-                          |> Time.toReal
-      val _ = tracing ("Elapsed time: " ^ string_of_real elapsed)
-*}*)
-
-datatype n = cero | suc n
+  @{type_name fun_box}
+*}  
   
-fun suma where
-"suma cero y = y"|
-"suma (suc x) y = suc (suma x y)"
+lemma "\<not>(x = 0) \<Longrightarrow> \<not>(x = Suc 0) \<Longrightarrow>\<not>(x = 2) \<Longrightarrow>\<not>(x = 3) \<Longrightarrow>\<not>(x = 4) \<Longrightarrow>\<not>(x = 5) \<Longrightarrow>\<not>(x = x)"
+  nitpick
+  
+  
+ML {*
+      val prop = @{prop "(((linS u) = (linS v)) --> (u = v))"}
+      val ctxt = @{context}
+      val thy = Proof_Context.theory_of ctxt
+      val _ = tracing "Getting definitional rewrites..."
+      val def_lemmas = Utils.get_definitional_rewrites thy prop
+      val _ = tracing "Done"
+      val lemmas_ref = Unsynchronized.ref def_lemmas
+      val lthy_nodefs = ctxt delsimps def_lemmas
+      val ctxt_nodefs = ( ctxt) delsimps def_lemmas
+      val _ = tracing "Latex Goal: "
+      val _ = tracing (Utils.latex_string_of_term ctxt prop)
+      val _ = tracing "Goal: "
+      val _ = tracing (Utils.string_of_term ctxt prop)
+      val lambda_size = Config.get ctxt Random_Terms.max_lambda_size
+      val n = Config.get ctxt EQ_Terms.max_random_terms
+      val _ = tracing "Preprocessing conjecture..."
+      val (table, typsub) = EQ_Terms.preprocess_conjecture ctxt lambda_size n prop.
+(*      val eq_tx = DB_EQ_Terms.equational_theory_exploration ctxt_nodefs (table, typsub) lambda_size n lambda_size lemmas_ref prop
+                  |> Seq.map (pair "EQ_TX")*)
+*}
+  
+ML {*
+  val l = hd (Type_Tab.dest table)
+*}
+  
+ML {*.
+  val r = Seq.list_of eq_tx
+  val _ = map (tracing o Syntax.string_of_term @{context} o snd) r
+*}
+  
+ML {*.
+  val prop' = Object_Logic.rulify_term @{context} prop
+  val _ = tracing (Syntax.string_of_term @{context} prop')
+*}
 
-lemma "suma x y = suma y x"
-  apply inductive_prove
 
 
+theorem "(((linS u) = (linS v)) \<Longrightarrow> (u = v))"
+   by inductive_prove
+  
 end

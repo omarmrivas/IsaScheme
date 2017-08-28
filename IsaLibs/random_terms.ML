@@ -411,8 +411,6 @@ fun lazy_all_lambda_terms A b =
 end
 
 (* Lazy version *)
-
-
   fun constructors_of_type ctxt typ =
     let val thy = Proof_Context.theory_of ctxt
     in case typ of

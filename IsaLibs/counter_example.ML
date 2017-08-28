@@ -13,11 +13,13 @@ sig
   val use_nitpick                     : bool Config.T
   val simp_before                     : bool Config.T
   val max_time_in_counter_ex          : int Config.T
+  val get_nitpick_params              : Nitpick.params -> int -> Nitpick.params
 
   val nitpick_params                  : Nitpick.params
   val counter_example                 : Proof.context -> int -> term -> bool
   val memoized_counter_example        : Proof.context -> int -> term -> bool
   val unfalsified_conjecture          : Proof.context -> int -> term -> term option
+  val enumerate_terms                 : Proof.context -> int -> typ -> term list
 end
 
 structure DB_Counter_Example
@@ -115,7 +117,7 @@ fun get_nitpick_params
      max_potential = max_potential,
      max_genuine = max_genuine,
      batch_size = batch_size,
-     expect = expect}
+     expect = expect} : Nitpick.params
 
 fun quickcheck timeOut state =
     if Config.get (Proof.context_of state) use_quickcheck
@@ -237,6 +239,40 @@ fun preprocess_counter_example ctxt size n table timeOut conjecture =
                        |> map (fn f => f conjecture)
   in exists (fn conj => Utils.normalise_term ctxt [] conj = @{prop "False"}) conjs orelse
      memoized_counter_example ctxt timeOut conjecture end
+
+local
+fun quickcheck_term n state =
+      (case Quickcheck.quickcheck [("size",[string_of_int (10 + n)])] 1 state of
+         SOME (_,r) => SOME r
+       | NONE => quickcheck_term (n+1) state)
+
+fun quickcheck_term_raw ctxt n conjecture =
+    ctxt |> Proof.theorem NONE (K I) [[(conjecture, [])]]
+         |> quickcheck_term n
+         |> (fn SOME l => get_first (fn (name, t) => if name = "x"
+                                                     then SOME t
+                                                     else NONE) l
+              | _ => NONE)
+
+in
+fun enumerate_terms ctxt n typ =
+  let fun mk_not (s,t) = (HOLogic.mk_Trueprop o HOLogic.mk_not o HOLogic.mk_eq) (s,t)
+      val x = Free ("x", typ)
+      val concl = mk_not (x,x)
+      fun neg t = mk_not (x,t)
+      val fix = HOLogic.mk_Trueprop o HOLogic.dest_not o HOLogic.dest_Trueprop
+      fun mk_conjecture tab =
+          tab |> Term_Tab.keys
+              |> map neg
+              |> (fn [] => concl
+                  | h :: tl => Logic.list_implies (tl, fix h))
+      fun terms 0 tab = Term_Tab.keys tab
+        | terms n tab =
+        case quickcheck_term_raw ctxt n (mk_conjecture tab) of
+          SOME t => terms (n-1) (Term_Tab.update (t, ()) tab)
+          | NONE => Term_Tab.keys tab
+  in terms n Term_Tab.empty end
+end
 
 end
 

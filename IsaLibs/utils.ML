@@ -11,6 +11,7 @@ sig
   val max_time_normalization : int Config.T
 
   (* Printing *)
+  val to_string          : 'a -> string
   val print_term         : term -> string
   val str_of_thms        : thm list -> string
   val str_of_terms       : Proof.context -> term list -> string
@@ -81,6 +82,7 @@ sig
   val get_rewrites               : theory -> string -> thm list
   val get_definitional_rewrites  : theory -> term -> thm list
   val definitional_dependencies  : theory -> ((string * typ) list * term) -> (string * typ) list
+  val datatype_dependencies      : Proof.context -> typ -> typ list
   val definitional_orientation   : theory -> term -> bool
   val oriented_rules_var         : unit Term_Tab.table Synchronized.var
   val schematic_lemmas_var       : unit Term_Tab.table Synchronized.var
@@ -142,6 +144,8 @@ structure DB_Utils
 = struct
 
 val (max_time_normalization, setup_max_time_normalization) = Attrib.config_int @{binding "max_time_normalization"} (K 5)
+
+val to_string = @{make_string}
 
 val print_term = ML_Syntax.print_term
 
@@ -550,6 +554,34 @@ fun definitional_dependencies thy (consts : (string * typ) list, term) =
                                       name <> Const_Names.protectC_name)
   end
 
+  fun constructors_of_type ctxt typ =
+    let val thy = Proof_Context.theory_of ctxt
+    in case typ of
+        Type (name, _) =>
+          (case BNF_LFP_Compat.get_constrs thy name of
+            SOME l => l |> map (strip_type o snd)
+                        |> map (fn (typs, _) => (map (fn _ => dummyT) typs, typ))
+                        |> map2 (fn (n, _) => fn (typs, ty) => Const (n, typs ---> ty)) l
+                        |> map (Syntax.check_term ctxt)
+          | NONE => [])
+      | _ => [] end
+
+fun datatype_dependencies ctxt typ =
+  let fun fold_atyps f (Type (_, T::Ts)) = fold (fold_atyps f) (T::Ts)
+        | fold_atyps f T = f T;
+      val add_ttypesT = fold_atyps (fn Type v => insert (op =) v | _ => I);
+      fun collect_typs (typs, typ) =
+          let val cts = constructors_of_type ctxt typ
+              val cts_typs = map type_of cts
+              val typs' = Library.foldl (fn (typs, typ) => 
+                            add_ttypesT typ typs) (typs, typ :: cts_typs)
+          in if length typs = length typs'
+             then typs
+             else Library.foldl collect_typs (typs', map Type (subtract (op =) typs typs'))
+          end
+  in map Type (collect_typs ([], typ)) end
+  
+
 fun get_definitional_rewrites thy term =
   ([], term)
     |> definitional_dependencies thy
@@ -649,8 +681,7 @@ fun rulify ctxt prop =
   let val rule_true = @{lemma "P \<equiv> (P = True)" by simp}
   in if can dest_eq prop
      then prop
-     else prop |> tap (tracing o print_term)
-               |> Thm.cterm_of ctxt
+     else prop |> Thm.cterm_of ctxt
                |> (Conv.concl_conv (Logic.count_prems prop) (Conv.arg_conv (Conv.rewr_conv rule_true)))
                |> (snd o dest_meta_equation)
   end

@@ -97,7 +97,7 @@ Completion_Rules.setup
 
 declare [[
   use_quickcheck = true,
-  use_nitpick = false,
+  use_nitpick = true,
   simp_before = false,
   max_time_in_counter_ex = 25,
   max_time_in_proof = 30,
@@ -168,10 +168,6 @@ definition right_distributive where
 
 definition equivalence_relation where
   [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"
-  
-definition test_scheme where
-  [prop_scheme]: "test_scheme f \<equiv> (\<And>x y. size x < size y \<Longrightarrow> f x y = f y x)"
-  
   
 ML {*
 (*  val p1 = Multithreading.max_threads_value ()*)
@@ -252,5 +248,89 @@ ML {*
 /Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks/tip2015/tree_Flatten3.smt2 - tree_Flatten3.thy 
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
+  
+datatype ('a) list = nil | cons (head: "'a") (tail: "'a list")
+
+datatype Tok = X | Y | Z
+
+datatype B2 = SB (SB_0: "B2") | ZB
+
+datatype A2 = SA (SA_0: "A2") | ZA
+
+datatype S = A (A_0: "A2") | B (B_0: "B2")
+
+fun appenda :: "'a list => 'a list => 'a list" where
+"(appenda nil y) = y"|
+"(appenda (cons z xs) y) = (cons z (appenda xs y))"
+
+fun linA :: "A2 => Tok list" where
+"(linA (SA a)) = (appenda (appenda (cons X (nil :: Tok list)) (linA a)) (cons Y (nil :: Tok list)))"|
+"(linA ZA) = (cons X (cons Z (cons Y (nil :: Tok list))))"
+
+fun linB :: "B2 => Tok list" where
+"(linB (SB b)) = (appenda (appenda (cons X (nil :: Tok list)) (linB b)) (cons Y (cons Y (nil :: Tok list))))"|
+"(linB ZB) = (cons X (cons Z (cons Y (cons Y (nil :: Tok list)))))"
+
+fun linS :: "S => Tok list" where
+"(linS (A a)) = (linA a)"|
+"(linS (B b)) = (linB b)"
+
+(*ML {*
+  val ctxt = @{context}
+  val prop = @{prop "\<not>(x = 0) \<Longrightarrow> \<not>(x = Suc 0) \<Longrightarrow>\<not>(x = 2) \<Longrightarrow>\<not>(x = 3) \<Longrightarrow>\<not>(x = 4) \<Longrightarrow>\<not>(x = 5) \<Longrightarrow>\<not>(x = x)"}
+  val state = ctxt |> Proof.theorem NONE (K I) [[(prop, [])]]
+  val nitpick_params = Nitpick_Commands.default_params @{theory} []
+  val algo = Nitpick.pick_nits_in_subgoal
+  val res = MY_Nitpick.pick_nits_in_subgoal state (Counter_Example.get_nitpick_params nitpick_params 10) MY_Nitpick.Normal 1 1
+*}
+ 
+lemma "\<not>(x = 0) \<Longrightarrow> \<not>(x = Suc 0) \<Longrightarrow>\<not>(x = 2) \<Longrightarrow>\<not>(x = 3) \<Longrightarrow>\<not>(x = 4) \<Longrightarrow>\<not>(x = 5) \<Longrightarrow>\<not>(x = x) \<or> y"
+  nitpick*)
+  
+  
+ML {*
+      val prop = @{prop "(((linS u) = (linS v)) --> (u = v))"}
+      val ctxt = @{context}
+      val thy = Proof_Context.theory_of ctxt
+      val _ = tracing "Getting definitional rewrites..."
+      val def_lemmas = Utils.get_definitional_rewrites thy prop
+      val _ = tracing "Done"
+      val lemmas_ref = Unsynchronized.ref def_lemmas
+      val lthy_nodefs = ctxt delsimps def_lemmas
+      val ctxt_nodefs = ( ctxt) delsimps def_lemmas
+      val _ = tracing "Latex Goal: "
+      val _ = tracing (Utils.latex_string_of_term ctxt prop)
+      val _ = tracing "Goal: "
+      val _ = tracing (Utils.string_of_term ctxt prop)
+      val lambda_size = Config.get ctxt Random_Terms.max_lambda_size
+      val n = Config.get ctxt EQ_Terms.max_random_terms
+      val _ = tracing "Preprocessing conjecture..."
+      val (table, typsub) = EQ_Terms.preprocess_conjecture ctxt lambda_size n prop
+(*      val eq_tx = DB_EQ_Terms.equational_theory_exploration ctxt_nodefs (table, typsub) lambda_size n lambda_size lemmas_ref prop
+                  |> Seq.map (pair "EQ_TX")*)
+*}
+  
+ML {*
+  structure K = Value
+*}  
+  
+ML {*
+  val l = hd (Type_Tab.dest table)
+*}
+  
+ML {*.
+  val r = Seq.list_of eq_tx
+  val _ = map (tracing o Syntax.string_of_term @{context} o snd) r
+*}
+  
+ML {*.
+  val prop' = Object_Logic.rulify_term @{context} prop
+  val _ = tracing (Syntax.string_of_term @{context} prop')
+*}
+
+
+
+theorem "(((linS u) = (linS v)) \<Longrightarrow> (u = v))"
+   by inductive_prove
   
 end

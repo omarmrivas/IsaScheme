@@ -30,7 +30,7 @@ fun pull_conjecture {sequence} =
       | NONE => NONE
 
 fun add_sequence seq {sequence} =
-  mk_conjecture_store (Seq.interleave (sequence, seq))
+  mk_conjecture_store (Seq.append sequence seq)
 
 fun orient_prop thy order prop =
   let val concl = (HOLogic.dest_Trueprop o Logic.strip_imp_concl) prop
@@ -165,15 +165,13 @@ fun inductive_prover ctxt tactic timeOut prop =
       fun subsumed_in_net net t =
             t |> Net.match_term net
               |> exists (fn t' => Pattern.matches thy (t', t))
-      fun next_subgoal simps subsumed subgoals =
+      fun next_subgoal simps subgoals =
         let val subgoals' = 
           subgoals |> map (Utils.normalise_term ctxt_nodefs simps)
                    |> map (arg_cong_equation' thy o Utils.rulify ctxt)
                    |> map (orient_prop thy LESS)
                    |> filter (fn prop => let val (lhs,rhs) = Utils.dest_eq prop
-                                         in lhs <> rhs andalso
-                                            not (subsumed prop) andalso
-                                            not (subsumed (Utils.commute_eq prop)) end)
+                                         in lhs <> rhs end)
                    |> Utils.make_term_set' thy
                    |> Utils.sort_by_general thy
         in if null subgoals'
@@ -194,13 +192,10 @@ fun inductive_prover ctxt tactic timeOut prop =
                                               |> (orient_prop thy LESS)
                   val (lhs,rhs) = Utils.dest_eq conjecture
               in if lhs = rhs orelse
-                    subsumed_in_net net conjecture
+                    subsumed_in_net net conjecture orelse
+                    subsumed_in_net net (Utils.commute_eq conjecture)
                  then (tracing "subsumed"; next_conjecture thy simps net store)
-                 else let val conjecture' = Utils.commute_eq conjecture
-                      in if subsumed_in_net net conjecture'
-                         then (tracing "subsumed"; next_conjecture thy simps net store)
-                         else SOME (orient_prop thy LESS conjecture, store)
-                      end
+                 else SOME (orient_prop thy LESS conjecture, store)
               end
           | NONE => NONE
       val terminates = Aprove.memoized_terminates ctxt_nodefs
@@ -214,17 +209,17 @@ fun inductive_prover ctxt tactic timeOut prop =
                   |> Seq.map (pair "EQ_TX")
       val _ = tracing "Done"
       val _ = tracing "Calculating known equational laws sequence..."
-      val known_laws = DB_EQ_Terms.known_eq_laws ctxt_nodefs (table, typsub) lambda_size n lemmas_ref prop
+      val known_laws = DB_EQ_Terms.known_laws ctxt_nodefs prop
                   |> Seq.map (pair "EQ_KNOWN")
       val _ = tracing "Done"
-      val conj_store = eq_tx |> mk_conjecture_store
-                             |> add_sequence known_laws
+      val conj_store = known_laws |> mk_conjecture_store
+                                  |> add_sequence eq_tx
       fun recursive_prover foo store net subgoals lemmas conj =
         case try_prove lemmas conj of
           Theorem thm =>(let val lemmas = build_trs lemmas thm
                              val _ = lemmas_ref := lemmas
                              val net = add_thms_to_net net lemmas
-                         in case (tracing "next_subgoal"; next_subgoal lemmas (subsumed_in_net net) subgoals) of
+                         in case (tracing "next_subgoal"; next_subgoal lemmas subgoals) of
                           SOME (goal, subgoals) => recursive_prover (not foo) store net subgoals lemmas goal
                         | NONE => SOME (build_trs lemmas thm) end)
         | Failure trms =>
@@ -232,6 +227,7 @@ fun inductive_prover ctxt tactic timeOut prop =
                 val lemmas' = lemmas |> map Thm.full_prop_of
                                      |> map Logic.unvarify_global
                 val failures = trms |> map (fst o Utils.binder_elimination Const_Names.meta_forall [])
+(*                                    |> tap (tracing o Utils.str_of_terms ctxt)*)
                                     |> Seq.of_list
                                     |> Seq.map (pair "EQ_FROM_FAILURE")
                 val walsh =
@@ -255,10 +251,10 @@ fun inductive_prover ctxt tactic timeOut prop =
                 val new_sequence =
                       (Seq.interleave (failures, walsh), transverse)
                         |> Seq.interleave
-                        |> Utils.map_filter_seq (Thread.numProcessors () * 2) 
+                        |> Utils.map_filter_seq (Thread.numProcessors () * 2)
                                   (generalize timeOut ctxt_nodefs thy LESS lemmas (subsumed_in_net net))
-                val new_store = add_sequence new_sequence conj_store
-            in case (tracing "next_conjecture"; next_conjecture thy lemmas net new_store) of
+                val store = add_sequence new_sequence store
+            in case (tracing "next_conjecture"; next_conjecture thy lemmas net store) of
                 SOME (conjecture, store) => recursive_prover (not foo) store (add_term_to_net net conj) (conj :: subgoals) lemmas conjecture
               | NONE => NONE
             end
