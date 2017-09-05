@@ -138,7 +138,7 @@ fun maps_filter_seq bufsize v par f seq =
   in process v [] seq end
 
 fun discover_equations ctxt simps table typsub terms =
-  let val buff = Thread.numProcessors () * 2
+  let val buff = Utils.num_processors
       fun check t s =
         let val eq = (t, s) |> HOLogic.mk_eq
                             |> HOLogic.mk_Trueprop
