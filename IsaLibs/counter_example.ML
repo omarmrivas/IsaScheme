@@ -141,7 +141,7 @@ fun quickcheck_model timeOut state =
 fun nitpick timeOut state =
     Config.get (Proof.context_of state) use_nitpick andalso
     (Utils.safe_eval "counter_example.ML 151:" false
-      (fn step => (step |> Nitpick.pick_nits_in_subgoal state (get_nitpick_params nitpick_params timeOut) Nitpick.Normal 1
+      (fn step => (step |> Nitpick.pick_nits_in_subgoal state (get_nitpick_params nitpick_params timeOut) Nitpick.Try 1
                         |> (fn (sce,_) => if "genuine" = sce then true
                                           (* FIXME: What if potential! *)
                                           (*else if "potential" = sce then
@@ -241,37 +241,71 @@ fun preprocess_counter_example ctxt size n table timeOut conjecture =
      memoized_counter_example ctxt timeOut conjecture end
 
 local
-fun quickcheck_term n state =
-      (case Quickcheck.quickcheck [("size",[string_of_int (10 + n)])] 1 state of
-         SOME (_,r) => SOME r
-       | NONE => quickcheck_term (n+1) state)
 
-fun quickcheck_term_raw ctxt n conjecture =
+fun nunchaku state =
+  let (*val state = ctxt |> Proof.theorem NONE (K I) [[(conjecture, [])]]*)
+      val thy = Proof.theory_of state
+      val params = Nunchaku_Commands.default_params thy []
+      val mode = Nunchaku.Normal
+      fun fix (Free (n, _), t ) = (Free (n, type_of t), t)
+        | fix _ = raise ERROR "Not free (nunchaku)"
+  in (map fix o #free_model o the o snd o Nunchaku.run_chaku_on_subgoal state params mode) 1 end
+
+fun quickcheck_term n state =
+  let fun iter n i = 
+    if i > 0
+    then
+    (case Quickcheck.quickcheck [("size",[string_of_int n]),
+                                 ("depth",[string_of_int n]),
+                                 ("quiet",["true"])
+(*                              ("tester",["exhaustive"]),*)
+(*                              ("tester",["random"]),*)
+(*                              ("tester",["narrowing"]),*)
+(*                              ("expect",["counterexample"])*)] 1 state of
+      SOME (_,r) => map (fn (n,t) => (Free (n, type_of t), t)) r
+    | NONE => iter (n+1) (i-1))
+    handle ERROR _ =>  iter (n+1) (i-1)
+        | ListPair.UnequalLengths => []
+    else []
+  in
+    iter n n
+  end
+
+fun counter_model_term ctxt n conjecture =
     ctxt |> Proof.theorem NONE (K I) [[(conjecture, [])]]
+(*         |> nunchaku*)
          |> quickcheck_term n
-         |> (fn SOME l => get_first (fn (name, t) => if name = "x"
-                                                     then SOME t
-                                                     else NONE) l
-              | _ => NONE)
 
 in
+
+fun conditional_terms ctxt n prems =
+  let fun mk_and l = Library.foldl (fn (res, (s,t)) =>
+            if res = @{term "True"}
+            then HOLogic.mk_eq (s,t)
+            else HOLogic.mk_conj (res, HOLogic.mk_eq (s,t))) (@{term "True"},l)
+      val frees = ([],prems) |> Library.foldl (fn (frees, prem) => Term.add_frees prem frees)
+                             |> map Free
+      val concl = frees |> map (fn f => (f,f))
+                        |> mk_and
+                        |> (HOLogic.mk_Trueprop o HOLogic.mk_not)
+      fun mk_conjecture xs =
+          xs |> map mk_and
+             |> map (HOLogic.mk_Trueprop o HOLogic.mk_not)
+             |> (fn assm => Logic.list_implies (assm @ prems, concl))
+      fun terms 0 xs = xs
+        | terms m xs =
+          let val ys = counter_model_term ctxt n (mk_conjecture xs)
+          in if null ys
+             then xs
+             else terms (m-1) (ys :: xs) end
+  in terms n [] end
+
 fun enumerate_terms ctxt n typ =
-  let fun mk_not (s,t) = (HOLogic.mk_Trueprop o HOLogic.mk_not o HOLogic.mk_eq) (s,t)
-      val x = Free ("x", typ)
-      val concl = mk_not (x,x)
-      fun neg t = mk_not (x,t)
-      val fix = HOLogic.mk_Trueprop o HOLogic.dest_not o HOLogic.dest_Trueprop
-      fun mk_conjecture tab =
-          tab |> Term_Tab.keys
-              |> map neg
-              |> (fn [] => concl
-                  | h :: tl => Logic.list_implies (tl, fix h))
-      fun terms 0 tab = Term_Tab.keys tab
-        | terms n tab =
-        case quickcheck_term_raw ctxt n (mk_conjecture tab) of
-          SOME t => terms (n-1) (Term_Tab.update (t, ()) tab)
-          | NONE => Term_Tab.keys tab
-  in terms n Term_Tab.empty end
+  let val x = Free ("x", typ)
+      val prem = (HOLogic.mk_Trueprop o HOLogic.mk_eq) (x,x)
+  in [prem] |> conditional_terms ctxt n
+            |> map (snd o hd) end
+
 end
 
 end

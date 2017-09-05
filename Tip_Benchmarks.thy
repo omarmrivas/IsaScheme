@@ -14,7 +14,7 @@ ML {*
   val names = SMT_Converter.smt2bash_to_isabelle @{context} destiny "IsaLibs" "../../IsaLibs" "by inductive_prover" smt2_files
 *}
   
-ML {*.
+ML {*
   val res = map (fn (smt2, (foo, thy)) => 
         if not foo then NONE
         else let val thy_file = destiny ^ "/" ^ thy ^ ".thy"

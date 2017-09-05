@@ -104,9 +104,10 @@ fun prove_schematic_from_method ctxt0 (SOME simps) method conjecture =
                            |> enclose "\"" "\""
                            |> parse_schematic_goal ctxt0
                            |> fst
-      fun dest_conjecture (Const (conj, _) $ _ $ conjecture) =
+     (* FIXME: Make it work for more than one schematic variables *)
+      fun dest_conjecture (Const _ $ (Const (conj, _) $ _ $ conjecture)) =
             if conj = Const_Names.schematic_and
-            then SOME (HOLogic.mk_Trueprop conjecture)
+            then SOME conjecture
             else NONE
         | dest_conjecture _ = NONE
   in Utils.safe_eval "" NONE
@@ -120,6 +121,7 @@ fun prove_schematic_from_method ctxt0 (SOME simps) method conjecture =
            |> (fn ({goal,...},_) =>
                   if 0 = Thm.nprems_of goal
                     then goal |> Thm.full_prop_of
+(*                              |> SOME*)
                               |> dest_conjecture
                   else NONE)) ctxt0
       end

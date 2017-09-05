@@ -62,6 +62,8 @@ sig
   val generalizations'   : theory -> int -> term list -> term list
   val is_trivial         : term -> bool
   val normalise_term     : Proof.context -> thm list -> term -> term 
+  val monomorphize_frees: typ -> term -> term
+  val monomorphize_tfrees: typ -> typ -> typ
 
   (* Rewrite rules *)
   val lhs                : term -> term
@@ -82,7 +84,7 @@ sig
   val get_rewrites               : theory -> string -> thm list
   val get_definitional_rewrites  : theory -> term -> thm list
   val definitional_dependencies  : theory -> ((string * typ) list * term) -> (string * typ) list
-  val datatype_dependencies      : Proof.context -> typ -> typ list
+  val datatype_dependencies      : Proof.context -> term -> typ list
   val definitional_orientation   : theory -> term -> bool
   val oriented_rules_var         : unit Term_Tab.table Synchronized.var
   val schematic_lemmas_var       : unit Term_Tab.table Synchronized.var
@@ -566,12 +568,18 @@ fun definitional_dependencies thy (consts : (string * typ) list, term) =
           | NONE => [])
       | _ => [] end
 
-fun datatype_dependencies ctxt typ =
-  let fun fold_atyps f (Type (_, T::Ts)) = fold (fold_atyps f) (T::Ts)
-        | fold_atyps f T = f T;
-      val add_ttypesT = fold_atyps (fn Type v => insert (op =) v | _ => I);
+local
+fun datatype_dependencies' ctxt typ =
+  let fun fold_atyps f (Type (n, T::Ts)) = fold (fn ty => fn a => fold_atyps f ty (f (Type (n, T::Ts)) a)) (T::Ts)
+        | fold_atyps f T = f T
+      val add_ttypesT = fold_atyps (fn Type v => 
+            if (null o constructors_of_type ctxt) (Type v)
+            then I
+            else insert (op =) v | _ => I);
       fun collect_typs (typs, typ) =
-          let val cts = constructors_of_type ctxt typ
+          let val typs' = add_ttypesT typ []
+              val cts = maps (constructors_of_type ctxt) (map Type typs')
+                          |> distinct (op =)
               val cts_typs = map type_of cts
               val typs' = Library.foldl (fn (typs, typ) => 
                             add_ttypesT typ typs) (typs, typ :: cts_typs)
@@ -580,7 +588,39 @@ fun datatype_dependencies ctxt typ =
              else Library.foldl collect_typs (typs', map Type (subtract (op =) typs typs'))
           end
   in map Type (collect_typs ([], typ)) end
-  
+in
+
+fun monomorphize_frees T t =
+      (case Term.add_tfrees t [] of
+        [] => t
+      | frees => let val env = map (fn S => (TFree S, T)) frees
+                 in subst_atomic_types env t end)
+
+fun monomorphize_tfrees T t =
+      (case Term.add_tfrees (Free ("x",t)) [] of
+        [] => t
+      | frees => let val env = map (fn S => (TFree S, T)) frees
+                 in typ_subst_atomic env t end)
+
+fun datatype_dependencies ctxt prop =
+  let val thy = Proof_Context.theory_of ctxt
+      val typs =  ([],prop) |> definitional_dependencies thy
+                            |> map snd
+      fun filter_typs typs =
+        let val meta_typs = filter (not o null o (fn ty => Term.add_tvarsT ty [])) typs
+            fun test_typ typ = 
+                meta_typs
+                |> exists (fn ty => can (Sign.typ_match thy (ty,typ)) Vartab.empty)
+                |> not
+                val typs = meta_typs @ filter test_typ typs
+        in  map Logic.unvarifyT_global typs end
+      val typs = filter_typs typs
+  in typs |> maps (datatype_dependencies' ctxt)
+          |> distinct (op =)
+          |> map Logic.varifyT_global
+          |> filter_typs
+  end
+end
 
 fun get_definitional_rewrites thy term =
   ([], term)

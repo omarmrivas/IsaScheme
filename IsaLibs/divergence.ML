@@ -94,6 +94,7 @@ fun walsh_critic ctxt simps eqs =
        (walsh_critic' ctxt thy simps (map Utils.swap_eq eqs))
         |> Utils.make_term_set thy
         |> map HOLogic.mk_Trueprop
+        |> filter (can (Syntax.check_term ctxt))
         |> Seq.of_list
   else Seq.empty
   end

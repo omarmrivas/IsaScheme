@@ -12,17 +12,15 @@ sig
 val max_random_terms   : int Config.T
 val max_vars_in_tx     : int Config.T
 
-val equation : Proof.context -> int -> int -> int -> term list Type_Tab.table ->
-              (term -> term) -> thm list -> (term -> bool) -> term list -> term option
-val counter_example: Proof.context -> int -> int -> term list Type_Tab.table ->
+(*val equation : Proof.context -> int -> int -> int -> term list Type_Tab.table ->
+              (term -> term) -> thm list -> (term -> bool) -> term list -> term option*)
+val counter_example: Proof.context -> term list Type_Tab.table ->
                      (term -> term) -> thm list -> term -> bool
 val generalize : theory -> 'a Type_Tab.table * (term -> term) ->
                   int -> term -> term list
 
 val preprocess_conjecture : Proof.context ->
-      int ->
-        int ->
-          term -> term list Type_Tab.table * (term -> term)
+      int -> term -> term list Type_Tab.table * (term -> term)
 
 end
 
@@ -33,26 +31,59 @@ structure DB_EQ_Terms
 val (max_random_terms, setup_max_random_terms) = Attrib.config_int @{binding "max_random_terms"} (K 10)
 val (max_vars_in_tx, setup_max_vars_in_tx) = Attrib.config_int @{binding "max_vars_in_tx"} (K 3)
 
-fun substitutions ctxt size n tab term =
-  let val thy = Proof_Context.theory_of ctxt
-      val frees = [] |> Term.add_frees term
-                     |> sort (prod_ord string_ord Term_Ord.typ_ord)
-      val tss = map (fn (_,ty) =>
-          case Type_Tab.lookup tab ty of
-            SOME ts => ts
-            | NONE  => (1 upto n)
-                         |> map_filter (fn _ => Random_Terms.random_term ctxt size ty)
-                         |> tap (fn _ => tracing "Re processing random terms!")
-                         |> tap (fn _ => tracing ("Type: " ^ Syntax.string_of_typ ctxt ty))
-                         |> Utils.make_term_set thy) frees
-      fun take f =
+fun substitutions ctxt simps tab term =
+  let val frees0 = [] |> Term.add_frees term
+                      |> sort (prod_ord string_ord Term_Ord.typ_ord)
+      fun take_all frees f =
         case f () of
-          SOME r => (frees ~~ r) :: take f
+          SOME r => (frees ~~ r) :: take_all frees f
           | NONE => []
-      val termsubts  = tss |> Utils.lazy_one_of_each
-                           |> take
-                           |> map (map (fn (v, t) => (Free v, t)))
-                           |> map Term.subst_free
+      fun take_one frees f =
+        case f () of
+          SOME r => frees ~~ r
+          | NONE => raise ERROR "take_one"
+      fun one_subst frees =
+          if null frees
+          then I
+          else
+          let val frees_vals = map (the o Type_Tab.lookup tab o snd) frees
+          in frees_vals |> Utils.lazy_one_of_each
+                        |> take_one frees
+                        |> map (fn (v, t) => (Free v, t))
+                        |> Term.subst_free end
+      fun get_substs frees = 
+          let val frees_vals = map (the o Type_Tab.lookup tab o snd) frees
+          in frees_vals |> Utils.lazy_one_of_each
+                        |> take_all frees
+                        |> map (map (fn (v, t) => (Free v, t)))
+                        |> map Term.subst_free end
+      fun not_projection ((n, ty), frees) =
+        let val free_vals = the (Type_Tab.lookup tab ty)
+            val termsubt = free_vals |> map (single o pair (Free (n, ty)))
+                                     |> map Term.subst_free
+            val termsubts  = get_substs frees
+            val termsubts = if null termsubts
+                            then map (fn _ => I) termsubt
+                            else termsubts
+            val subt0 = hd termsubt
+        in exists (fn subst => let val val0 = Utils.normalise_term ctxt simps ((subt0 o subst) term)
+              in exists (fn sub => Utils.normalise_term ctxt simps ((sub o subst) term) <> val0) termsubt
+              end) termsubts end
+      fun tk i ss = 
+            let val prefix = take i ss
+                val suffix = drop (i + 1) ss
+            in (prefix, suffix) end
+      val frees = 
+              frees0 |> map_index (fn (i, f) => 
+                      let val (prefix, suffix) = tk i frees0
+                      in (f, prefix @ suffix) end)
+                     |> filter not_projection
+                     |> map fst
+      val subst0 = one_subst (subtract (op =) frees frees0)
+      val termsubts  = get_substs frees
+      val termsubts  = if null termsubts
+                       then [subst0]
+                       else map (fn subst => subst0 o subst) termsubts
   in (map Free frees, termsubts) end
 
 fun substitutions' ctxt size n tab frees =
@@ -75,31 +106,17 @@ fun substitutions' ctxt size n tab frees =
                            |> map Term.subst_free
   in termsubts end
 
-fun preprocess_conjecture ctxt size n conjecture =
-  let val typsub = 
-             [] |> Term.add_tfrees conjecture
-                |> map (fn f => (TFree f, @{typ "int"}))
-                |> subst_atomic_types
-      val conjecture = typsub conjecture
-      val frees = Term.add_frees conjecture []
-      val typs = frees |> map snd
-                       |> Type_Tab.make_set
-                       |> Type_Tab.keys
-                       |> maps (Utils.datatype_dependencies ctxt)
-                       |> Type_Tab.make_set
-                       |> Type_Tab.keys
-      val thy = Proof_Context.theory_of ctxt
-      val ts = typs |> map (fn ty => 
-                  let val ts = (1 upto n)
-                                |> map_filter (fn _ => Random_Terms.random_term ctxt size ty)
-                                |> Utils.make_term_set thy
-                  in (ty, ts) end)
-      val table = Type_Tab.make ts
-  in (table, typsub) end
+fun preprocess_conjecture ctxt n conjecture =
+  let val typs = 
+            conjecture
+                |> Utils.datatype_dependencies ctxt
+                |> map (Utils.monomorphize_tfrees @{typ nat})
+      val table = Type_Tab.make (typs ~~ (Par_List.map (Counter_Example.enumerate_terms ctxt n) typs))
+  in (table, Utils.monomorphize_frees @{typ nat}) end
 
-fun counter_example ctxt size n table typsub simps (conjecture : term) =
+fun counter_example ctxt table typsub simps (conjecture : term) =
   let val t' = typsub conjecture
-      val (_, tsubsts) = substitutions ctxt size n table t'
+      val (_, tsubsts) = substitutions ctxt simps table t'
       val conjs = map (fn subst => subst t') tsubsts
   in exists (fn conj => Utils.normalise_term ctxt simps conj = @{prop "False"}) conjs end
 
@@ -120,7 +137,7 @@ fun maps_filter_seq bufsize v par f seq =
                 | [] => Seq.pull (process v [] seq))
   in process v [] seq end
 
-fun discover_equations ctxt simps typsub tsubsts terms =
+fun discover_equations ctxt simps table typsub terms =
   let val buff = Thread.numProcessors () * 2
       fun check t s =
         let val eq = (t, s) |> HOLogic.mk_eq
@@ -131,40 +148,21 @@ fun discover_equations ctxt simps typsub tsubsts terms =
            else NONE
         end
       fun calcule_keys t =
-          let val _ = (tracing o Syntax.string_of_term ctxt) t
-              val t' = typsub t
-              val key = map (fn subst => Utils.normalise_term ctxt (!simps) (subst t')) tsubsts
-              val _ = (tracing o Utils.str_of_terms ctxt) key
+          let val t' = typsub t
+              val (preffix, tsubsts) = substitutions ctxt (!simps) table t'
+              val key = preffix @ map (fn subst => Utils.normalise_term ctxt (!simps) (subst t')) tsubsts
           in (t, key) end
       fun find_eqs tab (t,key) =
           case Term_List_Tab.lookup tab key of
               SOME ss => (Term_List_Tab.update (key, t::ss) tab,  map_filter (check t) ss)
             | NONE => (Term_List_Tab.update (key, [t]) tab, [])
   in maps_filter_seq buff Term_List_Tab.empty calcule_keys find_eqs terms end
-(*      fun check_eqs tab [] seq = 
-            (case Seq.chop buff seq of
-              ([], _) => Seq.empty
-            | (terms, seq) =>
-                let val terms = Par_List.map (fn t =>
-                        let val t' = typsub t
-                            val key = map (fn subst => Utils.normalise_term ctxt (!simps) (subst t')) tsubsts
-                        in (t, key) end) terms
-                in check_eqs tab terms seq end)
-        | check_eqs tab ((t,key) :: terms) seq =
-              case Term_List_Tab.lookup tab key of
-                  SOME ss => (case map_filter (check t) ss of
-                              [] => check_eqs (Term_List_Tab.update (key, t::ss) tab) terms seq
-                            | eqs  => let val (eqs,last) = split_last eqs
-                                      in Seq.append (Seq.of_list eqs)
-                                      (Seq.make (fn () => SOME (last, check_eqs (Term_List_Tab.update (key, t::ss) tab) terms seq))) end)
-                 | NONE => check_eqs (Term_List_Tab.update (key, [t]) tab) terms seq
-  in check_eqs Term_List_Tab.empty [] terms end*)
 
 (* Finds a potential valid equation using tests
    terms: must be sorted from more general to less general
           to find general equations first. They also must
           be in normal form w.r.t. simps *)
-fun equation ctxt timeOut size n table typsub simps subsumed terms =
+(*fun equation ctxt timeOut size n table typsub simps subsumed terms =
   let val thy = Proof_Context.theory_of ctxt
       fun monomorphize typ = (type_of o typsub) (Free ("x", typ))
       fun null_frees t =
@@ -206,7 +204,7 @@ fun equation ctxt timeOut size n table typsub simps subsumed terms =
                              then check (Term_List_Tab.update (key, t)) v
                              else find (Term_List_Tab.update (key, t) tab) ts end
             end
-  in find Term_List_Tab.empty terms end
+  in find Term_List_Tab.empty terms end*)
 
 fun equation' ctxt (tab, typsub) size n simps subsumed term =
   let val thy = Proof_Context.theory_of ctxt
@@ -270,7 +268,7 @@ fun combine t l ctxt =
 
 (* FIXME: create fresh variables for frees in schemes and conjecture.
           Then apply the substitution. *)
-fun known_eq_laws ctxt (table, typsub) size n simps prop =
+(*fun known_eq_laws ctxt (table, typsub) size n simps prop =
   let val thy = Proof_Context.theory_of ctxt
 (*      val schemes = Utils.get_schematic_lemmas ()*)
       val frees = Term.add_frees prop []
@@ -322,7 +320,7 @@ fun known_eq_laws ctxt (table, typsub) size n simps prop =
   in terms
         |> Seq.of_list
         |> discover_equations ctxt simps typsub tsubsts
-  end
+  end*)
 
 fun known_laws ctxt prop =
   let val thy = Proof_Context.theory_of ctxt
@@ -358,7 +356,6 @@ fun known_laws ctxt prop =
             then NONE
             else SOME prop)
         |> map_filter I
-        |> tap (tracing o Utils.str_of_terms ctxt)
         |> Seq.of_list
   end
 
@@ -436,47 +433,39 @@ fun extend_frees (tab, typsub) prop =
 (* FIXME: Increment frees to a maximum limit of frees (e.g. x + x + x = x + x + x)
   should include more variables (e.g. y and z).
 *)
-fun equational_theory_exploration ctxt (table, typsub) size n lambda_size simps prop =
+fun equational_theory_exploration ctxt (table, typsub) lambda_size simps prems prop =
   let val thy = Proof_Context.theory_of ctxt
+      val typs = Utils.datatype_dependencies ctxt prop
+      (* FIXME: typs should be polymorphic *)
       val frees = 
-          [] |> Term.add_frees prop
-             |> map snd
-             |> Type_Tab.make_set
-             |> Type_Tab.keys
-             |> maps (Utils.datatype_dependencies ctxt)
-             |> Type_Tab.make_set
-             |> Type_Tab.keys
-             |> maps (fn typ => map (fn _ => typ) (1 upto Config.get ctxt max_vars_in_tx))
-             |> pair ([],[])
-             |> Library.foldl (fn ((names, frees), typ) =>
-                  let val name = singleton (Name.variant_list names) "x"
-                  in (name :: names, (name, typ) :: frees) end)
-             |> snd
-(*      val frees = extend_frees (table, typsub) prop*)
-      fun monomorphize typ = (type_of o typsub) (Free ("x", typ))
-      val tsubsts = frees
-                     |> map (fn (n,ty) => (n, monomorphize ty))
-                     |> substitutions' ctxt size n table
+          typs |> maps (fn typ => map (fn _ => typ) (1 upto Config.get ctxt max_vars_in_tx))
+               |> pair ([],[])
+               |> Library.foldl (fn ((names, frees), typ) =>
+                    let val name = singleton (Name.variant_list names) "x"
+                    in (name :: names, (name, typ) :: frees) end)
+               |> snd
       val consts = Utils.definitional_dependencies thy ([], prop)
                     |> filter_out (fn (name, _) => name = Const_Names.hol_eq)
+                    |> map (fn (name, typ) => (name, Logic.unvarifyT_global typ))
       val typ_args = map snd (consts @ frees)
-      val target_typs = Type_Tab.keys table
-      val target = hd target_typs
-      val typ = typ_args ---> target
       val args = map Const consts @ map Free frees
       val _ = args |> map (Syntax.string_of_term ctxt)
                    |> commas
                    |> enclose "<" ">"
                    |> tracing
-      val lambdas = Random_Terms.lazy_all_lambda_terms typ (lambda_size + length typ_args)
-      val terms = lambdas |> Seq.map (fn t => betapplys (t, args))
-                          |> Seq.list_of
-                          |> Utils.make_term_set thy
-                          |> Utils.sort_by_general thy
-(*                          |> tap (tracing o Utils.str_of_terms ctxt)*)
-                          |> Seq.of_list
-  in discover_equations ctxt simps typsub tsubsts terms end
-(*  in check_eqs Term_List_Tab.empty terms end*)
+      fun get_terms target =
+        let val typ = typ_args ---> target
+            val lambdas = Random_Terms.lazy_all_lambda_terms typ (lambda_size + length typ_args)
+        in lambdas |> Seq.map (fn t => betapplys (t, args))
+                   |> Seq.list_of
+                   |> Utils.make_term_set thy
+                   |> Utils.sort_by_general thy
+                   |> Seq.of_list
+        end
+  in typs |> Seq.of_list
+          |> Seq.maps get_terms
+          |> discover_equations ctxt simps table typsub
+          |> Seq.map (Logic.list_implies o pair prems) end
 
 (* Finds a potential valid equation using tests
    terms: must be sorted from more general to less general
