@@ -47,6 +47,8 @@ fun arg_cong_equation thy eq =
              val y = Var (("y", 0), @{typ_pat "?'b"})
              val f = Var (("f", 0), @{typ_pat "?'b \<Rightarrow> ?'a"})
              val pattern = HOLogic.mk_eq (f $ x, f $ y)
+             val (lhs, rhs) = (apply2 (arg_cong_equation thy) o HOLogic.dest_eq) eq
+             val eq = HOLogic.mk_eq (lhs, rhs)
          in case try (Pattern.match thy (pattern, eq)) (Vartab.empty, Vartab.empty) of
               SOME (tyenv, tenv) => let val env = Envir.Envir {maxidx = 1, tenv = tenv, tyenv = tyenv}
                                         val lhs = Envir.norm_term env x
@@ -131,8 +133,8 @@ fun generalize_assumptions ctxt conj =
       then NONE
       else SOME conj) conjs end
 
-fun generalize timeOut ctxt thy order simps subsumed (meth,conj) =
-  let val conj = conj |> Utils.normalise_term ctxt simps
+fun generalize timeOut ctxt thy order simps_ref subsumed (meth,conj) =
+  let val conj = conj |> Utils.normalise_term ctxt (!simps_ref)
                       |> apply_heuristics thy o Utils.rulify ctxt
                       |> orient_prop thy order
       val (lhs,rhs) = Utils.dest_eq conj
@@ -287,7 +289,7 @@ fun inductive_prover ctxt tactic timeOut prop =
                       (Seq.interleave (failures, walsh), transverse)
                         |> Seq.interleave
                         |> Utils.map_filter_seq (Thread.numProcessors () * 2)
-                                  (fn (meth, conj) => generalize timeOut ctxt_nodefs thy LESS lemmas (subsumed_in_net net) (meth, conj)
+                                  (fn (meth, conj) => generalize timeOut ctxt_nodefs thy LESS lemmas_ref (subsumed_in_net net) (meth, conj)
                                           handle ERROR err => (tracing ("TERM exception on: " ^ meth);
                                                               tracing (Utils.print_term conj); raise ERROR err))
                 val store = add_sequence new_sequence store
