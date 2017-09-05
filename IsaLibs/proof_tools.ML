@@ -288,7 +288,7 @@ fun inductive_prover ctxt tactic timeOut prop =
                 val new_sequence =
                       (Seq.interleave (failures, walsh), transverse)
                         |> Seq.interleave
-                        |> Utils.map_filter_seq (Thread.numProcessors () * 2)
+                        |> Utils.map_filter_seq Utils.num_processors
                                   (fn (meth, conj) => generalize timeOut ctxt_nodefs thy LESS lemmas_ref (subsumed_in_net net) (meth, conj)
                                           handle ERROR err => (tracing ("TERM exception on: " ^ meth);
                                                               tracing (Utils.print_term conj); raise ERROR err))

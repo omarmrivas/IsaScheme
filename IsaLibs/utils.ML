@@ -9,6 +9,7 @@ Names for important Pure and HOL constants.
 signature UTILS =
 sig
   val max_time_normalization : int Config.T
+  val num_processors         : int
 
   (* Printing *)
   val to_string          : 'a -> string
@@ -146,6 +147,8 @@ structure DB_Utils
 = struct
 
 val (max_time_normalization, setup_max_time_normalization) = Attrib.config_int @{binding "max_time_normalization"} (K 5)
+
+val num_processors = Thread.numProcessors ()
 
 val to_string = @{make_string}
 
