@@ -257,5 +257,5 @@ ML {*
 /Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks/tip2015/tree_Flatten3.smt2 - tree_Flatten3.thy 
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
-
+  
 end

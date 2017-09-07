@@ -240,6 +240,8 @@ fun binder_vars bin vars (t $ a) =
 | binder_vars _ vars _ = vars
 
 (* Removes all binders bin from a term, replacing bound variables by frees. *)
+(* FIXME: what happend with terms with a binder in a premise (or the conclusion?)
+ *)
 local
   fun dest_binder bin (Const (bin', _) $ Abs (a as (_,T,_))) =
       if bin = bin' then

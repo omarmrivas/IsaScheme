@@ -47,8 +47,8 @@ fun arg_cong_equation thy eq =
              val y = Var (("y", 0), @{typ_pat "?'b"})
              val f = Var (("f", 0), @{typ_pat "?'b \<Rightarrow> ?'a"})
              val pattern = HOLogic.mk_eq (f $ x, f $ y)
-             val (lhs, rhs) = (apply2 (arg_cong_equation thy) o HOLogic.dest_eq) eq
-             val eq = HOLogic.mk_eq (lhs, rhs)
+(*             val (lhs, rhs) = (apply2 (arg_cong_equation thy) o HOLogic.dest_eq) eq
+             val eq = HOLogic.mk_eq (lhs, rhs)*)
          in case try (Pattern.match thy (pattern, eq)) (Vartab.empty, Vartab.empty) of
               SOME (tyenv, tenv) => let val env = Envir.Envir {maxidx = 1, tenv = tenv, tyenv = tyenv}
                                         val lhs = Envir.norm_term env x
@@ -81,12 +81,12 @@ fun apply_until_no_change f eq =
   end
 
 fun apply_heuristics thy prop =
-  let val concl = (HOLogic.dest_Trueprop o Logic.strip_imp_concl) prop
-                    |> apply_until_no_change (clear_lambda o arg_cong_equation thy)
-      val prems = prop |> Logic.strip_imp_prems
-                       |> map (apply_heuristics thy)
-  in (Logic.list_implies o pair prems o HOLogic.mk_Trueprop) concl
-  end
+  (let val concl = (HOLogic.dest_Trueprop o Logic.strip_imp_concl) prop
+                     |> apply_until_no_change (clear_lambda o arg_cong_equation thy)
+       val prems = prop |> Logic.strip_imp_prems
+                        |> map (apply_heuristics thy)
+   in (Logic.list_implies o pair prems o HOLogic.mk_Trueprop) concl
+   end) handle TERM _ => prop
 
 fun generalize_cond_eq conj =
   let fun make_table positions =
@@ -133,7 +133,14 @@ fun generalize_assumptions ctxt conj =
       then NONE
       else SOME conj) conjs end
 
+fun not_prop_frees conj = 
+    Term.add_frees conj []
+        |> forall (fn (_, ty) => ty <> @{typ "prop"})
+
 fun generalize timeOut ctxt thy order simps_ref subsumed (meth,conj) =
+  (* Eliminate all conjectures with frees of type prop, e.g. @{term "PROP x \<Longrightarrow> PROP x"} *)
+  if not_prop_frees conj
+  then
   let val conj = conj |> Utils.normalise_term ctxt (!simps_ref)
                       |> apply_heuristics thy o Utils.rulify ctxt
                       |> orient_prop thy order
@@ -152,6 +159,7 @@ fun generalize timeOut ctxt thy order simps_ref subsumed (meth,conj) =
           handle TYPE err => (tracing meth; tracing (Utils.print_term conj); raise TYPE err)
                | TERM err => (tracing meth; tracing (Utils.print_term conj); raise TERM err)
   end
+  else NONE
 
 fun inductive_prover ctxt tactic timeOut prop =
   let val start = Timing.start ()
@@ -215,6 +223,8 @@ fun inductive_prover ctxt tactic timeOut prop =
       fun next_conjecture thy simps net store =
         case pull_conjecture store of
             SOME ((meth, conjecture), store) =>
+              if not_prop_frees conjecture
+              then
               let val _ = tracing ("Normalising (" ^ meth ^ "): " ^ Utils.string_of_term' ctxt conjecture)
                   val conjecture = conjecture |> Utils.normalise_term lthy_nodefs simps
                                               |> (apply_heuristics thy o Utils.rulify ctxt)
@@ -226,6 +236,8 @@ fun inductive_prover ctxt tactic timeOut prop =
                  then (tracing "subsumed"; next_conjecture thy simps net store)
                  else SOME (orient_prop thy LESS conjecture, store)
               end
+              else (tracing ("discarding: " ^ Utils.string_of_term' ctxt conjecture);
+                    next_conjecture thy simps net store)
           | NONE => NONE
       val terminates = Aprove.memoized_terminates ctxt_nodefs
       fun build_trs lemmas rule =
@@ -262,6 +274,7 @@ fun inductive_prover ctxt tactic timeOut prop =
                 val failures = trms |> map (fst o Utils.binder_elimination Const_Names.meta_forall [])
                                     |> Seq.of_list
                                     |> Seq.map (Object_Logic.rulify_term ctxt)
+(*                                    |> Seq.filter not_prop_frees*)
                                     |> Seq.map (pair "EQ_FROM_FAILURE")
                 val walsh =
                        (subgoals@lemmas')
@@ -290,8 +303,10 @@ fun inductive_prover ctxt tactic timeOut prop =
                         |> Seq.interleave
                         |> Utils.map_filter_seq Utils.num_processors
                                   (fn (meth, conj) => generalize timeOut ctxt_nodefs thy LESS lemmas_ref (subsumed_in_net net) (meth, conj)
-                                          handle ERROR err => (tracing ("TERM exception on: " ^ meth);
-                                                              tracing (Utils.print_term conj); raise ERROR err))
+                                          handle ERROR err => (tracing ("ERROR exception on: " ^ meth);
+                                                              tracing (Utils.print_term conj); raise ERROR err)
+                                               | TERM err => (tracing ("TERM exception on: " ^ meth);
+                                                              tracing (Utils.print_term conj); raise TERM err))
                 val store = add_sequence new_sequence store
             in case next_conjecture thy lemmas net store of
                 SOME (conjecture, store) => recursive_prover (not foo) store (add_term_to_net net conj) (conj :: subgoals) lemmas conjecture
@@ -317,13 +332,13 @@ fun inductive_prover ctxt tactic timeOut prop =
 (* Failure analysis *)
 fun inductive_prover_tactic' ctxt =
   fn (goal, i) =>
-    case inductive_prover ctxt InductiveTacs.ind_auto_failure (Config.get ctxt Prover.max_time_in_proof) goal of
+    case inductive_prover ctxt Inductive_Tacs.induct_auto_failure_tac (Config.get ctxt Prover.max_time_in_proof) goal of
       (ctxt,SOME simps) => (tracing "Proved original goal!"; simp_tac (ctxt addsimps simps) i)
     | (_,NONE) => (tracing "Not proved!"; no_tac)
 
 fun inductive_prover_sledgehammer_tactic' ctxt =
   fn (goal, i) =>
-    case inductive_prover ctxt InductiveTacs.ind_auto_sledgehammer_failure (Config.get ctxt Prover.max_time_in_proof) goal of
+    case inductive_prover ctxt Inductive_Tacs.induct_auto_sledgehammer_failure_tac (Config.get ctxt Prover.max_time_in_proof) goal of
       (ctxt,SOME simps) => (tracing "Proved original goal!"; simp_tac (ctxt addsimps simps) i)
     | (_,NONE) => (tracing "Not proved!"; no_tac)
 
@@ -341,7 +356,7 @@ val method_setup_inductive_prover =
 val _ = Context.>> (Context.map_theory method_setup_inductive_prover)
 
 val method_setup_inductive_prover =
-  Method.setup (Binding.name "inductive_prover_sledgehammer")
+  Method.setup (Binding.name "inductive_sledgehammer_prover")
     (Scan.succeed (fn ctxt => SIMPLE_METHOD (inductive_prover_sledgehammer_tactic ctxt 1)))
     "Recursive prover with failure analysis. Interleaves induction and auto and check failures."
 
