@@ -53,7 +53,10 @@ fun arg_cong_equation thy eq =
               SOME (tyenv, tenv) => let val env = Envir.Envir {maxidx = 1, tenv = tenv, tyenv = tyenv}
                                         val lhs = Envir.norm_term env x
                                         val rhs = Envir.norm_term env y
-                                    in HOLogic.mk_eq (lhs, rhs) end
+                                        val f' = Envir.norm_term env f
+                                    in if Utils.is_constructor (Context.proof_of (Context.Theory thy)) f'
+                                       then HOLogic.mk_eq (lhs, rhs)
+                                       else eq end
             | NONE => eq
              end
     else eq
@@ -80,6 +83,7 @@ fun apply_until_no_change f eq =
      else apply_until_no_change f eq'
   end
 
+(* FIXME: describe this clearly *)
 fun apply_heuristics thy prop =
   (let val concl = (HOLogic.dest_Trueprop o Logic.strip_imp_concl) prop
                      |> apply_until_no_change (clear_lambda o arg_cong_equation thy)

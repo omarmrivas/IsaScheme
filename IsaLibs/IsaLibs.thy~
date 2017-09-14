@@ -258,99 +258,23 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
-  datatype Nata = Z | S (p: "Nata")
-
-datatype Bin = One | ZeroAnd (ZeroAnd_0: "Bin") | OneAnd (OneAnd_0: "Bin")
-
-fun s :: "Bin => Bin" where
-"(s One) = (ZeroAnd One)"|
-"(s (ZeroAnd xs)) = (OneAnd xs)"|
-"(s (OneAnd ys)) = (ZeroAnd (s ys))"
-
-fun plus2 :: "Bin => Bin => Bin" where
-"(plus2 One y) = (s y)"|
-"(plus2 (ZeroAnd z) One) = (s (ZeroAnd z))"|
-"(plus2 (ZeroAnd z) (ZeroAnd ys)) = (ZeroAnd (plus2 z ys))"|
-"(plus2 (ZeroAnd z) (OneAnd xs)) = (OneAnd (plus2 z xs))"|
-"(plus2 (OneAnd x2) One) = (s (OneAnd x2))"|
-"(plus2 (OneAnd x2) (ZeroAnd zs)) = (OneAnd (plus2 x2 zs))"|
-"(plus2 (OneAnd x2) (OneAnd ys2)) = (ZeroAnd (s (plus2 x2 ys2)))"
-
-fun timesa :: "Bin => Bin => Bin" where
-"(timesa One y) = y"|
-"(timesa (ZeroAnd xs) y) = (ZeroAnd (timesa xs y))"|
-"(timesa (OneAnd ys) y) = (plus2 (ZeroAnd (timesa ys y)) y)"
-
-fun plusa :: "Nata => Nata => Nata" where
-"(plusa Z y) = y"|
-"(plusa (S n) y) = (S (plusa n y))"
-
-fun toNat :: "Bin => Nata" where
-"(toNat One) = (S Z)"|
-"(toNat (ZeroAnd xs)) = (plusa (toNat xs) (toNat xs))"|
-"(toNat (OneAnd ys)) = (S (plusa (toNat ys) (toNat ys)))"
-
-fun mult :: "Nata => Nata => Nata" where
-"(mult Z y) = Z"|
-"(mult (S n) y) = (plusa y (mult n y))"
-
-
-(*lemma "plusa x y = plusa y (x::Nata)"
-  apply (induction x y rule: plusa.induct)
-   apply simp_all
-    sledgehammer*)
-  
-(*lemma l1: "plusa (plusa x y) z = plusa x (plusa y z)"
-  ML_prf {*
-  val failures = Unsynchronized.ref (Net.empty : term Net.net)
-  val lemmas = Unsynchronized.ref ([] : thm list)
-  *}
-  apply (tactic {* Inductive_Tacs.induct_auto_failure_tac failures lemmas @{context} *})
-  ML_prf {*
-  !failures
-    |> Net.content
-    |> map (tracing o Syntax.string_of_term @{context})
-  *}*)
-
-(*lemma "\<And>ys ysa.
-   (\<And>ysa. (s ysa = s ys \<Longrightarrow> ysa = ys) \<Longrightarrow> ZeroAnd (s ysa) = s ys \<Longrightarrow> OneAnd ysa = ys) \<Longrightarrow>
-   (s ys = ZeroAnd (s ys) \<Longrightarrow> ysa = ys) \<Longrightarrow> s ysa = s ys \<Longrightarrow> ysa = ys"
-  ML_prf {*
-  val lemmas = Unsynchronized.ref ([] : thm list)
-  *}
-  apply (tactic {* DB_Inductive_Tacs.sledgehammer_tac @{context} lemmas 1 *})*)
-  
-
-lemma th1: "(s x = s y) = (x = y)"
-(*lemma "\<And>ys. (s ys = s y \<Longrightarrow> ys = y) \<Longrightarrow> ZeroAnd (s ys) = s y \<Longrightarrow> OneAnd ys = y"*)
-(*lemma th1: "plusa x y = plusa y x"*)
-(*lemma th1: "plusa y Z = y"*)
-  ML_prf {*
-  val failures = Unsynchronized.ref (Net.empty : term Net.net)
-  val lemmas = Unsynchronized.ref ([] : thm list)
-  *}
-(*  apply (induction x rule: s.induct, auto)
-      apply (induction y rule: s.induct, auto)
-    apply (metis Bin.distinct(1) Bin.distinct(3) s.elims)*)
-term "\<And>xs. OneAnd xs = s y \<Longrightarrow> ZeroAnd xs = y"
-term "ZeroAnd (s y) = s y \<Longrightarrow> OneAnd y = y"
-term "OneAnd y = y \<Longrightarrow> ZeroAnd (s y) = s y"
-term "\<And>ys. s ys \<noteq> s y \<Longrightarrow> ys \<noteq> y \<Longrightarrow> ZeroAnd (s ys) = s y \<Longrightarrow> OneAnd ys = y"
-  apply (tactic {* REPEAT_ALL_NEW (DB_Inductive_Tacs.atomic_tac @{context}) *})
-(*  apply (tactic {* Inductive_Tacs.induct_auto_sledgehammer_failure_tac failures lemmas @{context} *})*)
-  ML_prf {*
-  !failures
-    |> Net.content
-    |> map (tracing o Syntax.string_of_term @{context})
-  *}
+lemma th1: "x > 0 \<Longrightarrow> x + 0 = (x::nat)"
+  by auto
     
-(*  apply auto
-  apply (tactic {* tac4 @{context} @{term "x::Bin"} 1 *})
-  apply (tactic {* tac4 @{context} @{term "y::Bin"} 1 *})
-  apply (tactic {* tac4 @{context} @{term "y::Bin"} 1 *})*)
+lemma th2: "x < y \<Longrightarrow> x + y = y + (x::nat)"
+  by auto
+
+(*lemma "x > 0 \<Longrightarrow> x < y \<Longrightarrow> 0 + x = (x::nat)"
+  apply (simp only: th1 th2)*)
   
 ML {*
-  Par_List.map
+  val th1 = @{thm th1}
+  val th2 = @{thm th2}
+  val cterm = (@{term "op > :: nat\<Rightarrow>nat\<Rightarrow>bool"} $ (Var (("x",0), @{typ "nat"})) $ @{term "0 :: nat"})
+                |> HOLogic.mk_Trueprop
+                |> Thm.cterm_of @{context}
+  val th1' = Thm.unvarify_global @{theory} th1
+  val th = Thm.implies_intr cterm th1
 *}
-
+  
 end

@@ -17,11 +17,39 @@ sig
   
   val modify   : thm -> thm
 
+  val memoized_joinable :  Proof.context -> (thm list -> bool) ->
+                           (term * int) list -> thm list -> thm -> bool
+
 end
 
 structure DB_Conditional_Completion
 (* : CONDITIONAL_COMPLETION *)
 = struct
+
+local
+(* A method to apply the rewrite step r1 to r2 *)
+fun rw_method r1 r2 =
+  let fun frule_method r ctxt = Method.SIMPLE_METHOD (forward_tac ctxt [r] 1)
+      fun auto_method ctxt = Method.SIMPLE_METHOD (auto_tac ctxt)
+      val text = Method.Combinator (Method.no_combinator_info,
+                  Method.Then,
+                  [Method.Basic (frule_method r1),
+                   Method.Basic (frule_method r2),
+                   Method.Basic auto_method])
+  in (text,Position.no_range) end
+in
+  fun rewrite_step ctxt r1 r2 conv =
+    let val thy = Proof_Context.theory_of ctxt
+        val (_,rhs) = (Utils.dest_meta_equation o Thm.unvarify_global thy) r1
+        val crhs = Thm.cterm_of ctxt rhs
+        val conj =
+            r2 |> Thm.unvarify_global thy
+               |> Thm.cprop_of
+               |> conv (fn _ => Thm.reflexive crhs)
+               |> fst o Utils.dest_meta_equation
+        val timeOut = Config.get ctxt Prover.max_time_in_proof
+    in Prover.prove ctxt (SOME [r1, r2]) (rw_method r1 r2) conj timeOut end
+end
 
 (* Semi-Critical pairs of th1 and th2 *)
 fun scpairs thy (th1, th2) =
@@ -69,16 +97,26 @@ fun scpairs thy (th1, th2) =
               |> map_filter (fn (conv,(env,_)) => SOME (conv, Ground_Completion.unify_inst ctxt env))
               |> map (fn (conv,inst) => (conv,apply2 (Drule.instantiate_normalize inst) (th1,th2')))
               (* Conv.concl_conv (Thm.nprems_of th) *)
-              |> map (fn (conv,(r1,r2)) => 
-                    let val not_fired = Unsynchronized.ref true
-                        val ctxt = Simplifier.set_termless (fn _ =>
-                                let val v = !not_fired
-                                    val _ = not_fired := false
-                                in v end) (clear_simpset ctxt) addsimps [(Ground_Completion.varify_global ctxt r1)]
-                    in Conv.fconv_rule
-                    ((Conv.concl_conv (Thm.nprems_of r2) o Conv.fun_conv o Conv.arg_conv o conv)
-                      (Simplifier.rewrite ctxt)) r2 end)
-              |> filter_out (fn th => 
+              |> map (fn (conv,(r1,r2)) =>
+                    let val prems_r1 = Thm.prems_of r1
+                        val prems_r2 = Thm.prems_of r2
+                        val prems = prems_r1 |> filter (not o member (op =) prems_r2)
+                                             |> map (Thm.cterm_of ctxt)
+                        val r2 = Library.foldl (fn (r, prem) => Thm.implies_intr prem r) (r2,prems)
+                    in
+                      if Thm.nprems_of r1 = 0
+                      then Conv.fconv_rule
+                             ((Conv.concl_conv (Thm.nprems_of r2) o Conv.fun_conv o Conv.arg_conv o conv)
+                                 (Conv.rewr_conv r1)) r2
+                      else case rewrite_step (clear_simpset ctxt) r1 r2 
+                                   ((Conv.concl_conv (Thm.nprems_of r2) o 
+                                         Conv.fun_conv o Conv.arg_conv o conv)) of
+                             SOME thm => thm
+                           | NONE => (tracing "Could not find a proof for the critical pair";
+                                      tracing ("rules: " ^ Utils.str_of_thms [r1,r2]);
+                                      r2)
+                    end)
+              |> filter_out (fn th =>
                               let val th' = Utils.commute_meta_eq th
                               in EQUAL = (Term_Ord.term_ord o Utils.dest_meta_equation) th orelse
                                  Thm.equiv_thm thy (th, th1) orelse
@@ -483,7 +521,6 @@ fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
       (E,[],[]) |> compl
 (*                |> tap (fn TRS => tracing ("Done 0: " ^ Utils.str_of_thms TRS))*)
                 |> make_irreducible ctxt terminates f_map []
-                |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms TRS))
     end
 
 val rule_false = @{lemma "\<not>P \<equiv> (P = False)" by simp}
@@ -527,6 +564,8 @@ fun run_completion global_meta_rws ctxt terminates E e =
       complete global_meta_rws thy ctxt GREATER generate_cps terminates f_maps]
       |> Par_List.get_some (fn f => SOME (f (e :: E)))
       |> the
+      |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms' TRS))
+
   end
 
 fun run_completion' global_meta_rws ctxt terminates E e =

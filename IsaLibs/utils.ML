@@ -15,6 +15,7 @@ sig
   val to_string          : 'a -> string
   val print_term         : term -> string
   val str_of_thms        : thm list -> string
+  val str_of_thms'       : thm list -> string
   val str_of_terms       : Proof.context -> term list -> string
   val print_ss           : Proof.context -> unit
   val trace_log          : Path.T -> string -> unit
@@ -82,6 +83,8 @@ sig
   val equations                  : theory -> term -> term list
   val ac_orient                  : order -> term -> term
   val not_constructor            : theory -> term -> bool
+  val is_constructor             : Proof.context -> term -> bool
+  val constructors_of_type       : Proof.context -> typ -> term list
   val get_rewrites               : theory -> string -> thm list
   val get_definitional_rewrites  : theory -> term -> thm list
   val definitional_dependencies  : theory -> ((string * typ) list * term) -> (string * typ) list
@@ -158,6 +161,15 @@ fun str_of_thms thms =
   let fun str_of_cterm thy t = Syntax.string_of_term_global thy (Thm.term_of t)
       fun str_of_thm thy thm = str_of_cterm thy (Thm.cprop_of thm)
   in commas (map (fn th => str_of_thm (Thm.theory_of_thm th) th) thms) end
+
+fun str_of_thms' thms =
+  let fun str_of_cterm thy t =
+        let val ctxt = Context.proof_of (Context.Theory thy)
+            val ctxt' = Config.put show_question_marks false ctxt
+        in Syntax.string_of_term ctxt' (Thm.term_of t) end
+      fun str_of_thm thy thm = str_of_cterm thy (Thm.cprop_of thm)
+  in commas (map (fn th => str_of_thm (Thm.theory_of_thm th) th) thms) end
+
 
 (* Exceptions *)
 exception BadPosition of term * int list
@@ -769,11 +781,19 @@ fun lhs_in_rhs thy (lhs, rhs) =
   in rhs |> positions
          |> exists (fn (t, _, _) => Pattern.matches thy (pattern, t)) end
 
-fun top_symbol_constructor thy (lhs, _) = 
+fun is_constructor ctxt (Const (n, typ)) = 
+      let val constructors = 
+                typ |> (snd o strip_type)
+                    |> constructors_of_type ctxt
+      in exists ((fn m => n = m) o fst o dest_Const) constructors end
+    | is_constructor _ _ = false
+
+fun top_symbol_constructor thy (lhs, _) =
   case lhs |> strip_comb
            |> fst of
 (*       Const c => is_some (Datatype_Data.info_of_constr thy c)*)
-       Const c => is_some (Old_Datatype_Data.info_of_constr thy c)
+(*       Const c => is_some (Old_Datatype_Data.info_of_constr thy c)*)
+       Const c => is_constructor (Context.proof_of (Context.Theory thy)) (Const c)
      | _       => false
 
 fun not_constructor thy t = 
