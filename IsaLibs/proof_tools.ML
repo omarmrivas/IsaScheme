@@ -167,6 +167,7 @@ fun generalize timeOut ctxt thy order simps_ref subsumed (meth,conj) =
 
 fun inductive_prover ctxt tactic timeOut prop =
   let val start = Timing.start ()
+      (*val _ = tracing ("Setting timeout: " ^ string_of_int timeOut ^ "s.")*)
       val prop = Object_Logic.rulify_term ctxt prop
       val thy = Proof_Context.theory_of ctxt
       val _ = tracing "Getting definitional rewrites..."
@@ -247,7 +248,8 @@ fun inductive_prover ctxt tactic timeOut prop =
       fun build_trs lemmas rule =
           let val TRS = map Utils.obj_to_meta lemmas
               val e = Utils.obj_to_meta rule
-          in e |> Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS
+          in e (*|> Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS*)
+               |> Conditional_Completion.discriminate_cpairs [] ctxt_nodefs terminates TRS
                |> map Utils.meta_to_obj end
       val _ = tracing "Calculating equational theory exploration sequence..."
       val eq_tx = 
@@ -350,7 +352,7 @@ fun inductive_prover_tactic ctxt =
   SUBGOAL (inductive_prover_tactic' ctxt)
 
 fun inductive_prover_sledgehammer_tactic ctxt =
-  SUBGOAL (inductive_prover_tactic' ctxt)
+  SUBGOAL (inductive_prover_sledgehammer_tactic' ctxt)
 
 val method_setup_inductive_prover =
   Method.setup (Binding.name "inductive_prover")

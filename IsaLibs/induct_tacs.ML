@@ -71,7 +71,8 @@ fun structural_induction_tac ctxt (goal, i) =
       ((s,T), induction) :: _ =>
           ((*tracing ("structural induction on: " ^ Syntax.string_of_term ctxt goal);
            tracing ("params: " ^ Syntax.string_of_term ctxt (Free (s,T)));*)
-          DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]] [] [] (SOME induction) [] i))
+          DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]] [] [] NONE [] i))
+(*          DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]] [] [] (SOME induction) [] i))*)
        | [] => no_tac
   end
 
@@ -100,12 +101,8 @@ fun ind_auto_failure sts _ ctxt =
   (IF_UNSOLVED (ALLGOALS (SUBGOAL (check_fail_proof_state sts ctxt))))
 
 fun sledgehammer_tac ctxt simps i =
-  let val ctxt0 = ctxt addsimps (!simps)
-  in Sledgehammer_Tactics.sledgehammer_with_metis_tac
-            ctxt [] Sledgehammer_Fact.no_fact_override [] i ORELSE
-     Sledgehammer_Tactics.sledgehammer_with_metis_tac
-            ctxt0 [] Sledgehammer_Fact.no_fact_override (!simps) i
-  end
+  Sledgehammer_Tactics.sledgehammer_with_metis_tac
+            ctxt [] Sledgehammer_Fact.no_fact_override [] i
 
 fun SOLVE_TIMEOUT seconds tac t = 
   let val res = Timeout.apply (Time.fromSeconds seconds)

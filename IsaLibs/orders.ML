@@ -45,9 +45,10 @@ fun extend_ord _ [] [] = []
                              val ((v',i') :: O2) = O2
                            in if indx = i' then (i+1, indx, result)
                               else (i+1, indx+1,
+                                    (* Two symbols are not allowed to have the same priority *)
                                     (O1 @ [(v,indx+1), (v',i'+1)] @
-                                     (map (fn (a,i) => (a,i+1)) O2)) ::
-                                    ((O1 @ [(v,indx+1), (v',i')] @ O2) :: result)) end)
+                                     (map (fn (a,i) => (a,i+1)) O2)) :: result
+                                    (*(O1 @ [(v,indx+1), (v',i')] @ O2) :: result*)) end)
       |> (fn (_, indx, x) => x @ [ord_index @ [(v,indx+1)]])
       |> maps (fn ord_index => extend_ord P ord_index V)
 
@@ -62,9 +63,10 @@ fun extend_ord_eval P [] [] = P []
                              val ((v',i') :: O2) = O2
                            in if indx = i' then (i+1, indx, result)
                               else (i+1, indx+1,
+                                    (* Two symbols are not allowed to have the same priority *)
                                     (O1 @ [(v,indx+1), (v',i'+1)] @
-                                     (map (fn (a,i) => (a,i+1)) O2)) ::
-                                    ((O1 @ [(v,indx+1), (v',i')] @ O2) :: result)) end)
+                                     (map (fn (a,i) => (a,i+1)) O2)) :: result
+                                    (*(O1 @ [(v,indx+1), (v',i')] @ O2) :: result*)) end)
       |> (fn (_, indx, x) => x @ [ord_index @ [(v,indx+1)]])
       |> forall (fn ord_index => extend_ord_eval P ord_index V)
 

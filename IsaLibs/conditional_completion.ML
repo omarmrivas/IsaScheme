@@ -14,6 +14,9 @@ sig
                                       thm list -> thm -> thm list
   val run_completion'               : thm list -> Proof.context -> (thm list -> bool) ->
                                       thm list -> thm -> thm list * thm list
+
+  val discriminate_cpairs           : thm list -> Proof.context -> (thm list -> bool) ->
+                                      thm list -> thm -> thm list
   
   val modify   : thm -> thm
 
@@ -334,7 +337,7 @@ fun ground_joinable ctxt terminates f_map (e, E) =
                      |> Library.foldl (fn ((consts_map, vars_map), (Var V, I)) => (consts_map, (V, I) :: vars_map)
                                         | ((consts_map, vars_map), (Const C, I)) => ((C, I) :: consts_map, vars_map)
                                         | ((consts_map, vars_map), (_, _)) => (consts_map, vars_map))
-(*                     |> tap (fn (cs, vs) => 
+(*                     |> tap (fn (cs, vs) =>
                                 let val r = (map (apfst Const) cs @ map (apfst Var) vs)
                                 in (tracing o print_orders ctxt) r end)*)
                      |> Orders.map_term_to_int
@@ -344,9 +347,12 @@ fun ground_joinable ctxt terminates f_map (e, E) =
                                 val ctxt = ctxt |> Simplifier.set_termless termless
                                                 |> (fn ctxt => ctxt addsimps (equations @ rules))
                             in
-                            e |> simplify ctxt
+                            e |> asm_full_simplify ctxt
                               |> Utils.dest_meta_equation
                               |> (op =)
+(*                              |> tap (fn foo => if foo
+                                                then tracing "true"
+                                                else tracing "false")*)
 (*                              |> (is_equal o g_ord)*)
                             end)) f_map
  end
@@ -574,6 +580,52 @@ fun run_completion' global_meta_rws ctxt terminates E e =
         val additions = filter_out (fn r => exists (Thm.equiv_thm thy o pair r) E) rules
         val deletions = filter_out (fn e => exists (Thm.equiv_thm thy o pair e) rules) E
     in (additions, deletions) end
+
+fun discriminate_cpairs global_meta_rws ctxt terminates E e =
+  let (*val _ = tracing ("Discriminating cpairs: " ^ Utils.str_of_thms E)
+      val _ = tracing ("with: " ^ Utils.str_of_thms [e])*)
+      val thy = Proof_Context.theory_of ctxt
+      val cpairs = (semi_critical_pairs thy LESS E [e] @
+                    semi_critical_pairs thy LESS [e] E)
+                    |> Utils.make_theorem_set
+                    |> map (Utils.orient_meta_rule thy LESS)
+                    |> map (fn th => (th, Drule.size_of_thm th))
+                    |> sort (int_ord o (apply2 snd))
+                    |> map fst
+      val deps = Utils.definitional_dependencies thy ([], Thm.full_prop_of e)
+                  |> map Const
+(*      val f_map_eq = deps
+                    |> map (rpair 0)*)
+      val f_map_less = map_index (fn (x,y) => (y,x)) deps
+      (* Completion will subsume this function if CP generation is enabled *)
+      val ctxt = Config.put Ground_Completion.generate_cps false ctxt
+      val E' = Par_List.map (fn cp =>
+                    let val rule = cp |> rewrite_rule ctxt terminates E
+                                      |> Utils.orient_meta_rule thy LESS
+                        val (lhs, rhs) = Utils.dest_meta_equation rule
+                    in (rule, lhs = rhs orelse
+                            memoized_joinable ctxt terminates f_map_less E rule)
+                    end) (e :: cpairs)
+                    |> map_filter (fn (_, true) => NONE
+                                    | (cp, false) => SOME cp)
+                    |> tap (fn cp => tracing ("Non joinable CPs: " ^ Utils.str_of_thms' cp))
+  in case E' of
+      e :: E' => run_completion [] ctxt terminates (E @ E') e
+    | [] => E
+    (*(E, e :: cpairs)
+      |> Library.foldl (fn (E, cp) =>
+            let val rule = cp |> rewrite_rule ctxt terminates E
+                              |> Utils.orient_meta_rule thy LESS
+                val (lhs, rhs) = Utils.dest_meta_equation rule
+            in if lhs = rhs orelse
+                  memoized_joinable ctxt terminates f_map_less E rule
+               then E
+               else let val _ = tracing ("Adding cp: " ^ Utils.str_of_thms' [rule])
+                    in rule :: E end
+            end)*)
+(*      |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms' TRS))*)
+  end
+
 
 end
 
