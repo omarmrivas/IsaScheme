@@ -561,13 +561,13 @@ fun run_completion global_meta_rws ctxt terminates E e =
       val _ = tracing ("with: " ^ Utils.str_of_thms [e])
       val deps = Utils.definitional_dependencies thy ([], Thm.full_prop_of e)
                   |> map Const
-      val f_map_eq = deps
-                    |> map (rpair 0)
-(*     val f_map_less = map_index (fn (x,y) => (y,x)) deps
-     val f_map_greater = map_index (fn (x,y) => (y,x)) (rev deps)*)
-     val f_maps = f_map_eq
-  in [complete global_meta_rws thy ctxt LESS generate_cps terminates f_maps,
-      complete global_meta_rws thy ctxt GREATER generate_cps terminates f_maps]
+(*      val f_map_eq = deps
+                    |> map (rpair 0)*)
+     val f_map_less = map_index (fn (x,y) => (y,x)) deps
+(*     val f_map_greater = map_index (fn (x,y) => (y,x)) (rev deps)
+     val f_maps = f_map_eq*)
+  in [complete global_meta_rws thy ctxt LESS generate_cps terminates f_map_less,
+      complete global_meta_rws thy ctxt GREATER generate_cps terminates f_map_less]
       |> Par_List.get_some (fn f => SOME (f (e :: E)))
       |> the
       |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms' TRS))

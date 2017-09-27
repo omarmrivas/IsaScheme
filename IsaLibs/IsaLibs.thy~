@@ -100,7 +100,7 @@ declare [[
   use_nitpick = true,
   simp_before = false,
   max_time_in_counter_ex = 25,
-  max_time_in_proof = 30,
+  max_time_in_proof = 120,
   max_time_normalization = 5,
   max_lambda_size = 10,
   max_random_terms = 8,
@@ -257,51 +257,5 @@ ML {*
 /Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks/tip2015/tree_Flatten3.smt2 - tree_Flatten3.thy 
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
-
-datatype Bin = One | ZeroAnd (ZeroAnd_0: "Bin") | OneAnd (OneAnd_0: "Bin")
-
-fun s :: "Bin => Bin" where
-"(s One) = (ZeroAnd One)"|
-"(s (ZeroAnd xs)) = (OneAnd xs)"|
-"(s (OneAnd ys)) = (ZeroAnd (s ys))"
-
-fun plusa :: "Bin => Bin => Bin" where
-"(plusa One y) = (s y)"|
-"(plusa (ZeroAnd z) One) = (s (ZeroAnd z))"|
-"(plusa (ZeroAnd z) (ZeroAnd ys)) = (ZeroAnd (plusa z ys))"|
-"(plusa (ZeroAnd z) (OneAnd xs)) = (OneAnd (plusa z xs))"|
-"(plusa (OneAnd x2) One) = (s (OneAnd x2))"|
-"(plusa (OneAnd x2) (ZeroAnd zs)) = (OneAnd (plusa x2 zs))"|
-"(plusa (OneAnd x2) (OneAnd ys2)) = (ZeroAnd (s (plusa x2 ys2)))"
-
-fun timesa :: "Bin => Bin => Bin" where
-"(timesa One y) = y"|
-"(timesa (ZeroAnd xs) y) = (ZeroAnd (timesa xs y))"|
-"(timesa (OneAnd ys) y) = (plusa (ZeroAnd (timesa ys y)) y)"
-
-lemma "(s x = s y) = (x = y)"
-  by inductive_sledgehammer_prover
-
-(*ML {*
-  val prop = @{prop "(s x = s y) = (x = y)"}
-  val def_lemmas = Utils.get_definitional_rewrites @{theory} prop
-  val lemmas_ref = Unsynchronized.ref def_lemmas
-  val sts = Unsynchronized.ref (Net.empty : term Net.net)
-  val ctxt_nodefs = @{context} delsimps def_lemmas
-  val tactic = (DB_Inductive_Tacs.induct_auto_sledgehammer_failure_tac sts lemmas_ref)
-  val foo = Prover.prove_from_tactic ctxt_nodefs (SOME def_lemmas) tactic prop 30
-*}
-
-lemma "(s x = s y) = (x = y)"
-  ML_prf {*
-val prop = @{prop "(s x = s y) = (x = y)"}
-val def_lemmas = Utils.get_definitional_rewrites @{theory} prop
-val lemmas_ref = Unsynchronized.ref def_lemmas
-val ctxt_nodefs = @{context} delsimps def_lemmas
-
-val sts = Unsynchronized.ref (Net.empty : term Net.net)
-val lemmas = Unsynchronized.ref ([] : thm list)
-*}
-  apply (tactic {* DB_Inductive_Tacs.induct_auto_sledgehammer_failure_tac sts lemmas ctxt_nodefs *}*)
   
 end

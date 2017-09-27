@@ -100,7 +100,7 @@ declare [[
   use_nitpick = true,
   simp_before = false,
   max_time_in_counter_ex = 25,
-  max_time_in_proof = 30,
+  max_time_in_proof = 120,
   max_time_normalization = 5,
   max_lambda_size = 10,
   max_random_terms = 8,
@@ -257,5 +257,32 @@ ML {*
 /Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks/tip2015/tree_Flatten3.smt2 - tree_Flatten3.thy 
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
+  
+
+datatype ('a) list = nil | cons (head: "'a") (tail: "'a list")
+
+datatype Nata = Z | S (p: "Nata")
+
+fun le :: "Nata => Nata => bool" where
+"(le Z y) = True"|
+"(le (S z) Z) = False"|
+"(le (S z) (S x2)) = (le z x2)"
+
+fun equal :: "Nata => Nata => bool" where
+"(equal Z Z) = True"|
+"(equal Z (S z)) = False"|
+"(equal (S x2) Z) = False"|
+"(equal (S x2) (S y2)) = (equal x2 y2)"
+
+fun count :: "Nata => Nata list => Nata" where
+"(count x nil) = Z"|
+"(count x (cons z ys)) = (if (equal x z) then (S (count x ys)) else (count x ys))"
+
+fun appenda :: "'a list => 'a list => 'a list" where
+"(appenda nil y) = y"|
+"(appenda (cons z xs) y) = (cons z (appenda xs y))"
+
+theorem "(le (count n xs) (count n (appenda xs ys)))"
+   by inductive_sledgehammer_prove
   
 end

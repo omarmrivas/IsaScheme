@@ -326,7 +326,7 @@ fun inductive_prover ctxt tactic timeOut prop =
                                     tracing (Utils.str_of_thms thms);
                                     SOME thms)
                     | NONE => (tracing "No simpset!"; NONE)
-      val induction_prover_timeout = Time.fromSeconds 3600
+      val induction_prover_timeout = Time.fromSeconds 7200
       val res = Timeout.apply induction_prover_timeout result ()
                   handle Timeout.TIMEOUT _ => (tracing "induction_prover_timeout"; NONE)
       val elapsed = start |> Timing.result
