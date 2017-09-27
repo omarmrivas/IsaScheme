@@ -571,7 +571,6 @@ fun run_completion global_meta_rws ctxt terminates E e =
       |> Par_List.get_some (fn f => SOME (f (e :: E)))
       |> the
       |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms' TRS))
-
   end
 
 fun run_completion' global_meta_rws ctxt terminates E e =
@@ -584,6 +583,7 @@ fun run_completion' global_meta_rws ctxt terminates E e =
 fun discriminate_cpairs global_meta_rws ctxt terminates E e =
   let (*val _ = tracing ("Discriminating cpairs: " ^ Utils.str_of_thms E)
       val _ = tracing ("with: " ^ Utils.str_of_thms [e])*)
+      val e = modify e
       val thy = Proof_Context.theory_of ctxt
       val cpairs = (semi_critical_pairs thy LESS E [e] @
                     semi_critical_pairs thy LESS [e] E)

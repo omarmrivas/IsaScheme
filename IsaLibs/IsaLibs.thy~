@@ -258,4 +258,53 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
+
+datatype ('a) list = nil | cons (head: "'a") (tail: "'a list")
+
+datatype Nata = Z | S (p: "Nata")
+
+fun le :: "Nata => Nata => bool" where
+"(le Z y) = True"|
+"(le (S z) Z) = False"|
+"(le (S z) (S x2)) = (le z x2)"
+
+fun equal :: "Nata => Nata => bool" where
+"(equal Z Z) = True"|
+"(equal Z (S z)) = False"|
+"(equal (S x2) Z) = False"|
+"(equal (S x2) (S y2)) = (equal x2 y2)"
+
+fun count :: "Nata => Nata list => Nata" where
+"(count x nil) = Z"|
+"(count x (cons z ys)) = (if (equal x z) then (S (count x ys)) else (count x ys))"
+
+fun appenda :: "'a list => 'a list => 'a list" where
+"(appenda nil y) = y"|
+"(appenda (cons z xs) y) = (cons z (appenda xs y))"
+
+(*lemma th1: "le (count n xs) (count n (appenda xs ys))"
+  by (induction n xs rule: count.induct, auto)
+    
+ML {*
+  val prop = @{prop "le (count n xs) (count n (appenda xs ys))"}
+  val ctxt = @{context}
+  val thy = @{theory}
+  val def_lemmas = Utils.get_definitional_rewrites thy prop
+  val _ = tracing "Done"
+  val lemmas_ref = Unsynchronized.ref def_lemmas
+  val ctxt_nodefs = ctxt delsimps def_lemmas
+  val terminates = Aprove.memoized_terminates ctxt_nodefs
+  fun build_trs lemmas rule =
+          let val TRS = map Utils.obj_to_meta lemmas
+              val e = Utils.obj_to_meta rule
+          in e (*|> Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS*)
+               |> Conditional_Completion.discriminate_cpairs [] ctxt_nodefs terminates TRS
+               |> map Utils.meta_to_obj end
+  val rule = @{thm th1}
+  val TRS = build_trs def_lemmas rule
+*}*)
+
+theorem "(le (count n xs) (count n (appenda xs ys)))"
+   by inductive_sledgehammer_prover
+  
 end
