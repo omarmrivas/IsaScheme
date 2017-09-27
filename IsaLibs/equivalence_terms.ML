@@ -107,10 +107,11 @@ fun substitutions' ctxt size n tab frees =
   in termsubts end
 
 fun preprocess_conjecture ctxt n conjecture =
-  let val typs = 
+  let val typs =
             conjecture
                 |> Utils.datatype_dependencies ctxt
                 |> map (Utils.monomorphize_tfrees @{typ nat})
+                |> distinct (op =)
       val table = Type_Tab.make (typs ~~ (Par_List.map (Counter_Example.enumerate_terms ctxt n) typs))
   in (table, Utils.monomorphize_frees @{typ nat}) end
 
