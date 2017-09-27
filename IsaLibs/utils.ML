@@ -758,7 +758,7 @@ fun normalise_term ctxt simps term =
       (fn term => 
               term
                 |> Thm.cterm_of ctxt
-                |> Simplifier.rewrite ctxt
+                |> Simplifier.asm_full_rewrite ctxt
                 |> Thm.full_prop_of
                 |> snd o Logic.dest_equals
                 handle THM _ => term
