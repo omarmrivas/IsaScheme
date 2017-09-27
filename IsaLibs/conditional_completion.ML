@@ -587,8 +587,17 @@ fun discriminate_cpairs global_meta_rws ctxt terminates E e =
       val thy = Proof_Context.theory_of ctxt
       val cpairs = (semi_critical_pairs thy LESS E [e] @
                     semi_critical_pairs thy LESS [e] E)
-                    |> Utils.make_theorem_set
+                    (* Normalize critical pairs *)
+                    |> map (rewrite_rule ctxt terminates E)
+                    (* Filter True *)
+                    |> filter (fn cp => @{prop "True"} <> Thm.full_prop_of cp)
+                    (* Rulify normalizations *)
+                    |> map modify
+                    (* Orient normalizations *)
                     |> map (Utils.orient_meta_rule thy LESS)
+                    (* Filter rules where lhs = rhs *)
+                    |> filter ((op <>) o Utils.dest_meta_equation)
+                    |> Utils.make_theorem_set
                     |> map (fn th => (th, Drule.size_of_thm th))
                     |> sort (int_ord o (apply2 snd))
                     |> map fst
@@ -600,12 +609,7 @@ fun discriminate_cpairs global_meta_rws ctxt terminates E e =
       (* Completion will subsume this function if CP generation is enabled *)
       val ctxt = Config.put Ground_Completion.generate_cps false ctxt
       val E' = Par_List.map (fn cp =>
-                    let val rule = cp |> rewrite_rule ctxt terminates E
-                                      |> Utils.orient_meta_rule thy LESS
-                        val (lhs, rhs) = Utils.dest_meta_equation rule
-                    in (rule, lhs = rhs orelse
-                            memoized_joinable ctxt terminates f_map_less E rule)
-                    end) (e :: cpairs)
+                            (cp, memoized_joinable ctxt terminates f_map_less E cp)) (e :: cpairs)
                     |> map_filter (fn (_, true) => NONE
                                     | (cp, false) => SOME cp)
                     |> tap (fn cp => tracing ("Non joinable CPs: " ^ Utils.str_of_thms' cp))

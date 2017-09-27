@@ -258,15 +258,10 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
-
+  
 datatype ('a) list = nil | cons (head: "'a") (tail: "'a list")
 
 datatype Nata = Z | S (p: "Nata")
-
-fun le :: "Nata => Nata => bool" where
-"(le Z y) = True"|
-"(le (S z) Z) = False"|
-"(le (S z) (S x2)) = (le z x2)"
 
 fun equal :: "Nata => Nata => bool" where
 "(equal Z Z) = True"|
@@ -278,17 +273,13 @@ fun count :: "Nata => Nata list => Nata" where
 "(count x nil) = Z"|
 "(count x (cons z ys)) = (if (equal x z) then (S (count x ys)) else (count x ys))"
 
-fun appenda :: "'a list => 'a list => 'a list" where
-"(appenda nil y) = y"|
-"(appenda (cons z xs) y) = (cons z (appenda xs y))"
-
-(*lemma th1: "le (count n xs) (count n (appenda xs ys))"
-  by (induction n xs rule: count.induct, auto)
+(*lemma th1: "equal x y = (x = y)"
+  by (induction x y rule: equal.induct, auto)
     
 ML {*
-  val prop = @{prop "le (count n xs) (count n (appenda xs ys))"}
   val ctxt = @{context}
   val thy = @{theory}
+  val prop = @{prop "((n = x) --> ((S (count n xs)) = (count n (cons x xs))))"}
   val def_lemmas = Utils.get_definitional_rewrites thy prop
   val _ = tracing "Done"
   val lemmas_ref = Unsynchronized.ref def_lemmas
@@ -300,11 +291,32 @@ ML {*
           in e (*|> Conditional_Completion.run_completion [] ctxt_nodefs terminates TRS*)
                |> Conditional_Completion.discriminate_cpairs [] ctxt_nodefs terminates TRS
                |> map Utils.meta_to_obj end
-  val rule = @{thm th1}
-  val TRS = build_trs def_lemmas rule
+  val TRS = build_trs def_lemmas @{thm th1}
+  val _ = tracing (Syntax.string_of_term ctxt_nodefs prop)
+  val propp = Object_Logic.rulify_term ctxt prop
+  val _ = tracing (Syntax.string_of_term ctxt_nodefs propp)
+  val prop' = Utils.normalise_term ctxt_nodefs TRS propp
+  val _ = tracing (Syntax.string_of_term ctxt_nodefs prop')
+*}
+  
+lemma th2: "n = x \<Longrightarrow> (if n = x then S (count n xs) else count n xs) = S (count n xs)"
+  by simp
+  
+ML {*
+  val thy = @{theory}
+  val e = DB_Conditional_Completion.modify @{thm th2}
+  val TRS = map Utils.obj_to_meta TRS
+  val cpairs = (DB_Conditional_Completion.semi_critical_pairs thy LESS TRS [e] @
+                DB_Conditional_Completion.semi_critical_pairs thy LESS [e] TRS)
+                    |> Utils.make_theorem_set
+                    |> map (Utils.orient_meta_rule thy LESS)
+                    |> map (fn th => (th, Drule.size_of_thm th))
+                    |> sort (int_ord o (apply2 snd))
+                    |> map fst
 *}*)
-
-theorem "(le (count n xs) (count n (appenda xs ys)))"
+  
+theorem "((n = x) --> ((S (count n xs)) = (count n (cons x xs))))"
    by inductive_sledgehammer_prover
+  
   
 end

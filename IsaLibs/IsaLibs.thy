@@ -258,22 +258,7 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
-  
-datatype ('a) list = nil | cons (head: "'a") (tail: "'a list")
-
-datatype Nata = Z | S (p: "Nata")
-
-fun equal :: "Nata => Nata => bool" where
-"(equal Z Z) = True"|
-"(equal Z (S z)) = False"|
-"(equal (S x2) Z) = False"|
-"(equal (S x2) (S y2)) = (equal x2 y2)"
-
-fun count :: "Nata => Nata list => Nata" where
-"(count x nil) = Z"|
-"(count x (cons z ys)) = (if (equal x z) then (S (count x ys)) else (count x ys))"
-
-lemma th1: "equal x y = (x = y)"
+(*lemma th1: "equal x y = (x = y)"
   by (induction x y rule: equal.induct, auto)
     
 ML {*
@@ -299,23 +284,21 @@ ML {*
   val _ = tracing (Syntax.string_of_term ctxt_nodefs prop')
 *}
   
+lemma th2: "n = x \<Longrightarrow> (if n = x then S (count n xs) else count n xs) = S (count n xs)"
+  by simp
+  
 ML {*
-  val e = modify e
-  val thy = Proof_Context.theory_of ctxt
-  val cpairs = (semi_critical_pairs thy LESS E [e] @
-                semi_critical_pairs thy LESS [e] E)
+  val thy = @{theory}
+  val e = DB_Conditional_Completion.modify @{thm th2}
+  val TRS = map Utils.obj_to_meta TRS
+  val cpairs = (DB_Conditional_Completion.semi_critical_pairs thy LESS TRS [e] @
+                DB_Conditional_Completion.semi_critical_pairs thy LESS [e] TRS)
                     |> Utils.make_theorem_set
                     |> map (Utils.orient_meta_rule thy LESS)
                     |> map (fn th => (th, Drule.size_of_thm th))
                     |> sort (int_ord o (apply2 snd))
                     |> map fst
-*}
-  
-theorem "((n = x) --> ((S (count n xs)) = (count n (cons x xs))))"
-  apply (simp only: TRS)
-
-theorem "((n = x) --> ((S (count n xs)) = (count n (cons x xs))))"
-   by inductive_sledgehammer_prove
+*}*)
   
   
 end
