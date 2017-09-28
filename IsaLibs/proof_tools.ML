@@ -165,6 +165,16 @@ fun generalize timeOut ctxt thy order simps_ref subsumed (meth,conj) =
   end
   else NONE
 
+(* This function filters conjectures difficult to prove for the
+  inductive tactic  *)
+fun filter_conjectures conj =
+  let fun fun_eq (Const (name, _) $ lhs $ _) =
+            if name = Const_Names.hol_eq
+            then can (dest_funT o type_of) lhs
+            else false
+        | fun_eq _ = false
+  in Term.exists_subterm fun_eq conj end
+
 fun inductive_prover ctxt tactic timeOut prop =
   let val start = Timing.start ()
       (*val _ = tracing ("Setting timeout: " ^ string_of_int timeOut ^ "s.")*)
@@ -236,9 +246,10 @@ fun inductive_prover ctxt tactic timeOut prop =
                                               |> (orient_prop thy LESS)
                   val (lhs,rhs) = Utils.dest_eq conjecture
               in if lhs = rhs orelse
+                    filter_conjectures conjecture orelse
                     subsumed_in_net net conjecture orelse
                     subsumed_in_net net (Utils.commute_eq conjecture)
-                 then (tracing "subsumed"; next_conjecture thy simps net store)
+                 then (tracing "subsumed or rejected"; next_conjecture thy simps net store)
                  else SOME (orient_prop thy LESS conjecture, store)
               end
               else (tracing ("discarding: " ^ Utils.string_of_term' ctxt conjecture);
