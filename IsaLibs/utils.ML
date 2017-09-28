@@ -790,7 +790,8 @@ fun is_constructor ctxt (Const (n, typ)) =
 
 fun top_symbol_constructor thy (lhs, _) =
   case lhs |> strip_comb
-           |> fst of
+           |> fst
+           |> Logic.unvarify_global o Term_Subst.zero_var_indexes of
 (*       Const c => is_some (Datatype_Data.info_of_constr thy c)*)
 (*       Const c => is_some (Old_Datatype_Data.info_of_constr thy c)*)
        Const c => is_constructor (Context.proof_of (Context.Theory thy)) (Const c)
