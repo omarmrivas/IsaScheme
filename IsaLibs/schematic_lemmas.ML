@@ -18,7 +18,7 @@ structure DB_Schematic_Lemmas
 val parser = Args.embedded_inner_syntax
 
 fun memoized_rules rule =
-  Utils.memoize_function Term_Tab.lookup Term_Tab.update Utils.schematic_lemmas_var
+  Utils.memoize_function Term_Tab.lookup Term_Tab.update I Utils.schematic_lemmas_var
                          (fn _ => ()) rule
 
 fun map_contexts f =

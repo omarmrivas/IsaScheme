@@ -17,6 +17,7 @@ sig
   val str_of_thms        : thm list -> string
   val str_of_thms'       : thm list -> string
   val str_of_terms       : Proof.context -> term list -> string
+  val str_of_typs        : Proof.context -> typ list -> string
   val print_ss           : Proof.context -> unit
   val trace_log          : Path.T -> string -> unit
   val create_log         : Path.T -> unit
@@ -46,6 +47,8 @@ sig
   val bounds_at_position : term -> int list -> (string * typ) list
   val term_at            : int list -> term -> term
   val substitute         : (term * int list) -> term -> term
+  val injective_subst    : ('a * ''b) list -> (''c * ''b) list ->
+                           (('a * ''b) * (''c * ''b)) list option
   val binder_vars        : string -> (string * typ) list -> term -> (string * typ) list
   val binder_elimination : string -> term list -> term -> term * term list
   val fold_subterms      :  (term -> 'a -> 'a) -> term -> 'a -> 'a
@@ -53,6 +56,8 @@ sig
   val subterms_no_loose_no_funs :term -> term list
   val subterms           : term -> term list
   val subterms_no_loose  : term -> term list
+  val pattern_equiv      : theory -> term * term -> bool
+  val pattern_equiv'     : theory -> term * term -> bool
   val make_term_set      : theory -> term list -> term list
   val make_term_set'     : theory -> term list -> term list
   val make_term_set_by   : theory -> ('a -> term) -> 'a list -> 'a list
@@ -64,6 +69,7 @@ sig
   val generalizations'   : theory -> int -> term list -> term list
   val is_trivial         : term -> bool
   val normalise_term     : Proof.context -> thm list -> term -> term 
+  val normalise_term'    : Proof.context -> thm list -> term list -> term -> term
   val monomorphize_frees: typ -> term -> term
   val monomorphize_tfrees: typ -> typ -> typ
 
@@ -85,10 +91,12 @@ sig
   val not_constructor            : theory -> term -> bool
   val is_constructor             : Proof.context -> term -> bool
   val constructors_of_type       : Proof.context -> typ -> term list
+  val parametric_type            : Proof.context -> typ -> bool
   val get_rewrites               : theory -> string -> thm list
   val get_definitional_rewrites  : theory -> term -> thm list
   val definitional_dependencies  : theory -> ((string * typ) list * term) -> (string * typ) list
   val datatype_dependencies      : Proof.context -> term -> typ list
+  val type_dependencies          : Proof.context -> term -> typ list
   val definitional_orientation   : theory -> term -> bool
   val oriented_rules_var         : unit Term_Tab.table Synchronized.var
   val schematic_lemmas_var       : unit Term_Tab.table Synchronized.var
@@ -135,7 +143,7 @@ sig
   val timing_wrapper'    : (Timing.timing -> bool) ->
                               (unit -> string) -> ('a -> 'b) -> 'a -> 'b
   val memoize_function   : ('a -> 'b -> 'c option) -> ('b * 'c -> 'a -> 'a) ->
-                           'a Synchronized.var -> ('b -> 'c) -> 'b -> 'c
+                            ('d -> 'b) -> 'a Synchronized.var -> ('d -> 'c) -> 'd -> 'c
   val foldl_seq          : ('a * 'b -> 'a) -> 'a * 'b Seq.seq -> 'a
   val random             : unit -> real
   val weighted_choose    : ('a * int) list -> 'a
@@ -143,6 +151,7 @@ sig
   val trim               : string -> string
   val filter_seq         : int -> ('a -> bool) -> 'a Seq.seq -> 'a Seq.seq
   val map_filter_seq     : int -> ('a -> 'b option) -> 'a Seq.seq -> 'b Seq.seq
+  val maps_seq           : int -> ('a -> 'b list) -> 'a Seq.seq -> 'b Seq.seq
 end
 
 structure DB_Utils
@@ -335,6 +344,11 @@ fun pattern_equiv thy (t1, t2) =
                                  |> (fn (s1, s2) => s1 ^ " : " ^ s2)
                                  |> tracing; raise TYPE msg)
 
+fun pattern_equiv' thy (t1, t2) =
+  let val t1' = Logic.varify_global t1
+      val t2' = Logic.incr_indexes ([], [], 1) (Logic.varify_global t2)
+  in pattern_equiv thy (t1',t2') end
+
 fun make_term_set thy tms =
   (Net.empty, tms)
     |> Library.foldl (fn (net, t) =>
@@ -412,6 +426,15 @@ fun substitute (t', 0 :: pos) (Abs (v, T, t)) =
       p $ (substitute (t', pos) q)
   | substitute (t', []) _ = t'
   | substitute (_, pos) t = raise BadPosition (t, pos)
+
+fun injective_subst domain codomain =
+  Library.foldl (fn ((subst, codomain), (n,ty)) =>
+    case find_first (fn (_, ty') => ty = ty') codomain of
+      SOME (m, _) => (((n, ty), (m, ty)) :: subst, remove (op =) (m, ty) codomain)
+      | NONE => raise List.Empty) (([], codomain), domain)
+      |> SOME o fst
+      handle List.Empty => NONE
+      
 
 fun string_of_term ctxt t =
     let
@@ -511,12 +534,12 @@ fun equations thy term =
 
 val swap_eq = HOLogic.mk_eq o swap o HOLogic.dest_eq
 
-fun memoize_function lookup update var f input =
-  case lookup (Synchronized.value var) input of
+fun memoize_function lookup update transform var f input =
+  case lookup (Synchronized.value var) (transform input) of
       SOME foo => foo
     | NONE => let val r = f input
                   val _ = Synchronized.change var
-                            (fn tab => update (input, r) tab)
+                            (fn tab => update (transform input, r) tab)
               in r end
 
 val oriented_rules_var = Synchronized.var "oriented_rules"
@@ -585,6 +608,10 @@ fun definitional_dependencies thy (consts : (string * typ) list, term) =
           | NONE => [])
       | _ => [] end
 
+fun parametric_type ctxt typ =
+  typ |> constructors_of_type ctxt
+      |> exists (exists_type (exists_subtype (fn TFree _ => true | _ => false)))
+
 local
 fun datatype_dependencies' ctxt typ =
   let fun fold_atyps f (Type (n, T::Ts)) = fold (fn ty => fn a => fold_atyps f ty (f (Type (n, T::Ts)) a)) (T::Ts)
@@ -638,6 +665,10 @@ fun datatype_dependencies ctxt prop =
           |> filter_typs
   end
 end
+
+fun type_dependencies ctxt prop =
+  let val deps = datatype_dependencies ctxt prop
+  in (map TFree (fold Term.add_tfreesT deps [])) @ deps end
 
 fun get_definitional_rewrites thy term =
   ([], term)
@@ -743,7 +774,6 @@ fun rulify ctxt prop =
                |> (snd o dest_meta_equation)
   end
 
-
 fun rhs_is_trivial (_, rhs) =
     is_equal (Term_Ord.term_ord (@{const "True"}, rhs))
 
@@ -754,7 +784,7 @@ fun normalise_term ctxt simps term =
                       |> Simplifier.map_ss (fn simpset => simpset addsimps simps)
                       |> Context.the_proof*)
   in
-  Timeout.apply (Time.fromSeconds timeOut)
+(*  Timeout.apply (Time.fromSeconds timeOut)*)
       (fn term => 
               term
                 |> Thm.cterm_of ctxt
@@ -762,11 +792,25 @@ fun normalise_term ctxt simps term =
                 |> Thm.full_prop_of
                 |> snd o Logic.dest_equals
                 handle THM _ => term
-                     | Timeout.TIMEOUT _ => 
+                     | CTERM _ => term
+                     | Timeout.TIMEOUT _ =>
                           let val _ = tracing ("Timeout normalizing: " ^ Syntax.string_of_term ctxt term)
                               val _ = tracing ("With: " ^ str_of_thms simps)
                           in term end) term
   end
+
+fun normalise_term' ctxt simps prems term =
+  let val names = fold Term.add_free_names (term :: prems) []
+      val name = singleton (Name.variant_list names) "P"
+      val typ = type_of term
+      val concl = HOLogic.mk_Trueprop (Free (name, typ --> @{typ bool}) $ term)
+      val prop = Logic.list_implies (prems, concl)
+      val prop' = normalise_term ctxt simps prop
+      val concl' = Logic.strip_imp_concl prop'
+                         |> HOLogic.dest_Trueprop
+                         |> dest_comb
+                         |> snd
+  in concl' end
 
 fun lhs_in_rhs thy (lhs, rhs) =
   let val (lhs, rhs) = if exists_subterm is_Var lhs orelse
@@ -791,7 +835,7 @@ fun is_constructor ctxt (Const (n, typ)) =
 fun top_symbol_constructor thy (lhs, _) =
   case lhs |> strip_comb
            |> fst
-           |> Logic.unvarify_global o Term_Subst.zero_var_indexes of
+           |> (perhaps (try Logic.unvarify_global)) o Term_Subst.zero_var_indexes of
 (*       Const c => is_some (Datatype_Data.info_of_constr thy c)*)
 (*       Const c => is_some (Old_Datatype_Data.info_of_constr thy c)*)
        Const c => is_constructor (Context.proof_of (Context.Theory thy)) (Const c)
@@ -880,18 +924,20 @@ fun user_supplied_orientation thy eq =
      |> exists (fn pat => can (Pattern.first_order_match thy (pat,eq)) (Vartab.empty, Vartab.empty))
 
 fun orient_eq thy ord eq =
-  if definitional_orientation thy eq then eq
-  else if definitional_orientation thy (swap_eq eq) then swap_eq eq
-  else if user_supplied_orientation thy eq then eq
-  else if user_supplied_orientation thy (swap_eq eq) then swap_eq eq
-  else if match_simps thy eq then eq
-  else if match_simps thy (swap_eq eq) then swap_eq eq
-  else
-    let val eq = ac_orient ord eq
-    in if not (bad_equation' thy eq) then eq
-       else if not (bad_equation' thy (swap_eq eq)) then swap_eq eq
-       else eq
-    end
+  let val comm_eq = swap_eq eq
+  in if definitional_orientation thy eq then eq
+     else if definitional_orientation thy comm_eq then comm_eq
+     else if user_supplied_orientation thy eq then eq
+     else if user_supplied_orientation thy comm_eq then comm_eq
+     else if match_simps thy eq then eq
+     else if match_simps thy comm_eq then comm_eq
+     else
+     let val eq = ac_orient ord eq
+     in if not (bad_equation' thy eq) then eq
+         else if not (bad_equation' thy comm_eq) then comm_eq
+         else eq
+     end
+  end
 
 (*fun orient_eq thy ord eq =
   if definitional_orientation thy eq then eq
@@ -1450,9 +1496,29 @@ fun map_filter_seq bufsize f seq =
              end)
   in process [] seq end
 
+fun maps_seq bufsize f seq =
+  let fun process [] seq =
+            Seq.make (fn () =>
+              (case Seq.chop bufsize seq of
+                ([], _) => NONE
+              | (xs, seq) => Seq.pull (process xs seq)))
+        | process xs seq =
+            Seq.make (fn () =>
+              let val ys = xs |> Par_List.map f
+                              |> maps I
+              in case ys of
+                  y :: ys => SOME (y, Seq.append (Seq.of_list ys) (process [] seq))
+                | [] => Seq.pull (process [] seq)
+             end)
+  in process [] seq end
+
 fun str_of_terms ctxt terms =
   terms |> map (string_of_term ctxt)
         |> commas
+
+fun str_of_typs ctxt typs = 
+  typs |> map (Syntax.string_of_typ ctxt)
+       |> commas
 
 fun pretty_helper aux env =
   env |> Vartab.dest

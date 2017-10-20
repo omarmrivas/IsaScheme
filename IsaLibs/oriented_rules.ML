@@ -29,7 +29,7 @@ fun get_orientation_schemes () =
             |> map fst*)
 
 fun memoized_rules rule =
-  Utils.memoize_function Term_Tab.lookup Term_Tab.update Utils.oriented_rules_var
+  Utils.memoize_function Term_Tab.lookup Term_Tab.update I Utils.oriented_rules_var
                          (fn _ => ()) rule
 
 fun map_contexts f =

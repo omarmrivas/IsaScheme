@@ -43,15 +43,139 @@ fun rw_method r1 r2 =
 in
   fun rewrite_step ctxt r1 r2 conv =
     let val thy = Proof_Context.theory_of ctxt
-        val (_,rhs) = (Utils.dest_meta_equation o Thm.unvarify_global thy) r1
+        val (_,rhs) = (Utils.dest_meta_equation o Thm.unvarify_global thy o Drule.zero_var_indexes) r1
         val crhs = Thm.cterm_of ctxt rhs
         val conj =
-            r2 |> Thm.unvarify_global thy
+            r2 |> Drule.zero_var_indexes
+               |> Thm.unvarify_global thy
                |> Thm.cprop_of
                |> conv (fn _ => Thm.reflexive crhs)
                |> fst o Utils.dest_meta_equation
         val timeOut = Config.get ctxt Prover.max_time_in_proof
-    in Prover.prove ctxt (SOME [r1, r2]) (rw_method r1 r2) conj timeOut end
+        val res = Prover.prove ctxt (SOME [r1, r2]) (rw_method r1 r2) conj timeOut
+    in res
+    end
+end
+
+(*
+  val unifiers: Context.generic * Envir.env * ((term * term) list) ->
+    (Envir.env * (term * term) list) Seq.seq
+
+  val match: theory -> term * term -> Type.tyenv * Envir.tenv -> Type.tyenv * Envir.tenv
+
+*)
+
+local
+(* rewrite step of th1 and th2 *)
+fun scpairs' ctxt (th1, th2) =
+    let
+(*      val _ = tracing ("th1: " ^ Syntax.string_of_term_global thy (Thm.full_prop_of th1))
+      val _ = tracing ("th2: " ^ Syntax.string_of_term_global thy (Thm.full_prop_of th2))*)
+      val thy = Proof_Context.theory_of ctxt
+      val (pat, rhs1) = Utils.dest_meta_equation th1
+      val th2' = Drule.incr_indexes th1 th2
+      val (obj, rhs2) = Utils.dest_meta_equation th2'
+      val paty = type_of pat
+      val valid_rewrites = Pattern.pattern pat andalso Pattern.pattern obj (* Higher-order patterns *)
+                           andalso not (is_Var pat) andalso not (is_Var obj) (* Not a var on lhs *)
+                           andalso not (Ground_Completion.rewrite_rule_extra_vars [] pat rhs1)
+                           andalso not (Ground_Completion.rewrite_rule_extra_vars [] obj rhs2) (* does not introduce new Vars or TVars *)
+      (* Does pat match a subterm of obj? *)
+      fun msub bounds frees obj f =
+          (case obj of
+             Abs (_, T, t) =>
+             let
+               val matcher = if can (Sign.typ_match thy (T,paty)) Vartab.empty
+                             then Unify.matchers (Context.Theory thy) [(pat,obj)]
+                                        handle ListPair.UnequalLengths => Seq.empty
+                                              | TERM _ => Seq.empty
+                             else Seq.empty
+               val (new_free,new_abs) = Term.dest_abs (Name.bound bounds, T, t)
+             in Seq.append (Seq.map (pair (f,obj)) matcher)
+                           (msub (bounds + 1) (new_free :: frees)
+                                 new_abs
+                                 (f o (Ground_Completion.my_abs_conv ctxt))) end
+           | t $ u => (case (fst o Term.strip_comb) obj of
+                         (* According to Nipkow's definition of critical pairs, the head must not be a variable *)
+                         Var _ =>  Seq.append (msub bounds frees t (f o Conv.fun_conv)) (msub bounds frees u (f o Conv.arg_conv))
+                       | _ => let
+                           val unifier = if can (Sign.typ_match thy (type_of obj,paty)) Vartab.empty
+                                         then Unify.matchers (Context.Theory thy) [(pat,obj)]
+                                                  handle ListPair.UnequalLengths => Seq.empty
+                                                       | TERM _ => Seq.empty
+                                         else Seq.empty
+                         in Seq.append (Seq.map (pair (f,obj)) unifier)
+                                       (Seq.append (msub bounds frees t (f o Conv.fun_conv)) (msub bounds frees u (f o Conv.arg_conv))) end)
+           | _ => Seq.empty)
+    in if valid_rewrites then
+         msub 0 [] obj I
+              |> Seq.list_of
+(*              |> tap (map (fn ((_, obj),_) => tracing (Syntax.string_of_term ctxt obj)))*)
+              |> map_filter (fn ((conv, _),env) => SOME (conv, Ground_Completion.unify_inst ctxt env))
+              |> map (fn (conv,inst) => (conv,apply2 (Drule.instantiate_normalize inst) (th1,th2')))
+              (* Conv.concl_conv (Thm.nprems_of th) *)
+              |> map (fn (conv,(r1,r2)) =>
+                    let (*val prems_r1 = Thm.prems_of r1
+                        val prems_r2 = Thm.prems_of r2
+                        val prems = prems_r1 |> filter (not o member (op =) prems_r2)
+                                             |> map (Thm.cterm_of ctxt)
+                        val r2 = Library.foldl (fn (r, prem) => Thm.implies_intr prem r) (r2,prems)*)
+                    in
+                      if Thm.nprems_of r1 = 0
+                      then Conv.fconv_rule
+                             ((Conv.concl_conv (Thm.nprems_of r2) o Conv.fun_conv o Conv.arg_conv o conv)
+                                 (Conv.rewr_conv r1)) r2
+                      else case rewrite_step (clear_simpset ctxt) r1 r2
+                                   ((Conv.concl_conv (Thm.nprems_of r2) o
+                                         Conv.fun_conv o Conv.arg_conv o conv)) of
+                             SOME thm => thm
+                           | NONE => ((*tracing "Could not find a proof for the critical pair";
+                                      tracing ("rules: " ^ Utils.str_of_thms [r1,r2]);
+                                      tracing ("original rules: " ^ Utils.str_of_thms [th1,th2]);*)
+                                      r2)
+                    end)
+              |> map Drule.zero_var_indexes
+              |> distinct (Thm.equiv_thm thy)
+              |> filter_out (fn th =>
+                              let val th' = Utils.commute_meta_eq th
+                              in EQUAL = (Term_Ord.term_ord o Utils.dest_meta_equation) th orelse
+                                 Thm.equiv_thm thy (th, th1) orelse
+                                 Thm.equiv_thm thy (th, th2) orelse
+                                 Thm.equiv_thm thy (th', th1) orelse
+                                 Thm.equiv_thm thy (th', th2)
+                              end)
+       else []
+    end
+in
+
+fun rewrite_steps ctxt rule th =
+  scpairs' ctxt (rule, th) @ map Utils.commute_meta_eq (scpairs' ctxt (rule, Utils.commute_meta_eq th))
+
+fun rewrite_lhs ctxt rule th =
+  let (*val thy = Proof_Context.theory_of ctxt*)
+      val termless = (#termless o Raw_Simplifier.internal_ss) (simpset_of ctxt)
+      val rewrites = termless o swap o apply2 Thm.full_prop_of
+      fun it th =
+        case filter (rewrites o pair th) (scpairs' ctxt (rule, th)) of
+            th' :: _ => it th'
+            | [] => th
+  in it th end
+
+fun normalize_lhs ctxt TRS th =
+  let val thy = Proof_Context.theory_of ctxt
+      val TRS = filter_out Utils.permutative_rule TRS
+      val th' = fold (rewrite_lhs ctxt) TRS th
+  in if Thm.equiv_thm thy (th, th')
+     then th'
+     else normalize_lhs ctxt TRS th' 
+  end
+
+fun normalize_rhs thy TRS th =
+  th |> Utils.commute_meta_eq
+     |> normalize_lhs thy TRS
+     |> Utils.commute_meta_eq
+
+
 end
 
 (* Semi-Critical pairs of th1 and th2 *)
@@ -168,48 +292,65 @@ fun ac_termination_obj ctxt simps th =
       end
   else true
 
+(*fun rewrite_step' ctxt rule th =
+  let val r = Unsynchronized.ref true
+      val (pat, rhs1) = Utils.dest_meta_equation rule
+      val th' = Drule.incr_indexes rule th
+      val (obj, rhs2) = Utils.dest_meta_equation th'
+      val paty = type_of pat
+      val maxidx_typ = Term.maxidx_typ paty 0
+      val subterms = exists_subterm
+      fun proc _ _ _ = if !r = true
+                       then (r:=false; SOME rule)
+                       else NONE
+      val spec = {lhss = [], proc = proc}
+      val simproc = Simplifier.make_simproc ctxt "test_simproc" spec
+  in simplify (ctxt addsimprocs [simproc]) th end*)
+  
+
 (* Empirical test for termination of ac rewriting *)
 (* This test is necessarily incomplete due to the halting problem *)
 fun ac_termination ctxt (equations, rules) th =
-    let val max_size = (equations @ rules)
+    let (*val _ = tracing ("Equations: " ^ Utils.str_of_thms equations)
+        val _ = tracing ("Rules: " ^ Utils.str_of_thms rules)
+        val _ = tracing ("Th: " ^ Utils.str_of_thms [th])*)
+        val thy = Proof_Context.theory_of ctxt
+        val termless = (#termless o Raw_Simplifier.internal_ss) (simpset_of ctxt)
+        val rewrites = termless o swap o apply2 Thm.full_prop_of
+        val max_size = (equations @ rules)
                          |> map size_of_thm
                          |> pair 0
                          |> Library.foldl (op +)
                          |> (fn c => if c = 0 then 1000 else
-                                     c * Drule.size_of_thm th)
+                                     c + Drule.size_of_thm th)
         fun update_net thm net =
           Net.insert_term (is_equal o Thm.thm_ord) (Thm.full_prop_of thm, thm) net
         fun test_procs set s (proc :: procs) term =
-              let val t = simplify (ctxt addsimps [proc]) s
-(*                  val _ = tracing ("Eq: " ^ Utils.str_of_thms [proc])
-                  val _ = tracing ("1) s - t: " ^ Utils.str_of_thms [s, t])*)
-              in if is_equal (Thm.thm_ord (s, t))
-                 then test_procs set t procs term
-                 else if can (update_net t) set
-                 then test_procs (update_net t set) t procs term
-                 else false
+              let val ts = rewrite_steps ctxt proc s
+                            |> filter (rewrites o pair s)
+              in (case ts of
+                     _ :: _ => forall (fn t => test_procs (update_net t set) t procs term) ts
+                   | [] => test_procs set s procs term)
+                  handle Net.INSERT => false
               end
           | test_procs set s [] term = test_rules set s (th :: rules) term
         and test_rules set s (rule :: rules) term =
-              let val t = simplify (ctxt addsimps [rule]) s
-(*                  val _ = tracing ("Rule: " ^ Utils.str_of_thms [rule])
-                  val _ = tracing ("2) s - t: " ^ Utils.str_of_thms [s, t])
-                  val _ = tracing (if is_equal (Thm.thm_ord (s, t)) then "si" else "no")*)
-              in if is_equal (Thm.thm_ord (s, t))
-                 then test_rules set t rules term
-                 else if can (update_net t) set
-                 then test_rules (update_net t set) t rules term
-                 else false
+              let val ts = rewrite_steps ctxt rule s
+              in (case ts of
+                     _ :: _ => forall (fn t => test_rules (update_net t set) t rules term) ts
+                   | [] => test_rules set s rules term)
+                  handle Net.INSERT => false
               end
           | test_rules set s [] term =
-              if (is_equal o Thm.thm_ord) (s, term)
+              if Thm.equiv_thm thy (s, term)
               then true
               else if size_of_thm s < max_size
               then test_procs set s equations s
               else false
     fun test thm = 
       test_procs (update_net thm Net.empty) thm equations thm
-  in forall test [th] end
+  in forall test [th]
+  end
 
 (* This function uses only a subset of thms which is guarantied to terminate *)
 fun discriminate_rules ctxt terminates thms =
@@ -254,18 +395,24 @@ fun discriminate_rules ctxt terminates thms =
                    val _ = tracing ("with: " ^ Utils.str_of_thms (equations @ rules))
                in (equations, rules)
                end)
+         |> (fn (equations, rules) =>
+                (map (fn s => find_index (Thm.equiv_thm thy o pair s) thms) equations,
+                 map (fn s => find_index (Thm.equiv_thm thy o pair s) thms) rules))
 (*         |> apply2 Utils.make_theorem_set*)
   end
 
 val discriminate_rules_var
       = Synchronized.var "discriminate_rules"
-                         (Thm_List_Tab.empty : (thm list * thm list) Thm_List_Tab.table)
+                         (Term_List_Tab.empty : (int list * int list) Term_List_Tab.table)
 
 fun memoized_discriminate_rules ctxt terminates thms =
   let val thms = thms |> Utils.make_theorem_set
                       |> sort Thm.thm_ord
-  in Utils.memoize_function Thm_List_Tab.lookup Thm_List_Tab.update discriminate_rules_var
+      val transform = map Thm.full_prop_of
+  in Utils.memoize_function Term_List_Tab.lookup Term_List_Tab.update transform discriminate_rules_var
                             (discriminate_rules ctxt terminates) thms
+       |> (fn (equations, rules) => (map (nth thms) equations,
+                                     map (nth thms) equations))
   end
 
 (*fun memoized_discriminate_rules ctxt terminates (thms as th :: _) =
@@ -317,15 +464,15 @@ fun print_orders ctxt orders = ([], orders)
                                  |> space_implode ", "
                                  |> enclose "[" "]"
 
-fun ground_joinable ctxt terminates f_map (e, E) = 
+fun ground_joinable ctxt terminates f_map (e, E) =
   let (*val s_t = Thm.full_prop_of e
       val thy = Thm.theory_of_thm e*)
       val ctxt = clear_simpset ctxt
-      val (equations, rules) = memoized_discriminate_rules ctxt terminates E
 (*      val _ = tracing ("E: " ^ Utils.str_of_thms E)
-      val _ = tracing ("Equations: " ^ Utils.str_of_thms equations)
-      val _ = tracing ("Rules: " ^ Utils.str_of_thms rules)
       val _ = tracing ("e: " ^ Utils.str_of_thms [e])*)
+      val (equations, rules) = memoized_discriminate_rules ctxt terminates E
+(*      val _ = tracing ("Equations: " ^ Utils.str_of_thms equations)
+      val _ = tracing ("Rules: " ^ Utils.str_of_thms rules)*)
       val f_map = sort (int_ord o (apply2 snd)) f_map
       val vars = e |> Thm.full_prop_of
                    |> (fn t => Term.add_vars t [])
@@ -347,7 +494,8 @@ fun ground_joinable ctxt terminates f_map (e, E) =
                                 val ctxt = ctxt |> Simplifier.set_termless termless
                                                 |> (fn ctxt => ctxt addsimps (equations @ rules))
                             in
-                            e |> asm_full_simplify ctxt
+(*                            e |> asm_full_simplify ctxt*)
+                            e |> simplify ctxt
                               |> Utils.dest_meta_equation
                               |> (op =)
 (*                              |> tap (fn foo => if foo
@@ -355,17 +503,19 @@ fun ground_joinable ctxt terminates f_map (e, E) =
                                                 else tracing "false")*)
 (*                              |> (is_equal o g_ord)*)
                             end)) f_map
+(*        |> tap (fn foo => if foo then tracing "joinable" else tracing "not joinable")*)
  end
 
-(*fun ground_joinable' ctxt terminates f_maps (e, E) = 
+(*fun ground_joinable' ctxt terminates f_maps (e, E) =
   Par_List.forall (fn f_map => ground_joinable ctxt terminates f_map (e, E)) f_maps*)
 
 val memoized_joinability_var = Synchronized.var "memoized_joinability"
-                      (Thm_Thm_List_Tab.empty : bool Thm_Thm_List_Tab.table)
+                      (Term_Term_List_Tab.empty : bool Term_Term_List_Tab.table)
 
 fun memoized_joinable ctxt terminates f_map E e =
   let val E = sort Thm.thm_ord E
-  in Utils.memoize_function Thm_Thm_List_Tab.lookup Thm_Thm_List_Tab.update memoized_joinability_var
+      fun transform (e,E) = (Thm.full_prop_of e, (sort Term_Ord.term_ord o map Thm.full_prop_of) E)
+  in Utils.memoize_function Term_Term_List_Tab.lookup Term_Term_List_Tab.update transform memoized_joinability_var
                             (ground_joinable ctxt terminates f_map) (e, E) end
 
 fun memoized_joinable' ctxt terminates f_map E e =
@@ -396,15 +546,20 @@ end
 
 fun add_rule ctxt terminates (th,E,S,R) =
     let
+(*      val thy = Proof_Context.theory_of ctxt*)
       fun simpl ([],E',R') = (E',R')
         | simpl (u :: U,E',U') = 
           let
             val (g,_) = Utils.dest_meta_equation u
-            val u' = normalize_part ctxt terminates (Conv.fun_conv o Conv.arg_conv) [th] u
+(*            val u' = normalize_part ctxt terminates (Conv.fun_conv o Conv.arg_conv) [th] u*)
+            (* Normalization probably is without permutative rules! *)
+            val u' = normalize_lhs ctxt [th] u
             val (g',_) = Utils.dest_meta_equation u'
           in
             if EQUAL = Term_Ord.term_ord (g,g') then
-              let val u'' = normalize_part ctxt terminates Conv.arg_conv (th :: R @ S) u
+(*              let val u'' = normalize_part ctxt terminates Conv.arg_conv (th :: R @ S) u*)
+            (* Normalization probably is without permutative rules! *)
+              let val u'' = normalize_rhs ctxt (th :: R @ S) u
               in simpl (U,E', u'' :: U') end
             else simpl (U,u' :: E', U')
           end
@@ -449,9 +604,9 @@ fun orient ctxt global_meta_rws ord terminates f_map =
           | ori (th :: E,S,R) =
             let
               val thy = Thm.theory_of_thm th
-              (*val _ = tracing ("Before simplification: " ^ Syntax.string_of_term_global thy (Thm.full_prop_of th))*)
+(*              val _ = tracing ("Before simplification: " ^ Syntax.string_of_term_global thy (Thm.full_prop_of th))*)
               val th' = rewrite_rule ctxt terminates (S @ R) (Ground_Completion.linear_if_possible th)
-              (*val _ = tracing ("Antes: " ^ str_of_thms_raw [th'])*)
+(*              val _ = tracing ("After rewrite_rule: " ^ Utils.str_of_thms [th'])*)
               val th' = th' (*|> Utils.meta_to_obj*)
 (*                            |> Raw_Simplifier.rewrite_rule ctxt global_meta_rws*)
                             |> Utils.orient_meta_rule thy ord
@@ -459,7 +614,7 @@ fun orient ctxt global_meta_rws ord terminates f_map =
                             |> (fn th => if Thm.equiv_thm thy (@{thm "TrueI"},th)
                                          then Utils.obj_to_meta @{thm "refl"}
                                          else th)
-              (*val _ = tracing ("After simplification: " ^ Utils.str_of_thms [th'])*)
+(*              val _ = tracing ("After orientation: " ^ Utils.str_of_thms [th'])*)
               val (_, rules) = memoized_discriminate_rules (empty_simpset ctxt) terminates (S @ R)
               val joinable = memoized_joinable ctxt terminates f_map (S @ R) th'
 (*              val _ = if joinable
@@ -568,6 +723,7 @@ fun run_completion global_meta_rws ctxt terminates E e =
      val f_maps = f_map_eq*)
   in [complete global_meta_rws thy ctxt LESS generate_cps terminates f_map_less,
       complete global_meta_rws thy ctxt GREATER generate_cps terminates f_map_less]
+(*      |> get_first (fn f => SOME (f (e :: E)))*)
       |> Par_List.get_some (fn f => SOME (f (e :: E)))
       |> the
       |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms' TRS))
@@ -608,25 +764,26 @@ fun discriminate_cpairs global_meta_rws ctxt terminates E e =
       val f_map_less = map_index (fn (x,y) => (y,x)) deps
       (* Completion will subsume this function if CP generation is enabled *)
       val ctxt = Config.put Ground_Completion.generate_cps false ctxt
-      val E' = Par_List.map (fn cp =>
+(*      val E' = Par_List.map (fn cp =>
                             (cp, memoized_joinable ctxt terminates f_map_less E cp)) (e :: cpairs)
                     |> map_filter (fn (_, true) => NONE
                                     | (cp, false) => SOME cp)
-                    |> tap (fn cp => tracing ("Non joinable CPs: " ^ Utils.str_of_thms' cp))
-  in case E' of
+                    |> tap (fn cp => tracing ("Non joinable CPs: " ^ Utils.str_of_thms' cp))*)
+  in (*case E' of
       e :: E' => run_completion [] ctxt terminates (E @ E') e
-    | [] => E
-    (*(E, e :: cpairs)
+    | [] => E*)
+    (E, e :: cpairs)
       |> Library.foldl (fn (E, cp) =>
             let val rule = cp |> rewrite_rule ctxt terminates E
+                              |> modify
                               |> Utils.orient_meta_rule thy LESS
                 val (lhs, rhs) = Utils.dest_meta_equation rule
             in if lhs = rhs orelse
                   memoized_joinable ctxt terminates f_map_less E rule
                then E
                else let val _ = tracing ("Adding cp: " ^ Utils.str_of_thms' [rule])
-                    in rule :: E end
-            end)*)
+                    in run_completion [] ctxt terminates E rule end
+            end)
 (*      |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms' TRS))*)
   end
 

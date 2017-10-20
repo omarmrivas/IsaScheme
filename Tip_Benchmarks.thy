@@ -11,7 +11,7 @@ ML {*
 (*  val smt2_files = ["/Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks/isaplanner/prop_41.smt2"]*)
 (*  val smt2_files = ["/Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks/tip2015/list_Interleave.smt2"]*)
 (*  val smt2_files = ["/Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks/tip2015/sort_BubSortIsSort.smt2"]*)
-  val names = SMT_Converter.smt2bash_to_isabelle @{context} destiny "IsaLibs" "../../IsaLibs" "by inductive_sledgehammer_prover" smt2_files
+  val names = SMT_Converter.smt2bash_to_isabelle @{context} destiny "IsaLibs" "../../IsaLibs" "by inductive_prover" smt2_files
 *}
   
 ML {*

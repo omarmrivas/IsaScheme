@@ -16,6 +16,8 @@ sig
                                 -> Proof.context -> tactic
   val induct_auto_sledgehammer_failure_tac : term Net.net Unsynchronized.ref -> thm list Unsynchronized.ref
                                 -> Proof.context -> tactic
+
+  val final_sledgehammer_tac: Proof.context -> int -> thm -> thm Seq.seq
 end
 
 structure DB_Inductive_Tacs
@@ -51,20 +53,32 @@ fun inductive_applications thy prop =
           |> map (fn (y, z) => (transform y, z))
   end
 
+fun arbitrary args frees =
+  let val frees_args = Library.foldl (fn (frees, arg) => Term.add_frees arg frees) ([], args)
+  in subtract (op =) frees_args frees end
+
 (* Applies computation induction rules *)
 fun computation_induction_tac ctxt thy (goal, i) =
   let val apps = rev (inductive_applications thy goal)
+      val frees_goal = Term.add_frees goal []
 (*      val _ = map (fn (args, (name, induction)) =>
                     tracing ("params: (" ^ name ^") " ^ Utils.str_of_terms ctxt (map (fst o snd o the) args))) (rev apps)*)
+      val dest = fst o snd o the o hd
   in case apps of
       [] => no_tac
      | app :: apps => 
               apps |> map (fn (args, (name, induction)) =>
-                          DETERM (Induction.induction_tac ctxt true [args] [] [] 
-                                                          (SOME [induction]) [] i))
+                      (* Computation induction on args and making the rest of free variables arbitrary *)
+                      DETERM (Induction.induction_tac ctxt true [args] [arbitrary [dest args] frees_goal] []
+                                                      (SOME [induction]) [] i) APPEND
+                      (* Computation induction on args and leaving the rest of free variables alone *)
+                      DETERM (Induction.induction_tac ctxt true [args] [] []
+                                                      (SOME [induction]) [] i))
                    |> pair ((fn (args, (name, induction)) =>
-                          DETERM (Induction.induction_tac ctxt true [args] [] [] 
-                                                          (SOME [induction]) [] i)) app)
+                      DETERM (Induction.induction_tac ctxt true [args] [arbitrary [dest args] frees_goal] []
+                                                      (SOME [induction]) [] i) APPEND
+                      DETERM (Induction.induction_tac ctxt true [args] [] [] 
+                                                      (SOME [induction]) [] i)) app)
                    |> Library.foldl (op APPEND o swap)
   end
 
@@ -72,7 +86,8 @@ fun computation_induction_tac ctxt thy (goal, i) =
 (* It chooses any free datatype variable available. Probably it would be better
   to perform induction on arguments where the recursive function is  *)
 fun structural_induction_tac ctxt (goal, i) =
-  let val frees = Term.add_frees goal []
+  let val frees_goal = Term.add_frees goal []
+      val frees = frees_goal
                     |> map_filter (fn (s, T) =>
                               let val ind_rules = Induct.find_inductT ctxt T
                               in if null ind_rules
@@ -83,9 +98,15 @@ fun structural_induction_tac ctxt (goal, i) =
       [] => no_tac
     | free :: frees =>
           frees |> map (fn ((s,T), induction) =>
+                      (* Induction on a free variable and making the rest arbitrary *)
+                      DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
+                                                      [arbitrary [Free (s,T)] frees_goal] [] NONE [] i) APPEND
+                      (* Induction on a free variable and leaving the rest alone *)
                       DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
                                                       [] [] NONE [] i))
                 |> pair ((fn ((s,T), induction) =>
+                      DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
+                                                      [arbitrary [Free (s,T)] frees_goal] [] NONE [] i) APPEND
                       DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
                                                       [] [] NONE [] i)) free)
                 |> Library.foldl (op APPEND o swap)
@@ -103,21 +124,26 @@ fun check_fail_proof_state sts ctxt =
 
 (* Choose induction on a goal. Prefers computation over structural induction. *)
 fun induction_tac ctxt =
-  (SUBGOAL (computation_induction_tac ctxt (Proof_Context.theory_of ctxt))) ORELSE'
+  (SUBGOAL (computation_induction_tac ctxt (Proof_Context.theory_of ctxt))) APPEND'
   (SUBGOAL (structural_induction_tac ctxt))
 
 (* induction \<rightarrow> auto *)
 fun atomic_tac ctxt i =
           (IF_UNSOLVED (TRY (induction_tac ctxt i))) THEN
-          (IF_UNSOLVED (TRY (auto_tac ctxt)))
+          (IF_UNSOLVED (TRY (auto_tac ctxt))) (*THEN
+          (print_tac ctxt "atomic_tac")*)
+
+(* Our heuristic is simply the number of premises (in our interpretation... the pending goals)
+   plus the depth in search (shorter proofs are preferred). *)
+fun theorem_heuristic i thm = Thm.nprems_of thm + i
 
 (* Recursive tactic that performs induction \<rightarrow> auto until no free datatype variables
    are present in goal. It stores any pending subgoal in sts when frees are exhausted. *)
 fun ind_auto_failure sts _ ctxt =
 (*  REPEAT (CHANGED (ALLGOALS (atomic_tac ctxt))) THEN*)
-  DEPTH_FIRST Thm.no_prems
-    (CHANGED (ALLGOALS (atomic_tac ctxt)) THEN
-             (IF_UNSOLVED (ALLGOALS (SUBGOAL (check_fail_proof_state sts ctxt)))))
+  ASTAR (Thm.no_prems, theorem_heuristic)
+    (CHANGED ((ALLGOALS (atomic_tac ctxt)) THEN
+             (IF_UNSOLVED (ALLGOALS (SUBGOAL (check_fail_proof_state sts ctxt))))))
 
 fun SOLVE_TIMEOUT seconds tac t = 
   let val res = Timeout.apply (Time.fromSeconds seconds)
@@ -138,11 +164,17 @@ fun sledgehammer_tac ctxt simps =
                         (Sledgehammer_Tactics.sledgehammer_with_metis_tac
                           ctxt [] Sledgehammer_Fact.no_fact_override [] i)
 
+fun final_sledgehammer_tac ctxt i =
+    SOLVE_TIMEOUT (Options.default_int @{system_option sledgehammer_timeout})
+                  (Sledgehammer_Tactics.sledgehammer_with_metis_tac
+                   ctxt [] Sledgehammer_Fact.no_fact_override [] i)
+
 (* Recursive tactic that performs induction \<rightarrow> auto until no free datatype variables
    are present in goal. Calls sledgehammer and then stores any pending subgoal in sts
    when frees are exhausted. *)
 fun ind_auto_sledgehammer_failure sts simps ctxt =
-   DEPTH_FIRST Thm.no_prems
+(*   DEPTH_FIRST Thm.no_prems*)
+  ASTAR (Thm.no_prems, theorem_heuristic)
     (CHANGED (ALLGOALS (atomic_tac ctxt)) THEN
      TRY (CHANGED (ALLGOALS (SUBGOAL (sledgehammer_tac ctxt simps)))) THEN
      (IF_UNSOLVED (ALLGOALS (SUBGOAL (check_fail_proof_state sts ctxt)))))
@@ -162,7 +194,7 @@ val method_setup_inductive_prover =
                       (Unsynchronized.ref []) ctxt)))
     "Atomic tactic with failure analysis. Interleaves induction and auto and check failures."
 
-val method_setup_inductive_prover =
+val method_setup_inductive_sledgehammer_prover =
   Method.setup (Binding.name "induct_auto_sledgehammer_failure_tac")
     (Scan.succeed (fn ctxt => SIMPLE_METHOD (induct_auto_sledgehammer_failure_tac
                       (Unsynchronized.ref Net.empty)
@@ -170,6 +202,7 @@ val method_setup_inductive_prover =
     "Atomic tactic with failure analysis. Interleaves induction, auto, sledgehammer and check failures."
 
 val _ = Context.>> (Context.map_theory method_setup_inductive_prover)
+val _ = Context.>> (Context.map_theory method_setup_inductive_sledgehammer_prover)
 
 
 (*fun metis_tac ctxt facts = 

@@ -20,6 +20,11 @@ structure DB_Divergence
 (* : DIVERGENCE *)
 = struct
 
+fun unifiers (params as (context, env, tus)) =
+  Seq.cons (fold (Pattern.unify context) tus env, []) Seq.empty
+    handle Pattern.Unif => Seq.empty
+      | Pattern.Pattern => Seq.empty
+
 fun conditional critic ctxt simps props =
   let val eqs = map (HOLogic.dest_Trueprop o Logic.strip_imp_concl) props
       val prems = map (Logic.strip_imp_prems) props
@@ -52,12 +57,12 @@ fun precondictions_divergence_critic thy eqs =
                      val U = Var (("U" ^ string_of_int i, 0), @{typ_pat "?'b"})
                  in [(G $ (H $ U), s'), (G $ U, s)] end)
            |> maps I
-           |> (fn pairs => 
-                 (Unify.unifiers (Context.Theory thy,(Envir.empty 1),pairs)
+           |> (fn pairs =>
+                 (unifiers (Context.Theory thy,(Envir.empty 1),pairs)
                            handle ListPair.UnequalLengths => Seq.empty
                                 | TERM _ => Seq.empty))
            |> Seq.map fst
-           |> Seq.take 20
+           |> Seq.take 10
 (*                |> Seq.filter non_trivial*)
     end
 
@@ -122,11 +127,11 @@ fun precondictions_transverse thy eqs =
                in [((G $ (H $ U)) $ Acc, s'), ((G $ U) $ Acc, s)] end)
          |> maps I
          |> (fn pairs => 
-               (Unify.unifiers (Context.Theory thy,(Envir.empty 1),pairs)
+               (unifiers (Context.Theory thy,(Envir.empty 1),pairs)
                          handle ListPair.UnequalLengths => Seq.empty
                               | TERM _ => Seq.empty))
          |> Seq.map fst
-         |> Seq.take 40
+         |> Seq.take 10
    end
 
 (* Postconditions of transverse wave rules *)

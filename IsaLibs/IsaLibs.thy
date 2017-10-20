@@ -13,6 +13,47 @@ ML {*
    val description = "Propositional Schemes")
 *}
   
+text {* A datatype for dummy free types *}
+datatype two = A | B
+  
+instantiation two :: linorder
+begin
+fun less_eq_two where
+"A \<le> y \<longleftrightarrow> True"|
+"B \<le> B \<longleftrightarrow> True"|
+"B \<le> A \<longleftrightarrow> False"
+
+fun less_two where
+"A < A \<longleftrightarrow> False"|
+"A < B \<longleftrightarrow> True"|
+"B < A \<longleftrightarrow> False"|
+"B < B \<longleftrightarrow> False"
+
+instance
+proof
+    fix x y z :: two
+    show "(x < y) = (x \<le> y \<and> \<not> y \<le> x)"
+      apply (induction x, simp_all)
+       apply (induction y, simp_all)
+      by (induction y, simp_all)
+    show "x \<le> x"
+      by (induction x, simp_all)
+    show "x \<le> y \<Longrightarrow> y \<le> z \<Longrightarrow> x \<le> z"
+      apply (induction x, simp_all)
+      by (induction y, simp_all)
+    show "x \<le> y \<Longrightarrow> y \<le> x \<Longrightarrow> x = y"
+      apply (induction x, simp_all)
+       apply (induction y, simp_all)
+      by  (induction y, simp_all)
+    show "x \<le> y \<or> y \<le> x"
+      apply (induction x, simp_all)
+      by (induction y, simp_all)
+  qed
+    
+declare less_eq_two.simps [simp del]
+declare less_two.simps [simp del]
+end
+  
 ML_file "$ISABELLE_HOME/src/HOL/TPTP/sledgehammer_tactics.ML"
 (*ML_file "html.ML"*)
 ML_file "const_names.ML"
@@ -78,6 +119,8 @@ DB_EQ_Terms.setup_max_random_terms #>
 DB_EQ_Terms.setup_max_vars_in_tx #>
 
 DB_Prover.setup_max_time_in_proof #>
+DB_Proof_Tools.setup_max_time_in_inductive_proof #>
+DB_Proof_Tools.setup_max_num_generalizations #>
 (*DB_Proof_Tools.setup_max_depth_in_meta_induction #>
 DB_Proof_Tools.setup_max_num_generalizations #>
 DB_Proof_Tools.setup_max_consts_in_generalizations #>*)
@@ -96,11 +139,13 @@ Completion_Rules.setup
 *}
 
 declare [[
+  quick_and_dirty = true,
   use_quickcheck = true,
   use_nitpick = true,
   simp_before = false,
   max_time_in_counter_ex = 25,
-  max_time_in_proof = 120,
+  max_time_in_proof = 60,
+  max_time_in_inductive_proof = 3600,
   max_time_normalization = 5,
   max_lambda_size = 10,
   max_random_terms = 8,
@@ -108,7 +153,7 @@ declare [[
   max_time_in_termination = 20,
   max_time_in_fitness = 15,
 (*  max_depth_in_meta_induction = 10,*)
-(*  max_num_generalizations = 3,*)
+  max_num_generalizations = 2,
 (*  max_consts_in_generalizations = 4,*)
 (*  use_metis = false,*)
   quickcheck_quiet = true,
@@ -169,14 +214,14 @@ definition right_distributive where
 definition equivalence_relation where
   [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"
   
-definition injectivity_one where
+(*definition injectivity_one where
   [prop_scheme]: "injectivity_one f \<equiv> \<forall>x y. (f x = f y) = (x = y)"
   
 definition injectivity_two where
   [prop_scheme]: "injectivity_two f \<equiv> \<forall>x y z w. (f x y = f z w) = ((x = z) \<and> (y = w))"
   
 definition injectivity_three where
-  [prop_scheme]: "injectivity_three f \<equiv> \<forall>x1 x2 x3 y1 y2 y3. (f x1 x2 x3 = f y1 y2 y3) = ((x1 = y1) \<and> (x2 = y2) \<and> (x3 = y3))"
+  [prop_scheme]: "injectivity_three f \<equiv> \<forall>x1 x2 x3 y1 y2 y3. (f x1 x2 x3 = f y1 y2 y3) = ((x1 = y1) \<and> (x2 = y2) \<and> (x3 = y3))"*)
   
 ML {*
 (*  val p1 = Multithreading.max_threads_value ()*)
@@ -258,97 +303,44 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
-(*datatype ('a) list = nil | cons (head: "'a") (tail: "'a list")
-
+(*ML {*
+  val typ = @{typ "('B\<Rightarrow>'C\<Rightarrow>'C)\<Rightarrow>'C\<Rightarrow>'C \<Rightarrow>('B\<Rightarrow>'C\<Rightarrow>'B)\<Rightarrow>('C\<Rightarrow>'C\<Rightarrow>'A)\<Rightarrow>('A\<Rightarrow>'B\<Rightarrow>'A)\<Rightarrow>'A"}
+  val typ' = @{typ "((('A\<Rightarrow>('B\<Rightarrow>'N)\<Rightarrow>'N)\<Rightarrow>('A\<Rightarrow>'N))\<Rightarrow>'N)\<Rightarrow>('A\<Rightarrow>'N)\<Rightarrow>'N"}
+  val c1 = Random_Terms.count_lambda_terms typ' 13
+  val polynomials = DB_Counting_Terms.polynomials @{context} typ'
+  val n = length polynomials
+  val polynomials = DB_Counting_Terms.count_beta_eta_long @{context} 10 typ'
+*}*)
+  
 datatype Nata = Z | S (p: "Nata")
 
-fun map2 :: "('a => 'b) => 'a list => 'b list" where
-"(map2 x nil) = (nil :: 'b list)"|
-"(map2 x (cons z xs)) = (cons (x z) (map2 x xs))"
+fun max2 :: "Nata => Nata => Nata" where
+"(max2 Z y) = y"|
+"(max2 (S z) Z) = (S z)"|
+"(max2 (S z) (S x2)) = (S (max2 z x2))"
 
-fun dropa :: "Nata => 'a list => 'a list" where
-"(dropa Z y) = y"|
-"(dropa (S z) nil) = (nil :: 'a list)"|
-"(dropa (S z) (cons x2 x3)) = (dropa z x3)"
-  
-lemma th1: "((dropa n (map2 f xs)) = (map2 f (dropa n xs)))"
-  by (induction n xs rule: dropa.induct, auto)
+(*lemma [simp]: "max2 a Z = a"
+  by induct_auto_failure_tac*)
+
+declare [[max_time_in_inductive_proof = 36000]]
+
+
+theorem "((max2 (max2 a b) c) = (max2 a (max2 b c)))"
+ apply inductive_prover
     
-ML {*
-  datatype result = Theorem of thm | Failure of term list
-  val tactic = Inductive_Tacs.induct_auto_sledgehammer_failure_tac
-  val ctxt = @{context}
-  val thy = @{theory}
-  val timeOut = Config.get ctxt Prover.max_time_in_proof
-  val prop = @{prop "((dropa n (map2 f xs)) = (map2 f (dropa n xs)))"}
-  val def_lemmas = Utils.get_definitional_rewrites thy prop
-  val lemmas_ref = Unsynchronized.ref def_lemmas
-  val ctxt_nodefs = ctxt delsimps def_lemmas
-  val terminates = Aprove.memoized_terminates ctxt_nodefs
-  fun try_prove simps conj =
-        let val failures = Unsynchronized.ref (Net.empty : term Net.net)
-            val _ = tracing ("Proving: " ^ Utils.string_of_term ctxt conj)
-        in (case Prover.prove_from_tactic ctxt_nodefs (SOME simps) (tactic failures lemmas_ref) conj timeOut of
-          SOME thm => (tracing ("Proved!: " ^ Utils.str_of_terms ctxt [conj]);Theorem thm)
-        | NONE => (!failures) |> Net.content
-                              |> Failure)
-            handle ERROR err => (tracing "try_prove"; raise ERROR err)
-        end
-  fun build_trs lemmas rule =
-          let val TRS = map Utils.obj_to_meta lemmas
-              val e = Utils.obj_to_meta rule
-          in e |> Conditional_Completion.discriminate_cpairs [] ctxt_nodefs terminates TRS
-               |> map Utils.meta_to_obj end
-  val Theorem rule = try_prove def_lemmas prop
-  val TRS = build_trs def_lemmas rule
-(*  val _ = tracing (Syntax.string_of_term ctxt_nodefs prop)
-  val propp = Object_Logic.rulify_term ctxt prop
-  val _ = tracing (Syntax.string_of_term ctxt_nodefs propp)
-  val prop' = Utils.normalise_term ctxt_nodefs TRS propp
-  val _ = tracing (Syntax.string_of_term ctxt_nodefs prop')*)
-*}*)
-  (*
-lemma th2: "n = x \<Longrightarrow> (if n = x then S (count n xs) else count n xs) = S (count n xs)"
-  by simp
-  
-ML {*
-  val thy = @{theory}
-  val e = DB_Conditional_Completion.modify @{thm th2}
-  val TRS = map Utils.obj_to_meta TRS
-  val cpairs = (DB_Conditional_Completion.semi_critical_pairs thy LESS TRS [e] @
-                DB_Conditional_Completion.semi_critical_pairs thy LESS [e] TRS)
-                    |> Utils.make_theorem_set
-                    |> map (Utils.orient_meta_rule thy LESS)
-                    |> map (fn th => (th, Drule.size_of_thm th))
-                    |> sort (int_ord o (apply2 snd))
-                    |> map fst
-*}*)
-
-(*datatype ('a) list = nil | cons (head: "'a") (tail: "'a list")
-
-datatype Nata = Z | S (p: "Nata")
-
-fun map2 :: "('a => 'b) => 'a list => 'b list" where
-"(map2 x nil) = (nil :: 'b list)"|
-"(map2 x (cons z xs)) = (cons (x z) (map2 x xs))"
-
-fun dropa :: "Nata => 'a list => 'a list" where
-"(dropa Z y) = y"|
-"(dropa (S z) nil) = (nil :: 'a list)"|
-"(dropa (S z) (cons x2 x3)) = (dropa z x3)"
-
-lemma th1: "dropa n nil = nil"
-  by (induction n, auto)
-    
-lemma th2: "dropa n (map2 f xs) = map2 f (dropa n xs)"
+(*theorem "((max2 (max2 a b) c) = (max2 a (max2 b c)))"
   ML_prf {*
-  val sts = Unsynchronized.ref (Net.empty : term Net.net)
-  val lemmas = Unsynchronized.ref ([] : thm list)
+  val failures = Unsynchronized.ref (Net.empty : term Net.net)
+  val ll = Unsynchronized.ref ([] : thm list)
 *}
-  apply (tactic {* DB_Inductive_Tacs.induct_auto_sledgehammer_failure_tac sts lemmas @{context} *})
+  apply (tactic {* DB_Inductive_Tacs.induct_auto_failure_tac failures ll @{context}*})
   ML_prf {*
-    Net.content (!sts)
-    |> map (tracing o Syntax.string_of_term @{context})
-  *}*)
+  !failures |> Net.content
+            |> Utils.sort_by_general @{theory}
+            |> map (tracing o Syntax.string_of_term @{context})
+            |> length
+*}*)
     
+    
+  
 end

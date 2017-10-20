@@ -156,7 +156,8 @@ fun terminates ctxt TRS =
     else false
 
 val memoized_terminates_var = Synchronized.var "memoized_terminates"
-                      (Thm_List_Tab.empty : bool Thm_List_Tab.table)
+                      (Term_List_Tab.empty : bool Term_List_Tab.table)
+
 
 (* getenv "ISABELLE_PLATFORM_FAMILY" *)
 
@@ -206,9 +207,10 @@ fun aprove_server_ok ctxt =
     end
 
 fun memoized_terminates ctxt TRS =
-  let val TRS = sort Thm.thm_ord TRS
-  in Utils.memoize_function Thm_List_Tab.lookup Thm_List_Tab.update memoized_terminates_var
-                            (all_terminates ctxt) TRS end
+  let val transform = sort Term_Ord.term_ord o map Thm.full_prop_of
+  in Utils.memoize_function Term_List_Tab.lookup Term_List_Tab.update transform memoized_terminates_var
+                            (terminates ctxt) TRS end
+
 
 end
 

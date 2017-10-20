@@ -190,24 +190,38 @@ fun quickcheck_terms ctxt timeOut n typ =
 fun counter_example _ _ (_ $ Const ("HOL.True",_)) = false
   | counter_example ctxt timeOut conjecture = quickcheck_nitpick_raw ctxt timeOut conjecture
 
-val false_set = Synchronized.var "CE_false_set" (Net.empty : term Net.net)
+val false_true_set = Synchronized.var "CE_sets" (Net.empty : term Net.net, Net.empty : term Net.net)
 
-fun subsumed_in_net thy t net =
+fun subsumed_false_in_net thy t net =
   let val t = Logic.varify_global t
   in t |> Net.unify_term net
        |> exists (fn t' => Pattern.matches thy (t, t')) end
 
+fun subsumed_true_in_net thy t net =
+  t |> Envir.beta_eta_contract
+    |> Net.match_term net
+    |> exists (fn t' => Pattern.matches thy (t', t))
+
+fun update_false_net thy t (net,net') =
+  (Net.insert_term_safe (Pattern.equiv thy) (t, t) net, net')
+
+fun update_true_net thy t (net,net') =
+  let val t = Logic.varify_global t
+  in (net, Net.insert_term_safe (Pattern.equiv thy) (t, t) net') end
+
 fun memoized_counter_example ctxt timeOut conjecture =
   let val thy = Proof_Context.theory_of ctxt
-  in if false_set |> Synchronized.value
-                  |> subsumed_in_net thy conjecture
+      val (false_net, true_net) = Synchronized.value false_true_set
+  in if subsumed_false_in_net thy conjecture false_net
      then true
+     else if subsumed_true_in_net thy conjecture true_net
+     then false
      else let val v = counter_example ctxt timeOut conjecture
               val _ = if v
-                      then Synchronized.change false_set
-                            (fn net => Net.insert_term_safe (Pattern.equiv thy)
-                                                            (conjecture, conjecture) net)
-                      else ()
+                      then Synchronized.change false_true_set
+                            (update_false_net thy conjecture)
+                      else Synchronized.change false_true_set
+                            (update_true_net thy conjecture)
           in v end
   end
 
@@ -251,7 +265,7 @@ fun nunchaku state =
         | fix _ = raise ERROR "Not free (nunchaku)"
   in (map fix o #free_model o the o snd o Nunchaku.run_chaku_on_subgoal state params mode) 1 end
 
-fun quickcheck_term n state =
+fun last_quickcheck_term n state =
   let fun iter n i = 
     if i > 0
     then
@@ -271,12 +285,12 @@ fun quickcheck_term n state =
     iter n n
   end
 
+in
+
 fun counter_model_term ctxt n conjecture =
     ctxt |> Proof.theorem NONE (K I) [[(conjecture, [])]]
-(*         |> nunchaku*)
-         |> quickcheck_term n
-
-in
+         |> (fn sts => nunchaku sts handle Option => [])
+(*         |> last_quickcheck_term n*)
 
 fun conditional_terms ctxt n prems =
   let fun mk_and l = Library.foldl (fn (res, (s,t)) =>

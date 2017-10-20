@@ -18,7 +18,7 @@ sig
 
   val unify_inst                    : Proof.context -> Envir.env -> 
                                       ((indexname * sort) * ctyp) list * ((indexname * typ) * cterm) list
-
+  val match_inst                    :  Proof.context -> Envir.env -> (ctyp * ctyp) list * (cterm * cterm) list
   val linear_if_possible            :  thm -> thm
   val varify_global                 :  Proof.context -> thm -> thm
   val my_abs_conv                   :  Proof.context -> conv -> conv
@@ -76,12 +76,14 @@ fun subsets s =
     in subsets_ [] s' end*)
 
 (* instantiation utilities *)
+local 
 fun prep_trm thy env (x, (T, _)) =
     ((x, Envir.norm_type (Envir.type_env env) T), Thm.cterm_of thy (Envir.norm_term env (Var (x, T))))
 
 fun prep_ty thy env (x, (S, _)) =
       ((x, S), Thm.ctyp_of thy (Envir.norm_type (Envir.type_env env) (TVar (x, S))))
 
+in
 fun unify_inst ctxt env = 
     let
       val ctenv = env |> Envir.term_env
@@ -93,6 +95,23 @@ fun unify_inst ctxt env =
     in
       (ctyenv,ctenv)
     end
+end
+
+local
+ fun prep_trm ctxt (x, (T, t)) =
+  (Thm.cterm_of ctxt (Var (x, T)), Thm.cterm_of ctxt t)
+
+ fun prep_ty ctxt (x, (S, ty)) =
+  (Thm.ctyp_of ctxt (TVar (x, S)), Thm.ctyp_of ctxt ty)
+in
+fun match_inst ctxt env =
+  let
+    val tenv = Vartab.dest (Envir.term_env env)
+    val tyenv = Vartab.dest (Envir.type_env env)
+    in
+      (map (prep_ty ctxt) tyenv, map (prep_trm ctxt) tenv)
+    end
+end
 
 (* left-linear equations are preferred when any orientation is terminating *)
 fun is_linear thm =
@@ -307,7 +326,7 @@ val discriminate_rules_var
 fun memoized_discriminate_rules ctxt terminates thms =
   let val thms = thms |> Utils.make_theorem_set
                       |> sort Thm.thm_ord
-  in Utils.memoize_function Thm_List_Tab.lookup Thm_List_Tab.update discriminate_rules_var
+  in Utils.memoize_function Thm_List_Tab.lookup Thm_List_Tab.update I discriminate_rules_var
                             (discriminate_rules ctxt terminates) thms
   end
 
@@ -405,7 +424,7 @@ val memoized_joinability_var = Synchronized.var "memoized_joinability"
 
 fun memoized_joinable ctxt terminates f_map E e =
   let val E = sort Thm.thm_ord E
-  in Utils.memoize_function Thm_Thm_List_Tab.lookup Thm_Thm_List_Tab.update memoized_joinability_var
+  in Utils.memoize_function Thm_Thm_List_Tab.lookup Thm_Thm_List_Tab.update I memoized_joinability_var
                             (ground_joinable ctxt terminates f_map) (e, E) end
 
 fun memoized_joinable' ctxt terminates f_map E e =

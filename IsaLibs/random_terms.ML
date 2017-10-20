@@ -106,7 +106,7 @@ val memoized_count_terms_var =
                      (IntType_Tab.empty : int IntType_Tab.table)
 
 fun count_lambda_terms A s =
-  Utils.memoize_function IntType_Tab.lookup IntType_Tab.update memoized_count_terms_var
+  Utils.memoize_function IntType_Tab.lookup IntType_Tab.update I memoized_count_terms_var
   (fn (s, A) => count_term A [] s) (s, A)
 
 fun index A = find_index (fn (typ, _) => typ = A)
@@ -297,7 +297,7 @@ val memoized_enumerate_terms_var =
                      (IntType_Tab.empty : term list IntType_Tab.table)
 
 fun enumerate_lambda_terms A s =
-  Utils.memoize_function IntType_Tab.lookup IntType_Tab.update memoized_enumerate_terms_var
+  Utils.memoize_function IntType_Tab.lookup IntType_Tab.update I memoized_enumerate_terms_var
   (fn (s, A) => s |> gen_term A []
                   |> map (fn t => normalize_closed_term 0 [] [] t)) (s, A)
 
@@ -397,7 +397,7 @@ val memoized_lazy_terms_var =
                      (IntType_Tab.empty : term Seq.seq IntType_Tab.table)
 
 fun lazy_lambda_terms A s =
-  Utils.memoize_function IntType_Tab.lookup IntType_Tab.update memoized_lazy_terms_var
+  Utils.memoize_function IntType_Tab.lookup IntType_Tab.update I memoized_lazy_terms_var
   (fn (s, A) => s |> gen_term A []
                   |> Seq.map (fn t => normalize_closed_term 0 [] [] t)) (s, A)
 
