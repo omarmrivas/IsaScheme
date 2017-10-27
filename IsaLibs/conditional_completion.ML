@@ -17,6 +17,9 @@ sig
 
   val discriminate_cpairs           : thm list -> Proof.context -> (thm list -> bool) ->
                                       thm list -> thm -> thm list
+
+  val memoized_discriminate_rules   : Proof.context -> (thm list -> bool) -> thm list -> 
+                                      thm list * thm list
   
   val modify   : thm -> thm
 
@@ -412,7 +415,7 @@ fun memoized_discriminate_rules ctxt terminates thms =
   in Utils.memoize_function Term_List_Tab.lookup Term_List_Tab.update transform discriminate_rules_var
                             (discriminate_rules ctxt terminates) thms
        |> (fn (equations, rules) => (map (nth thms) equations,
-                                     map (nth thms) equations))
+                                     map (nth thms) rules))
   end
 
 (*fun memoized_discriminate_rules ctxt terminates (thms as th :: _) =
@@ -616,14 +619,18 @@ fun orient ctxt global_meta_rws ord terminates f_map =
                                          else th)
 (*              val _ = tracing ("After orientation: " ^ Utils.str_of_thms [th'])*)
               val (_, rules) = memoized_discriminate_rules (empty_simpset ctxt) terminates (S @ R)
+(*              val _ = tracing ("After memoized_discriminate_rules: ")*)
               val joinable = memoized_joinable ctxt terminates f_map (S @ R) th'
+(*              val _ = tracing ("After joinable: ")*)
 (*              val _ = if joinable
                       then (tracing ("Joinable!: " ^ Utils.str_of_thms [th']);
                             tracing ("From: " ^ Utils.str_of_thms (S @ R)))
                       else ()*)
               fun restart () = NONE
               val (s,t) = Utils.dest_meta_equation th'
+(*              val _ = tracing ("After dest_meta_equation: ")*)
               val comm_th' = Utils.commute_meta_eq th'
+(*              val _ = tracing ("After commute_meta_eq: ")*)
             in
               case restart () of
                 SOME thms => RESTART thms
@@ -712,8 +719,8 @@ fun run_completion global_meta_rws ctxt terminates E e =
                  then Local_Theory.target_of ctxt
                  else ctxt
       val generate_cps = Config.get ctxt Ground_Completion.generate_cps
-      val _ = tracing ("Completing: " ^ Utils.str_of_thms E)
-      val _ = tracing ("with: " ^ Utils.str_of_thms [e])
+      val _ = tracing ("Completing: " ^ Utils.str_of_thms' E)
+      val _ = tracing ("with: " ^ Utils.str_of_thms' [e])
       val deps = Utils.definitional_dependencies thy ([], Thm.full_prop_of e)
                   |> map Const
 (*      val f_map_eq = deps

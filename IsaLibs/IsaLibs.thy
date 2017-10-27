@@ -121,6 +121,8 @@ DB_EQ_Terms.setup_max_vars_in_tx #>
 DB_Prover.setup_max_time_in_proof #>
 DB_Proof_Tools.setup_max_time_in_inductive_proof #>
 DB_Proof_Tools.setup_max_num_generalizations #>
+DB_Proof_Tools.setup_schematic_conjectures #>
+DB_Proof_Tools.setup_theory_exploration_conjectures #>
 (*DB_Proof_Tools.setup_max_depth_in_meta_induction #>
 DB_Proof_Tools.setup_max_num_generalizations #>
 DB_Proof_Tools.setup_max_consts_in_generalizations #>*)
@@ -154,6 +156,8 @@ declare [[
   max_time_in_fitness = 15,
 (*  max_depth_in_meta_induction = 10,*)
   max_num_generalizations = 2,
+  schematic_conjectures = false,
+  theory_exploration_conjectures = false,
 (*  max_consts_in_generalizations = 4,*)
 (*  use_metis = false,*)
   quickcheck_quiet = true,
@@ -165,6 +169,12 @@ declare [[
   eta_contract = false
   ]]
 
+ML {*
+  () |> Options.default
+     |> Options.put_int @{system_option sledgehammer_timeout} 5
+     |> Options.set_default
+*}
+
 text {* Associative operators must be oriented this way to avoid non-termination
         in case they are also Commutative operators. *}
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?x (?X ?y ?z)"
@@ -174,7 +184,7 @@ orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?y (?X ?z ?x)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?z (?X ?x ?y)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?z (?X ?y ?x)"
 orient_rules "?X (?x :: ?'a) (?y :: ?'a) = (?x = ?y)"
-  
+
 definition associativity where
   [prop_scheme]: "associativity R \<equiv> \<forall>x y z. R (R x y) z = R x (R y z)"
 
@@ -214,14 +224,24 @@ definition right_distributive where
 definition equivalence_relation where
   [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"
   
-(*definition injectivity_one where
+definition arguments_output where
+  [prop_scheme]: "arguments_output f \<equiv> \<forall>x y. (f x y = x) \<or> (f x y = y)"
+  
+definition injectivity_one where
   [prop_scheme]: "injectivity_one f \<equiv> \<forall>x y. (f x = f y) = (x = y)"
   
 definition injectivity_two where
   [prop_scheme]: "injectivity_two f \<equiv> \<forall>x y z w. (f x y = f z w) = ((x = z) \<and> (y = w))"
   
 definition injectivity_three where
-  [prop_scheme]: "injectivity_three f \<equiv> \<forall>x1 x2 x3 y1 y2 y3. (f x1 x2 x3 = f y1 y2 y3) = ((x1 = y1) \<and> (x2 = y2) \<and> (x3 = y3))"*)
+  [prop_scheme]: "injectivity_three f \<equiv> \<forall>x1 x2 x3 y1 y2 y3. (f x1 x2 x3 = f y1 y2 y3) = ((x1 = y1) \<and> (x2 = y2) \<and> (x3 = y3))"
+
+definition absorption_left where
+  [prop_scheme]: "absorption_left f \<equiv> \<forall>x y z. ((f x y = x) \<longrightarrow> (f x (f y z) = f x z))"
+  
+definition absorption_right where
+  [prop_scheme]: "absorption_right f \<equiv> \<forall>x y z. ((f x y = y) \<longrightarrow> (f x (f y z) = f y z))"
+  
   
 ML {*
 (*  val p1 = Multithreading.max_threads_value ()*)
@@ -311,36 +331,5 @@ val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
   val n = length polynomials
   val polynomials = DB_Counting_Terms.count_beta_eta_long @{context} 10 typ'
 *}*)
-  
-datatype Nata = Z | S (p: "Nata")
-
-fun max2 :: "Nata => Nata => Nata" where
-"(max2 Z y) = y"|
-"(max2 (S z) Z) = (S z)"|
-"(max2 (S z) (S x2)) = (S (max2 z x2))"
-
-(*lemma [simp]: "max2 a Z = a"
-  by induct_auto_failure_tac*)
-
-declare [[max_time_in_inductive_proof = 36000]]
-
-
-theorem "((max2 (max2 a b) c) = (max2 a (max2 b c)))"
- apply inductive_prover
-    
-(*theorem "((max2 (max2 a b) c) = (max2 a (max2 b c)))"
-  ML_prf {*
-  val failures = Unsynchronized.ref (Net.empty : term Net.net)
-  val ll = Unsynchronized.ref ([] : thm list)
-*}
-  apply (tactic {* DB_Inductive_Tacs.induct_auto_failure_tac failures ll @{context}*})
-  ML_prf {*
-  !failures |> Net.content
-            |> Utils.sort_by_general @{theory}
-            |> map (tracing o Syntax.string_of_term @{context})
-            |> length
-*}*)
-    
-    
   
 end

@@ -12,12 +12,12 @@ The tactic searches for free variables in the conjecture to perform induction.
 signature INDUCTIVE_TACS =
 sig
   (* Utilery tactics *)
-  val induct_auto_failure_tac : term Net.net Unsynchronized.ref -> thm list Unsynchronized.ref
+  val induct_auto_failure_tac : term Net.net Unsynchronized.ref -> thm list
                                 -> Proof.context -> tactic
-  val induct_auto_sledgehammer_failure_tac : term Net.net Unsynchronized.ref -> thm list Unsynchronized.ref
+  val induct_auto_sledgehammer_failure_tac : term Net.net Unsynchronized.ref -> thm list
                                 -> Proof.context -> tactic
 
-  val final_sledgehammer_tac: Proof.context -> int -> thm -> thm Seq.seq
+  val final_sledgehammer_tac: Proof.context -> thm list -> int -> thm -> thm Seq.seq
 end
 
 structure DB_Inductive_Tacs
@@ -119,6 +119,7 @@ fun check_fail_proof_state sts ctxt =
     if Term.exists_subterm (fn Free _ => true | _ => false) goal
     then all_tac
     else let val thy = Proof_Context.theory_of ctxt
+(*             val _ = tracing ("Storing: " ^ Syntax.string_of_term ctxt goal)*)
              val _ = sts := Net.insert_term_safe (Pattern.equiv thy) (goal,goal) (!sts)
          in all_tac end
 
@@ -145,10 +146,13 @@ fun ind_auto_failure sts _ ctxt =
     (CHANGED ((ALLGOALS (atomic_tac ctxt)) THEN
              (IF_UNSOLVED (ALLGOALS (SUBGOAL (check_fail_proof_state sts ctxt))))))
 
-fun SOLVE_TIMEOUT seconds tac t = 
-  let val res = Timeout.apply (Time.fromSeconds seconds)
-                  (fn () => SINGLE tac t) ()
-                handle Timeout.TIMEOUT _ => NONE
+fun SOLVE_TIMEOUT seconds tac t =
+  let val res = Utils.apply_timeout2 (Time.fromSeconds seconds)
+                  (fn () => SINGLE tac t
+                              handle  Utils.TIMEOUT1 _ => NONE
+                                    | Utils.TIMEOUT2 _ => NONE
+                                    | Timeout.TIMEOUT _ => NONE) ()
+                handle Utils.TIMEOUT2 _ => ((*tracing "TIMEOUT2";*) NONE)
                      | ERROR message => (warning ("Error: " ^ message ^ "\n"); NONE)
   in
     case res of
@@ -156,27 +160,30 @@ fun SOLVE_TIMEOUT seconds tac t =
     | SOME t' => Seq.single t'
   end
 
-fun sledgehammer_tac ctxt simps =
+fun sledgehammer_tac ctxt =
   fn (goal, i) =>
     if Term.exists_subterm (fn Free _ => true | _ => false) goal
     then all_tac
-    else SOLVE_TIMEOUT (Options.default_int @{system_option sledgehammer_timeout})
+    else ((*tracing ("sledgehammer_tac: " ^ Syntax.string_of_term ctxt goal);*)
+          SOLVE_TIMEOUT (Options.default_int @{system_option sledgehammer_timeout})
                         (Sledgehammer_Tactics.sledgehammer_with_metis_tac
-                          ctxt [] Sledgehammer_Fact.no_fact_override [] i)
+                          ctxt [] Sledgehammer_Fact.no_fact_override [] i))
 
-fun final_sledgehammer_tac ctxt i =
-    SOLVE_TIMEOUT (Options.default_int @{system_option sledgehammer_timeout})
-                  (Sledgehammer_Tactics.sledgehammer_with_metis_tac
-                   ctxt [] Sledgehammer_Fact.no_fact_override [] i)
+fun final_sledgehammer_tac ctxt simps i =
+  let val (_, ctxt) = Proof_Context.note_thmss "" [((Binding.empty,[]), [(simps,[])])] ctxt
+  in SOLVE_TIMEOUT (Options.default_int @{system_option sledgehammer_timeout})
+                   (Sledgehammer_Tactics.sledgehammer_with_metis_tac
+                    ctxt [] Sledgehammer_Fact.no_fact_override [] i)
+  end
 
 (* Recursive tactic that performs induction \<rightarrow> auto until no free datatype variables
    are present in goal. Calls sledgehammer and then stores any pending subgoal in sts
    when frees are exhausted. *)
-fun ind_auto_sledgehammer_failure sts simps ctxt =
+fun ind_auto_sledgehammer_failure sts ctxt =
 (*   DEPTH_FIRST Thm.no_prems*)
   ASTAR (Thm.no_prems, theorem_heuristic)
     (CHANGED (ALLGOALS (atomic_tac ctxt)) THEN
-     TRY (CHANGED (ALLGOALS (SUBGOAL (sledgehammer_tac ctxt simps)))) THEN
+     TRY (CHANGED (ALLGOALS (SUBGOAL (sledgehammer_tac ctxt)))) THEN
      (IF_UNSOLVED (ALLGOALS (SUBGOAL (check_fail_proof_state sts ctxt)))))
 
 fun induct_auto_failure_tac sts simps ctxt =
@@ -184,21 +191,22 @@ fun induct_auto_failure_tac sts simps ctxt =
         (ind_auto_failure sts simps ctxt)
 
 fun induct_auto_sledgehammer_failure_tac sts simps ctxt =
-  (IF_UNSOLVED (TRY (auto_tac ctxt))) THEN
-  (ind_auto_sledgehammer_failure sts simps ctxt)
+  let val (_, ctxt) = Proof_Context.note_thmss "" [((Binding.empty,[]), [(simps,[])])] ctxt
+  in (IF_UNSOLVED (TRY (auto_tac ctxt))) THEN
+     (ind_auto_sledgehammer_failure sts ctxt) end
 
 val method_setup_inductive_prover =
   Method.setup (Binding.name "induct_auto_failure_tac")
-    (Scan.succeed (fn ctxt => SIMPLE_METHOD (induct_auto_failure_tac 
+    (Scan.succeed (fn ctxt => SIMPLE_METHOD (induct_auto_failure_tac
                       (Unsynchronized.ref Net.empty)
-                      (Unsynchronized.ref []) ctxt)))
+                      [] ctxt)))
     "Atomic tactic with failure analysis. Interleaves induction and auto and check failures."
 
 val method_setup_inductive_sledgehammer_prover =
   Method.setup (Binding.name "induct_auto_sledgehammer_failure_tac")
     (Scan.succeed (fn ctxt => SIMPLE_METHOD (induct_auto_sledgehammer_failure_tac
                       (Unsynchronized.ref Net.empty)
-                      (Unsynchronized.ref []) ctxt)))
+                      [] ctxt)))
     "Atomic tactic with failure analysis. Interleaves induction, auto, sledgehammer and check failures."
 
 val _ = Context.>> (Context.map_theory method_setup_inductive_prover)

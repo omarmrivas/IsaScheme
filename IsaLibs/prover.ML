@@ -60,7 +60,11 @@ val short_statement =
 fun parse_schematic_goal ctxt = Utils.parse ctxt (long_statement || short_statement)
 
 fun prove_from_method ctxt0 (SOME simps) method conjecture =
-  let val ctxt = ctxt0 addsimps simps
+  let (* for rewriting methods *)
+      val ctxt = ctxt0 addsimps simps
+      (* for non-rewriting methods *)
+      (* FIXME: for some reason this is not perceived by sledgehammer *)
+(*      val (_, ctxt) = Proof_Context.note_thmss "" [((Binding.empty,[]), [(simps,[])])] ctxt*)
       (*val ctxt = ctxt0 |> Context.Proof
                        |> Simplifier.map_ss (fn simpset => simpset addsimps simps)
                        |> Context.the_proof*)
@@ -132,9 +136,12 @@ fun prove_from_spass ctxt0 args conjecture =
 fun prove ctxt args method conjecture timeOut = 
   let fun prove' ctxt args method conjecture timeOut = 
   (conjecture
-    |> Timeout.apply (Time.fromSeconds timeOut)
-                           (prove_from_method ctxt args method))
-      handle Timeout.TIMEOUT _ => NONE
+    |> Utils.apply_timeout1 (Time.fromSeconds timeOut)
+                           (fn conj => prove_from_method ctxt args method conj
+                                      handle  Utils.TIMEOUT1 _ => NONE
+                                    | Utils.TIMEOUT2 _ => NONE
+                                    | Timeout.TIMEOUT _ => NONE))
+      handle Utils.TIMEOUT1 _ => NONE
   in if can Local_Theory.target_of ctxt
      then let val ctxt = Local_Theory.target_of ctxt
           in prove' ctxt args method conjecture timeOut end

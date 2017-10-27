@@ -11,6 +11,9 @@ sig
   val max_time_normalization : int Config.T
   val num_processors         : int
 
+  exception TIMEOUT1 of Time.time;
+  exception TIMEOUT2 of Time.time;
+
   (* Printing *)
   val to_string          : 'a -> string
   val print_term         : term -> string
@@ -103,6 +106,7 @@ sig
   val get_orientation_schemes    : unit -> term list
   val get_schematic_lemmas       : unit -> term list
   val rules_in_simpset           : term list -> thm list
+  val has_meta_forall            : thm -> bool
 
   (* Rewrite rules *)
   val meta_to_obj                      : thm -> thm
@@ -152,6 +156,8 @@ sig
   val filter_seq         : int -> ('a -> bool) -> 'a Seq.seq -> 'a Seq.seq
   val map_filter_seq     : int -> ('a -> 'b option) -> 'a Seq.seq -> 'b Seq.seq
   val maps_seq           : int -> ('a -> 'b list) -> 'a Seq.seq -> 'b Seq.seq
+  val apply_timeout1     : Time.time -> ('a -> 'b) -> 'a -> 'b
+  val apply_timeout2     : Time.time -> ('a -> 'b) -> 'a -> 'b
 end
 
 structure DB_Utils
@@ -161,6 +167,51 @@ structure DB_Utils
 val (max_time_normalization, setup_max_time_normalization) = Attrib.config_int @{binding "max_time_normalization"} (K 5)
 
 val num_processors = Thread.numProcessors ()
+
+exception TIMEOUT1 of Time.time;
+exception TIMEOUT2 of Time.time;
+
+fun apply_timeout1 timeout f x =
+  Thread_Attributes.with_attributes Thread_Attributes.no_interrupts (fn orig_atts =>
+    let
+      val self = Thread.self ();
+      val start = Time.now ();
+
+      val request =
+        Event_Timer.request (start + timeout)
+          (fn () => Standard_Thread.interrupt_unsynchronized self);
+      val result =
+        Exn.capture (fn () => Thread_Attributes.with_attributes orig_atts (fn _ => f x)) ();
+
+      val stop = Time.now ();
+      val was_timeout = not (Event_Timer.cancel request);
+      val test = Exn.capture Thread_Attributes.expose_interrupt ();
+    in
+      if was_timeout andalso (Exn.is_interrupt_exn result orelse Exn.is_interrupt_exn test)
+      then raise TIMEOUT1 (stop - start)
+      else (Exn.release test; Exn.release result)
+    end);
+
+fun apply_timeout2 timeout f x =
+  Thread_Attributes.with_attributes Thread_Attributes.no_interrupts (fn orig_atts =>
+    let
+      val self = Thread.self ();
+      val start = Time.now ();
+
+      val request =
+        Event_Timer.request (start + timeout)
+          (fn () => Standard_Thread.interrupt_unsynchronized self);
+      val result =
+        Exn.capture (fn () => Thread_Attributes.with_attributes orig_atts (fn _ => f x)) ();
+
+      val stop = Time.now ();
+      val was_timeout = not (Event_Timer.cancel request);
+      val test = Exn.capture Thread_Attributes.expose_interrupt ();
+    in
+      if was_timeout andalso (Exn.is_interrupt_exn result orelse Exn.is_interrupt_exn test)
+      then raise TIMEOUT2 (stop - start)
+      else (Exn.release test; Exn.release result)
+    end);
 
 val to_string = @{make_string}
 
@@ -779,7 +830,7 @@ fun rhs_is_trivial (_, rhs) =
 
 fun normalise_term ctxt simps term =
   let val ctxt = ctxt addsimps simps
-      val timeOut = Config.get ctxt max_time_normalization
+(*      val timeOut = Config.get ctxt max_time_normalization*)
                (*ctxt |> Context.Proof
                       |> Simplifier.map_ss (fn simpset => simpset addsimps simps)
                       |> Context.the_proof*)
@@ -1590,6 +1641,10 @@ fun rules_in_simpset ts =
                                   |> exists (Str_Tab.defined set))
     end
 
+fun has_meta_forall th =
+  th |> Thm.full_prop_of
+     |> Term.exists_subterm (fn (Const (n, _)) =>
+      n = Const_Names.meta_forall | _ => false)
 
 (* Antiquotation parsing metavariables *)
 val typ_pat_setup = 
