@@ -287,7 +287,7 @@ fun equation' ctxt (tab, typsub) size n simps subsumed term =
           |> Utils.make_term_set thy
           |> Utils.sort_by_general thy
           |> check_eqs Term_List_Tab.empty
-          end
+          end handle TERM err => (tracing "equation'"; raise TERM err)
 
 fun known_laws ctxt prop =
   let val thy = Proof_Context.theory_of ctxt
@@ -324,7 +324,7 @@ fun known_laws ctxt prop =
             else SOME prop)
         |> map_filter I
         |> Seq.of_list
-  end
+  end handle TERM err => (tracing "known_laws"; raise TERM err)
 
 fun extend_frees (tab, typsub) prop =
   let fun monomorphize typ = (type_of o typsub) (Free ("x", typ))
@@ -433,6 +433,7 @@ fun equational_theory_exploration ctxt (table, typsub) lambda_size simps prems p
           |> Seq.maps get_terms
           |> discover_equations ctxt simps table typsub
           |> Seq.map (Logic.list_implies o pair prems) end
+    handle TERM err => (tracing "equational_theory_exploration"; raise TERM err)
 
 (* FIXME: Increment frees to a maximum limit of frees (e.g. x + x + x = x + x + x)
   should include more variables (e.g. y and z).
@@ -470,7 +471,7 @@ fun equational_theory_exploration2 ctxt (table, typsub) lambda_size simps prems 
           |> Seq.maps get_terms
           |> discover_equations2 ctxt prems simps table typsub classes
           |> pair frees
-  end
+  end handle TERM err => (tracing "equational_theory_exploration2"; raise TERM err)
 
 (* Finds a potential valid equation using tests
    terms: must be sorted from more general to less general

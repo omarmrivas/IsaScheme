@@ -18,8 +18,8 @@ sig
   val discriminate_cpairs           : thm list -> Proof.context -> (thm list -> bool) ->
                                       thm list -> thm -> thm list
 
-  val memoized_discriminate_rules   : Proof.context -> (thm list -> bool) -> thm list -> 
-                                      thm list * thm list
+(*  val memoized_discriminate_rules   : Proof.context -> (thm list -> bool) -> thm list -> 
+                                      thm list * thm list*)
   
   val modify   : thm -> thm
 
@@ -398,13 +398,13 @@ fun discriminate_rules ctxt terminates thms =
                    val _ = tracing ("with: " ^ Utils.str_of_thms (equations @ rules))
                in (equations, rules)
                end)
-         |> (fn (equations, rules) =>
+(*         |> (fn (equations, rules) =>
                 (map (fn s => find_index (Thm.equiv_thm thy o pair s) thms) equations,
-                 map (fn s => find_index (Thm.equiv_thm thy o pair s) thms) rules))
+                 map (fn s => find_index (Thm.equiv_thm thy o pair s) thms) rules))*)
 (*         |> apply2 Utils.make_theorem_set*)
   end
 
-val discriminate_rules_var
+(*val discriminate_rules_var
       = Synchronized.var "discriminate_rules"
                          (Term_List_Tab.empty : (int list * int list) Term_List_Tab.table)
 
@@ -416,7 +416,7 @@ fun memoized_discriminate_rules ctxt terminates thms =
                             (discriminate_rules ctxt terminates) thms
        |> (fn (equations, rules) => (map (nth thms) equations,
                                      map (nth thms) rules))
-  end
+  end handle Subscript => (tracing "memoized_discriminate_rules"; raise Subscript)*)
 
 (*fun memoized_discriminate_rules ctxt terminates (thms as th :: _) =
   let val thms = thms |> Utils.make_theorem_set
@@ -435,7 +435,8 @@ fun memoized_discriminate_rules ctxt terminates thms =
 
 fun ordered_simpset_without_simprocs ctxt terminates thms =
     let (*val ctxt = clear_simpset ctxt*)
-        val (_,rules) = memoized_discriminate_rules ctxt terminates thms
+(*        val (_,rules) = memoized_discriminate_rules ctxt terminates thms*)
+        val (_,rules) = discriminate_rules ctxt terminates thms
     in ctxt addsimps rules
     end
 
@@ -473,7 +474,8 @@ fun ground_joinable ctxt terminates f_map (e, E) =
       val ctxt = clear_simpset ctxt
 (*      val _ = tracing ("E: " ^ Utils.str_of_thms E)
       val _ = tracing ("e: " ^ Utils.str_of_thms [e])*)
-      val (equations, rules) = memoized_discriminate_rules ctxt terminates E
+(*      val (equations, rules) = memoized_discriminate_rules ctxt terminates E*)
+      val (equations, rules) = discriminate_rules ctxt terminates E
 (*      val _ = tracing ("Equations: " ^ Utils.str_of_thms equations)
       val _ = tracing ("Rules: " ^ Utils.str_of_thms rules)*)
       val f_map = sort (int_ord o (apply2 snd)) f_map
@@ -618,7 +620,8 @@ fun orient ctxt global_meta_rws ord terminates f_map =
                                          then Utils.obj_to_meta @{thm "refl"}
                                          else th)
 (*              val _ = tracing ("After orientation: " ^ Utils.str_of_thms [th'])*)
-              val (_, rules) = memoized_discriminate_rules (empty_simpset ctxt) terminates (S @ R)
+(*              val (_, rules) = memoized_discriminate_rules (empty_simpset ctxt) terminates (S @ R)*)
+              val (_, rules) = discriminate_rules (empty_simpset ctxt) terminates (S @ R)
 (*              val _ = tracing ("After memoized_discriminate_rules: ")*)
               val joinable = memoized_joinable ctxt terminates f_map (S @ R) th'
 (*              val _ = tracing ("After joinable: ")*)

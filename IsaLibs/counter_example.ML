@@ -223,7 +223,7 @@ fun memoized_counter_example ctxt timeOut conjecture =
                       else Synchronized.change false_true_set
                             (update_true_net thy conjecture)
           in v end
-  end
+  end handle TERM err => (tracing "memoized_counter_example"; raise TERM err)
 
 fun unfalsified_conjecture ctxt timeOut conjecture =
   if memoized_counter_example ctxt timeOut conjecture

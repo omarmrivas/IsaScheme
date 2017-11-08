@@ -399,6 +399,7 @@ fun pattern_equiv' thy (t1, t2) =
   let val t1' = Logic.varify_global t1
       val t2' = Logic.incr_indexes ([], [], 1) (Logic.varify_global t2)
   in pattern_equiv thy (t1',t2') end
+  handle TERM err => (tracing "pattern_equiv'"; raise TERM err)
 
 fun make_term_set thy tms =
   (Net.empty, tms)
@@ -418,6 +419,7 @@ fun make_term_set' thy terms =
         |> make_term_set thy
         |> map (Logic.unvarify_global o Term_Subst.zero_var_indexes)
         |> sort (int_ord o (apply2 size_of_term))
+        handle TERM err => (tracing "make_term_set'"; raise TERM err)
 
 fun make_term_set_by' thy by terms =
   terms |> map_index (fn (i, t) => (t, t |> by
@@ -426,6 +428,7 @@ fun make_term_set_by' thy by terms =
         |> make_term_set_by thy snd
         |> map fst
         |> sort (int_ord o (apply2 size_of_term) o (apply2 by))
+        handle TERM err => (tracing "make_term_set_by'"; raise TERM err)
 
 fun make_theorem_set thms =
   thms |> zero_var_indexes_list
@@ -714,7 +717,7 @@ fun datatype_dependencies ctxt prop =
           |> distinct (op =)
           |> map Logic.varifyT_global
           |> filter_typs
-  end
+  end handle TERM err => (tracing "datatype_dependencies"; raise TERM err)
 end
 
 fun type_dependencies ctxt prop =
@@ -875,6 +878,7 @@ fun lhs_in_rhs thy (lhs, rhs) =
       val pattern = Logic.varify_global lhs
   in rhs |> positions
          |> exists (fn (t, _, _) => Pattern.matches thy (pattern, t)) end
+     handle TERM err => (tracing "lhs_in_rhs"; raise TERM err)
 
 fun is_constructor ctxt (Const (n, typ)) = 
       let val constructors = 
@@ -891,6 +895,7 @@ fun top_symbol_constructor thy (lhs, _) =
 (*       Const c => is_some (Old_Datatype_Data.info_of_constr thy c)*)
        Const c => is_constructor (Context.proof_of (Context.Theory thy)) (Const c)
      | _       => false
+     handle TERM err => (tracing "top_symbol_constructor"; raise TERM err)
 
 fun not_constructor thy t = 
   not (top_symbol_constructor thy (t, @{term "True"}))
@@ -1493,11 +1498,11 @@ fun sort_by_general thy terms =
         | (true, false) => LESS
         | _ => (list_ord int_ord o apply2 order_ints_raw) (s,t)
 (*        | _ => (int_ord o (apply2 size_of_term)) (s, t)*)
-  in terms |> map_index (fn (i, t) => t |> Logic.varify_global
+  in terms |> map_index (fn (i, t) => t |> (fn t => the_default t (try Logic.varify_global t))
                                         |> Logic.incr_indexes ([], [], i))
            |> sort ord
            |> map (Logic.unvarify_global o Term_Subst.zero_var_indexes)
-  end
+  end handle TERM err => (tracing "sort_by_general"; raise TERM err)
 
 fun sort_by_general' thy by terms =
   let fun ord (s, t) =
@@ -1507,11 +1512,11 @@ fun sort_by_general' thy by terms =
         | _ => (list_ord int_ord o apply2 order_ints_raw) (s,t)
 (*        | _ => (int_ord o (apply2 size_of_term)) (s, t)*)
   in terms |> map_index (fn (i, t) => (t, t |> by
-                                            |> Logic.varify_global
+                                            |> (fn t => the_default t (try Logic.varify_global t))
                                             |> Logic.incr_indexes ([], [], i)))
            |> sort (ord o apply2 snd)
            |> map fst
-  end
+  end handle TERM err => (tracing "sort_by_general'"; raise TERM err)
 
 fun filter_seq bufsize f seq =
   let fun process [] seq =

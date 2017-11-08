@@ -156,8 +156,8 @@ declare [[
   max_time_in_fitness = 15,
 (*  max_depth_in_meta_induction = 10,*)
   max_num_generalizations = 2,
-  schematic_conjectures = false,
-  theory_exploration_conjectures = false,
+  schematic_conjectures = true,
+  theory_exploration_conjectures = true,
 (*  max_consts_in_generalizations = 4,*)
 (*  use_metis = false,*)
   quickcheck_quiet = true,
@@ -331,5 +331,6 @@ val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
   val n = length polynomials
   val polynomials = DB_Counting_Terms.count_beta_eta_long @{context} 10 typ'
 *}*)
+  
   
 end
