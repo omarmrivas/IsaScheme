@@ -53,6 +53,10 @@ proof
 declare less_eq_two.simps [simp del]
 declare less_two.simps [simp del]
 end
+
+text \<open> Invert binary operators? \<close>
+definition invert_bin where
+  "invert_bin bin x y = bin y x"
   
 ML_file "$ISABELLE_HOME/src/HOL/TPTP/sledgehammer_tactics.ML"
 (*ML_file "html.ML"*)
@@ -184,6 +188,7 @@ orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?y (?X ?z ?x)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?z (?X ?x ?y)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?z (?X ?y ?x)"
 orient_rules "?X (?x :: ?'a) (?y :: ?'a) = (?x = ?y)"
+orient_rules "(?F (?x :: ?'a) = ?F (?y :: ?'a)) = (?x = ?y)"
 
 definition associativity where
   [prop_scheme]: "associativity R \<equiv> \<forall>x y z. R (R x y) z = R x (R y z)"
@@ -236,11 +241,11 @@ definition injectivity_two where
 definition injectivity_three where
   [prop_scheme]: "injectivity_three f \<equiv> \<forall>x1 x2 x3 y1 y2 y3. (f x1 x2 x3 = f y1 y2 y3) = ((x1 = y1) \<and> (x2 = y2) \<and> (x3 = y3))"
 
-definition absorption_left where
+(*definition absorption_left where
   [prop_scheme]: "absorption_left f \<equiv> \<forall>x y z. ((f x y = x) \<longrightarrow> (f x (f y z) = f x z))"
   
 definition absorption_right where
-  [prop_scheme]: "absorption_right f \<equiv> \<forall>x y z. ((f x y = y) \<longrightarrow> (f x (f y z) = f y z))"
+  [prop_scheme]: "absorption_right f \<equiv> \<forall>x y z. ((f x y = y) \<longrightarrow> (f x (f y z) = f y z))"*)
   
   
 ML {*
@@ -331,6 +336,5 @@ val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
   val n = length polynomials
   val polynomials = DB_Counting_Terms.count_beta_eta_long @{context} 10 typ'
 *}*)
-  
   
 end

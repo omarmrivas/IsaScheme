@@ -137,10 +137,7 @@ fun prove ctxt args method conjecture timeOut =
   let fun prove' ctxt args method conjecture timeOut = 
   (conjecture
     |> Utils.apply_timeout1 (Time.fromSeconds timeOut)
-                           (fn conj => prove_from_method ctxt args method conj
-                                      handle  Utils.TIMEOUT1 _ => NONE
-                                    | Utils.TIMEOUT2 _ => NONE
-                                    | Timeout.TIMEOUT _ => NONE))
+                           (fn conj => prove_from_method ctxt args method conj))
       handle Utils.TIMEOUT1 _ => NONE
   in if can Local_Theory.target_of ctxt
      then let val ctxt = Local_Theory.target_of ctxt
@@ -162,6 +159,24 @@ fun prove ctxt args method conjecture timeOut =
 
 fun prove_from_tactic ctxt args tactic conjecture timeOut = 
   prove ctxt args (Method.Basic (fn ctxt => SIMPLE_METHOD (tactic ctxt)), Position.no_range) conjecture timeOut
+
+(*fun prove_from_tactic ctxt args tactic conjecture timeOut = 
+  let fun prove' ctxt args method conjecture timeOut = 
+  (conjecture
+    |> Utils.apply_timeout1 (Time.fromSeconds timeOut)
+                           (fn conj => prove_from_method ctxt args method conj))
+      handle Utils.TIMEOUT1 _ => NONE
+  in if can Local_Theory.target_of ctxt
+     then let val ctxt = Local_Theory.target_of ctxt
+          in prove' ctxt args method conjecture timeOut end
+     else prove' ctxt args method conjecture timeOut
+  end
+  
+  prove ctxt args (Method.Basic (fn ctxt => SIMPLE_METHOD (tactic ctxt)), Position.no_range) conjecture timeOut
+
+  Goal.prove @{context} [] [] @{prop "equal x y = (x = y) "}
+    (fn {context, prems} => Inductive_Tacs.induct_auto_failure_tac (Unsynchronized.ref (Net.empty : term Net.net)) [] context)*)
+
 
 fun cheat_prover ctxt prop =
   (K (Skip_Proof.cheat_tac ctxt 1))

@@ -21,6 +21,9 @@ sig
   val hol_not                          : string
   val hol_conj                         : string
   val hol_disj                         : string
+  val hol_if                           : string
+  val hol_true                         : string
+  val hol_false                        : string
 
   val hol_less                         : string
 
@@ -58,6 +61,9 @@ val Const (hol_implies, _) = @{term "HOL.implies"}
 val Const (hol_not, _) = @{term "HOL.Not"}
 val Const (hol_conj, _) = @{term "HOL.conj"}
 val Const (hol_disj, _) = @{term "HOL.disj"}
+val hol_if = @{const_name If}
+val hol_true = @{const_name True}
+val hol_false = @{const_name False}
 
 val Const (Bit0, _) = @{const "Num.num.Bit0"}
 val Const (Bit1, _) = @{const "Num.num.Bit1"}

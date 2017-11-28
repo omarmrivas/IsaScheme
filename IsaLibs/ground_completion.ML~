@@ -326,7 +326,7 @@ val discriminate_rules_var
 fun memoized_discriminate_rules ctxt terminates thms =
   let val thms = thms |> Utils.make_theorem_set
                       |> sort Thm.thm_ord
-  in Utils.memoize_function Thm_List_Tab.lookup Thm_List_Tab.update discriminate_rules_var
+  in Utils.memoize_function Thm_List_Tab.lookup Thm_List_Tab.update I discriminate_rules_var
                             (discriminate_rules ctxt terminates) thms
   end
 
@@ -424,7 +424,7 @@ val memoized_joinability_var = Synchronized.var "memoized_joinability"
 
 fun memoized_joinable ctxt terminates f_map E e =
   let val E = sort Thm.thm_ord E
-  in Utils.memoize_function Thm_Thm_List_Tab.lookup Thm_Thm_List_Tab.update memoized_joinability_var
+  in Utils.memoize_function Thm_Thm_List_Tab.lookup Thm_Thm_List_Tab.update I memoized_joinability_var
                             (ground_joinable ctxt terminates f_map) (e, E) end
 
 fun memoized_joinable' ctxt terminates f_map E e =

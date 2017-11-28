@@ -289,8 +289,8 @@ in
 
 fun counter_model_term ctxt n conjecture =
     ctxt |> Proof.theorem NONE (K I) [[(conjecture, [])]]
-         |> (fn sts => nunchaku sts handle Option => [])
-(*         |> last_quickcheck_term n*)
+(*         |> (fn sts => nunchaku sts handle Option => [])*)
+         |> last_quickcheck_term n
 
 fun conditional_terms ctxt n prems =
   let fun mk_and l = Library.foldl (fn (res, (s,t)) =>
@@ -317,8 +317,14 @@ fun conditional_terms ctxt n prems =
 fun enumerate_terms ctxt n typ =
   let val x = Free ("x", typ)
       val prem = (HOLogic.mk_Trueprop o HOLogic.mk_eq) (x,x)
-  in [prem] |> conditional_terms ctxt n
-            |> map (snd o hd) end
+      val res = if can dest_funT typ
+                then []
+                else [prem] |> conditional_terms ctxt n
+                            |> map (snd o hd)
+  in if null res
+     then take n (Random_Terms.functional_terms ctxt n typ)
+     else res end
+     handle TYPE err => (tracing ("Error on enumerate_terms: " ^ Syntax.string_of_typ ctxt typ); raise TYPE err)
 
 end
 

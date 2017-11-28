@@ -16,8 +16,6 @@ sig
 
   val generate_cps                  : bool Config.T
 
-  val unify_inst                    : Proof.context -> Envir.env -> 
-                                      ((indexname * sort) * ctyp) list * ((indexname * typ) * cterm) list
   val match_inst                    :  Proof.context -> Envir.env -> (ctyp * ctyp) list * (cterm * cterm) list
   val linear_if_possible            :  thm -> thm
   val varify_global                 :  Proof.context -> thm -> thm
@@ -74,28 +72,6 @@ fun subsets s =
                               (subsets_ t (t1 :: t2)))
           | _ => []
     in subsets_ [] s' end*)
-
-(* instantiation utilities *)
-local 
-fun prep_trm thy env (x, (T, _)) =
-    ((x, Envir.norm_type (Envir.type_env env) T), Thm.cterm_of thy (Envir.norm_term env (Var (x, T))))
-
-fun prep_ty thy env (x, (S, _)) =
-      ((x, S), Thm.ctyp_of thy (Envir.norm_type (Envir.type_env env) (TVar (x, S))))
-
-in
-fun unify_inst ctxt env = 
-    let
-      val ctenv = env |> Envir.term_env
-                      |> Vartab.dest
-                      |> map (prep_trm ctxt env)
-      val ctyenv = env |> Envir.type_env
-                       |> Vartab.dest
-                       |> map (prep_ty ctxt env)
-    in
-      (ctyenv,ctenv)
-    end
-end
 
 local
  fun prep_trm ctxt (x, (T, t)) =
@@ -185,7 +161,7 @@ fun scpairs thy (th1, th2) =
     in if valid_rewrites then
          msub 0 [] obj I
               |> Seq.list_of
-              |> map_filter (fn (conv,(env,_)) => SOME (conv,unify_inst ctxt env))
+              |> map_filter (fn (conv,(env,_)) => SOME (conv,Utils.unify_inst ctxt env))
               |> map (fn (conv,inst) => (conv,apply2 (Drule.instantiate_normalize inst) (th1,th2')))
               |> map (fn (conv,(r1,r2)) => Conv.fconv_rule ((Conv.fun_conv o Conv.arg_conv o conv) (Conv.rewr_conv (varify_global ctxt r1))) r2)
               |> filter_out (fn th => EQUAL = (Term_Ord.term_ord o Utils.dest_meta_equation) th)

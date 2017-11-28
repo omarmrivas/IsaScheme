@@ -18,6 +18,7 @@ sig
   val lazy_all_lambda_terms      : typ -> int -> term Seq.seq
   val random_datatype            : Proof.context -> int -> typ -> term option
   val random_term                : Proof.context -> int -> typ -> term option
+  val functional_terms           : Proof.context -> int -> typ -> term list
 end
 
 structure DB_Random_Terms
@@ -496,6 +497,31 @@ fun random_term ctxt n typ =
     | (typs, _) => (1 upto n) |> map_filter (fn n => random_lambda_term typ (n + length typs))
                               |> random_term_aux
   end
+
+fun functional_terms ctxt lambda_size target_typ =
+  let fun base_types (TFree T) = [TFree T]
+        | base_types (TVar T) = [TVar T]
+        | base_types (Type (n, Ts)) = (Type (n, Ts)) :: maps base_types Ts
+      val consts =
+              target_typ |> base_types
+                         |> distinct (op =)
+                         |> map_filter (fn ty => case Utils.constructors_of_type ctxt ty of
+                                                   [] => NONE
+                                                 | consts => SOME consts)
+                         |> maps I
+      val typ_args = map type_of consts
+      val args = consts
+      val thy = Proof_Context.theory_of ctxt
+      fun get_terms target =
+        let val typ = typ_args ---> target
+            val lambdas = enumerate_all_lambda_terms typ (lambda_size + length typ_args)
+        in lambdas |> map (fn t => betapplys (t, args))
+                   |> Utils.make_term_set thy
+                   |> Utils.sort_by_general thy
+        end
+    in get_terms target_typ end
+    handle TYPE err => (tracing ("Error on functional_terms: " ^ Syntax.string_of_typ ctxt target_typ); raise TYPE err)
+
 
 end
 

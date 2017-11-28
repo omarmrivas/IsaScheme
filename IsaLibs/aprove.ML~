@@ -118,7 +118,7 @@ fun non_terminating_subterm th =
     in Term.exists_subterm (fn t => (is_equal o Term_Ord.term_ord) (t, lhs)) rhs end
 
 fun terminates ctxt TRS =
-    if Config.get ctxt use_aprove
+    (if Config.get ctxt use_aprove
     then
       if exists non_terminating_subterm TRS then false
       else
@@ -153,7 +153,7 @@ fun terminates ctxt TRS =
         (*then (tracing "aprove true!"; true)
     else (tracing "aprove false!"; false)*)
         end
-    else false
+    else false) handle CTERM err => (tracing "aprove"; raise CTERM err)
 
 val memoized_terminates_var = Synchronized.var "memoized_terminates"
                       (Term_List_Tab.empty : bool Term_List_Tab.table)

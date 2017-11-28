@@ -1,1 +1,7 @@
-(VAR x0 y1 y2 x2 y3 x3) (RULES gcd(x0,zero) -> x0 gcd(zero,y1) -> y1 gcd(Suc(x2),Suc(y2)) -> gcd(Suc(x2),minus(y2,x2)) | less(x2,y2) -> True gcd(Suc(x3),Suc(y3)) -> gcd(minus(x3,y3),Suc(y3)) | less(x3,y3) -> False) 
+(VAR y1 xs2 y22 y2) 
+(RULES 
+fa(c,ys) -> Pair2(True,cons(y22,ys)) 
+f(b2,zs) -> Pair2(b2,cons(y2,zs)) 
+bubble(nil) -> Pair2(False,nil) 
+bubble(cons(y1,nil)) -> Pair2(False,cons(y1,nil)) 
+bubble(cons(y2,cons(y22,xs2))) -> If(less_eq(y2,y22),case_Paira(f,bubble(cons(y22,xs2))),case_Paira(fa,bubble(cons(y2,xs2))))) 

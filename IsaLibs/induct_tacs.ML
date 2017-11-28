@@ -12,12 +12,14 @@ The tactic searches for free variables in the conjecture to perform induction.
 signature INDUCTIVE_TACS =
 sig
   (* Utilery tactics *)
-  val induct_auto_failure_tac : term Net.net Unsynchronized.ref -> thm list
+  val induct_auto_failure_tac : (thm list -> thm list) -> term Net.net Unsynchronized.ref -> thm list
                                 -> Proof.context -> tactic
   val induct_auto_sledgehammer_failure_tac : term Net.net Unsynchronized.ref -> thm list
                                 -> Proof.context -> tactic
 
   val final_sledgehammer_tac: Proof.context -> thm list -> int -> thm -> thm Seq.seq
+
+  val induct_failure_provers_tac : (thm list -> thm list) -> term Net.net Unsynchronized.ref -> thm list -> Proof.context -> tactic
 end
 
 structure DB_Inductive_Tacs
@@ -63,21 +65,25 @@ fun computation_induction_tac ctxt thy (goal, i) =
       val frees_goal = Term.add_frees goal []
 (*      val _ = map (fn (args, (name, induction)) =>
                     tracing ("params: (" ^ name ^") " ^ Utils.str_of_terms ctxt (map (fst o snd o the) args))) (rev apps)*)
+      fun induction_tac x1 x2 x3 x4 x5 x6 x7 x8 =
+(*          print_tac ctxt "BEFORE comp induction" THEN*)
+          Induction.induction_tac x1 x2 x3 x4 x5 x6 x7 x8 (*THEN
+          print_tac ctxt "AFTER comp induction"*)
       val dest = fst o snd o the o hd
   in case apps of
       [] => no_tac
      | app :: apps => 
               apps |> map (fn (args, (name, induction)) =>
                       (* Computation induction on args and making the rest of free variables arbitrary *)
-                      DETERM (Induction.induction_tac ctxt true [args] [arbitrary [dest args] frees_goal] []
+                      DETERM (induction_tac ctxt true [args] [arbitrary [dest args] frees_goal] []
                                                       (SOME [induction]) [] i) APPEND
                       (* Computation induction on args and leaving the rest of free variables alone *)
-                      DETERM (Induction.induction_tac ctxt true [args] [] []
+                      DETERM (induction_tac ctxt true [args] [] []
                                                       (SOME [induction]) [] i))
                    |> pair ((fn (args, (name, induction)) =>
-                      DETERM (Induction.induction_tac ctxt true [args] [arbitrary [dest args] frees_goal] []
+                      DETERM (induction_tac ctxt true [args] [arbitrary [dest args] frees_goal] []
                                                       (SOME [induction]) [] i) APPEND
-                      DETERM (Induction.induction_tac ctxt true [args] [] [] 
+                      DETERM (induction_tac ctxt true [args] [] [] 
                                                       (SOME [induction]) [] i)) app)
                    |> Library.foldl (op APPEND o swap)
   end
@@ -94,20 +100,24 @@ fun structural_induction_tac ctxt (goal, i) =
                                  then NONE
                                  else SOME ((s, T), ind_rules) end)
                     |> rev
+      fun induction_tac x1 x2 x3 x4 x5 x6 x7 x8 =
+(*          print_tac ctxt "BEFORE comp induction" THEN*)
+          Induction.induction_tac x1 x2 x3 x4 x5 x6 x7 x8 (*THEN
+          print_tac ctxt "AFTER comp induction"*)
   in case frees of
       [] => no_tac
     | free :: frees =>
           frees |> map (fn ((s,T), induction) =>
                       (* Induction on a free variable and making the rest arbitrary *)
-                      DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
+                      DETERM (induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
                                                       [arbitrary [Free (s,T)] frees_goal] [] NONE [] i) APPEND
                       (* Induction on a free variable and leaving the rest alone *)
-                      DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
+                      DETERM (induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
                                                       [] [] NONE [] i))
                 |> pair ((fn ((s,T), induction) =>
-                      DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
+                      DETERM (induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
                                                       [arbitrary [Free (s,T)] frees_goal] [] NONE [] i) APPEND
-                      DETERM (Induction.induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
+                      DETERM (induction_tac ctxt true [[SOME (NONE, (Free (s,T), false))]]
                                                       [] [] NONE [] i)) free)
                 |> Library.foldl (op APPEND o swap)
   end
@@ -130,13 +140,16 @@ fun induction_tac ctxt =
 
 (* induction \<rightarrow> auto *)
 fun atomic_tac ctxt i =
+(*          (IF_UNSOLVED (print_tac ctxt "BEFORE atomic_tac")) THEN*)
           (IF_UNSOLVED (TRY (induction_tac ctxt i))) THEN
           (IF_UNSOLVED (TRY (auto_tac ctxt))) (*THEN
-          (print_tac ctxt "atomic_tac")*)
+          (IF_UNSOLVED (print_tac ctxt "AFTER atomic_tac"))*)
 
 (* Our heuristic is simply the number of premises (in our interpretation... the pending goals)
    plus the depth in search (shorter proofs are preferred). *)
-fun theorem_heuristic i thm = Thm.nprems_of thm + i
+fun theorem_heuristic i thm =
+  let val _ = tracing ("Proof state: " ^ Utils.str_of_thms [thm])
+  in Thm.nprems_of thm + i end
 
 (* Recursive tactic that performs induction \<rightarrow> auto until no free datatype variables
    are present in goal. It stores any pending subgoal in sts when frees are exhausted. *)
@@ -186,21 +199,29 @@ fun ind_auto_sledgehammer_failure sts ctxt =
      TRY (CHANGED (ALLGOALS (SUBGOAL (sledgehammer_tac ctxt)))) THEN
      (IF_UNSOLVED (ALLGOALS (SUBGOAL (check_fail_proof_state sts ctxt)))))
 
-fun induct_auto_failure_tac sts simps ctxt =
-        IF_UNSOLVED (TRY (auto_tac ctxt)) THEN
-        (ind_auto_failure sts simps ctxt)
+fun induct_auto_failure_tac safe_rules sts (simps : thm list) ctxt =
+  let val safes = safe_rules simps
+      val ctxt = ctxt addsimps safes
+  in (*IF_UNSOLVED (TRY (auto_tac ctxt)) THEN*)
+     (ind_auto_failure sts simps ctxt)
+  end
 
 fun induct_auto_sledgehammer_failure_tac sts simps ctxt =
   let val (_, ctxt) = Proof_Context.note_thmss "" [((Binding.empty,[]), [(simps,[])])] ctxt
-  in (IF_UNSOLVED (TRY (auto_tac ctxt))) THEN
+  in (*(IF_UNSOLVED (TRY (auto_tac ctxt))) THEN*)
      (ind_auto_sledgehammer_failure sts ctxt) end
 
-val method_setup_inductive_prover =
+fun induct_failure_provers_tac safe_rules sts simps ctxt =
+  Par_Tactical.PARALLEL_CHOICE
+        [induct_auto_failure_tac safe_rules sts simps ctxt,
+         induct_auto_sledgehammer_failure_tac sts simps ctxt]
+
+(*val method_setup_inductive_prover =
   Method.setup (Binding.name "induct_auto_failure_tac")
     (Scan.succeed (fn ctxt => SIMPLE_METHOD (induct_auto_failure_tac
                       (Unsynchronized.ref Net.empty)
                       [] ctxt)))
-    "Atomic tactic with failure analysis. Interleaves induction and auto and check failures."
+    "Atomic tactic with failure analysis. Interleaves induction and auto and check failures."*)
 
 val method_setup_inductive_sledgehammer_prover =
   Method.setup (Binding.name "induct_auto_sledgehammer_failure_tac")
@@ -209,7 +230,7 @@ val method_setup_inductive_sledgehammer_prover =
                       [] ctxt)))
     "Atomic tactic with failure analysis. Interleaves induction, auto, sledgehammer and check failures."
 
-val _ = Context.>> (Context.map_theory method_setup_inductive_prover)
+(*val _ = Context.>> (Context.map_theory method_setup_inductive_prover)*)
 val _ = Context.>> (Context.map_theory method_setup_inductive_sledgehammer_prover)
 
 

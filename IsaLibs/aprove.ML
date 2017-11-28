@@ -75,35 +75,42 @@ fun strip_abs frees (Abs (a, T, t)) =
     in ((a', T) :: a'', t'') end
   | strip_abs _ t = ([], t)
 
-fun eliminate_lambdas eqs_ref consts_ref (Abs (a, T, t)) =
-    let val frees = Term.add_frees (Abs (a, T, t)) []
-        val (lambda_frees, t') = strip_abs [] (Abs (a, T, t))
+fun eliminate_lambdas frees_ref eqs_ref consts_ref (Abs (a, T, t)) =
+    let val frees = [] |> Term.add_vars (Abs (a, T, t))
+                       |> map (fn ((n, i), ty) => (n ^ string_of_int i, ty))
+        val (lambda_frees, t') = strip_abs (!frees_ref) (Abs (a, T, t))
+(*        val _ = tracing "===== Abs ======"
+        val _ = (tracing o Syntax.string_of_term @{context}) (Abs (a, T, t))
+        val _ = tracing "===== frees ======"
+        val _ = map (tracing o Syntax.string_of_term @{context}) (map Free frees)
+        val _ = tracing "===== lambda frees ======"
+        val _ = map (tracing o Syntax.string_of_term @{context}) (map Free lambda_frees)*)
+        val _ = frees_ref := (map fst lambda_frees) @ !frees_ref
         val consts = !consts_ref
         val const = singleton (Name.variant_list consts) "f"
         val _ = consts_ref := (const :: consts)
-        val t'' = eliminate_lambdas eqs_ref consts_ref t'
-        val typ_const = ((map snd frees) @ (map snd lambda_frees))
+        val t'' = eliminate_lambdas frees_ref eqs_ref consts_ref t'
+        val typ_const = (map snd (frees @ lambda_frees))
                           ---> (type_of t'')
         val eq = (Term.list_comb (Const (const, typ_const), map Free (frees @ lambda_frees)), t'')
         val _ = eqs_ref := eq :: (!eqs_ref)
     in Term.list_comb (Const (const, typ_const), map Free frees) end
-  | eliminate_lambdas eqs_ref consts_ref (t $ u) = (eliminate_lambdas eqs_ref consts_ref t) $ (eliminate_lambdas eqs_ref consts_ref u)
-  | eliminate_lambdas _ _ t = t
+  | eliminate_lambdas frees_ref eqs_ref consts_ref (t $ u) = (eliminate_lambdas frees_ref eqs_ref consts_ref t) $ (eliminate_lambdas frees_ref eqs_ref consts_ref u)
+  | eliminate_lambdas _ _ _ t = t
 
 fun trs_to_wst TRS = 
     let
       val trs = TRS |> map_index (fn (i, th) => ((Thm.incr_indexes i) o Drule.zero_var_indexes) th)
-      val vars = trs |> map Thm.full_prop_of
-                     |> maps (fn t => Term.add_vars t [])
-                     |> map (fn ((n, i), _) => n ^ string_of_int i)
-                     |> space_implode " "
-                     |> (fn vs => "(VAR " ^ vs ^ ")")
+      val var_names = trs |> map Thm.full_prop_of
+                          |> maps (fn t => Term.add_vars t [])
+                          |> map (fn ((n, i), _) => n ^ string_of_int i)
       val eqs_ref = Unsynchronized.ref []
       val consts_ref = Unsynchronized.ref []
+      val frees_ref = Unsynchronized.ref var_names
       val conditions = trs |> map (map (HOLogic.dest_eq o HOLogic.dest_Trueprop) o Thm.prems_of o modify)
-                           |> map (map (thm_to_wst o (apply2 (eliminate_lambdas eqs_ref consts_ref))))
+                           |> map (map (thm_to_wst o (apply2 (eliminate_lambdas frees_ref eqs_ref consts_ref))))
                            |> map commas
-      val rules = trs |> map (thm_to_wst o (apply2 (eliminate_lambdas eqs_ref consts_ref)) o Utils.dest_meta_equation)
+      val rules = trs |> map (thm_to_wst o (apply2 (eliminate_lambdas frees_ref eqs_ref consts_ref)) o Utils.dest_meta_equation)
                       |> (fn eqs => eqs ~~ conditions
                                       |> map (fn (eq, cond) => if cond = ""
                                                                then eq
@@ -111,6 +118,11 @@ fun trs_to_wst TRS =
                       |> (fn eqs => map thm_to_wst (!eqs_ref) @ eqs)
                       |> space_implode " "
                       |> (fn rs => "(RULES " ^ rs ^ ")")
+(*      fun print (p, q) = Syntax.string_of_term @{context} p ^ " \<longrightarrow> " ^ Syntax.string_of_term @{context} q
+      val _ = map (tracing o print) (!eqs_ref)*)
+      val vars = !frees_ref
+                     |> space_implode " "
+                     |> (fn vs => "(VAR " ^ vs ^ ")")
     in vars ^ " " ^ rules end
 
 fun non_terminating_subterm th =

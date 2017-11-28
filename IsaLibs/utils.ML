@@ -44,14 +44,16 @@ sig
 (*  val html_string_of_term     : Proof.context -> term -> string*)
   val string_of_typ      : Proof.context -> typ -> string
   val int_of_string      : string -> int
+  val injective_subst    : ('a * ''b) list -> (''c * ''b) list ->
+                           (('a * ''b) * (''c * ''b)) list option
+  val injections         : ''a list -> ''b list -> (''a * ''b) list list
+  val surjections        : ''a list -> ''b list -> (''a * ''b) list list
   val unique_names       : term -> term
   val dummyfy_term       : term -> term
   val positions          : term -> (term * typ * int list) list
   val bounds_at_position : term -> int list -> (string * typ) list
   val term_at            : int list -> term -> term
   val substitute         : (term * int list) -> term -> term
-  val injective_subst    : ('a * ''b) list -> (''c * ''b) list ->
-                           (('a * ''b) * (''c * ''b)) list option
   val binder_vars        : string -> (string * typ) list -> term -> (string * typ) list
   val binder_elimination : string -> term list -> term -> term * term list
   val fold_subterms      :  (term -> 'a -> 'a) -> term -> 'a -> 'a
@@ -67,6 +69,7 @@ sig
   val make_term_set_by'   : theory -> ('a -> term) -> 'a list -> 'a list
   val sort_by_general    : theory -> term list -> term list
   val sort_by_general'   : theory -> ('a -> term) -> 'a list -> 'a list
+  val subsumed_set       : theory -> term list -> term list
   val make_theorem_set   : thm list -> thm list
   val generalizations    : theory -> int -> term list -> term list
   val generalizations'   : theory -> int -> term list -> term list
@@ -86,6 +89,7 @@ sig
   val orient_rule        : theory -> order -> thm -> thm
   val orient_meta_rule   : theory -> order -> thm -> thm
   val swap_eq            : term -> term
+  val unify_inst         : Proof.context -> Envir.env -> ((indexname * sort) * ctyp) list * ((indexname * typ) * cterm) list
   val permutative_eq     : term * term -> bool
   val permutative_rule           : thm -> bool
   val order_ints_raw             : term -> int list
@@ -98,6 +102,7 @@ sig
   val get_rewrites               : theory -> string -> thm list
   val get_definitional_rewrites  : theory -> term -> thm list
   val definitional_dependencies  : theory -> ((string * typ) list * term) -> (string * typ) list
+  val definitional_dependencies' : Proof.context -> (string * typ) list * term -> (string * typ) list
   val datatype_dependencies      : Proof.context -> term -> typ list
   val type_dependencies          : Proof.context -> term -> typ list
   val definitional_orientation   : theory -> term -> bool
@@ -106,9 +111,10 @@ sig
   val get_orientation_schemes    : unit -> term list
   val get_schematic_lemmas       : unit -> term list
   val rules_in_simpset           : term list -> thm list
-  val has_meta_forall            : thm -> bool
+  val unsupported_rule           : thm -> bool
 
   (* Rewrite rules *)
+  val varify_global                    : Proof.context -> thm -> thm
   val meta_to_obj                      : thm -> thm
   val obj_to_meta                      : thm -> thm
   val commute_obj_eq                   : thm -> thm
@@ -154,7 +160,7 @@ sig
   val repeat_until       : ('a -> bool) -> ('b -> 'a) -> 'b -> 'a
   val trim               : string -> string
   val filter_seq         : int -> ('a -> bool) -> 'a Seq.seq -> 'a Seq.seq
-  val map_filter_seq     : int -> ('a -> 'b option) -> 'a Seq.seq -> 'b Seq.seq
+  val map_filter_seq     : int -> ('a list -> 'b list) -> ('b -> 'c option) -> 'a Seq.seq -> 'c Seq.seq
   val maps_seq           : int -> ('a -> 'b list) -> 'a Seq.seq -> 'b Seq.seq
   val apply_timeout1     : Time.time -> ('a -> 'b) -> 'a -> 'b
   val apply_timeout2     : Time.time -> ('a -> 'b) -> 'a -> 'b
@@ -394,6 +400,9 @@ fun pattern_equiv thy (t1, t2) =
     handle TYPE msg => ((t1, t2) |> apply2 (Syntax.string_of_term_global thy)
                                  |> (fn (s1, s2) => s1 ^ " : " ^ s2)
                                  |> tracing; raise TYPE msg)
+         | TERM msg => ((t1, t2) |> apply2 (Syntax.string_of_term_global thy)
+                                 |> (fn (s1, s2) => s1 ^ " : " ^ s2)
+                                 |> tracing; raise TERM msg)
 
 fun pattern_equiv' thy (t1, t2) =
   let val t1' = Logic.varify_global t1
@@ -662,9 +671,11 @@ fun definitional_dependencies thy (consts : (string * typ) list, term) =
           | NONE => [])
       | _ => [] end
 
-fun parametric_type ctxt typ =
-  typ |> constructors_of_type ctxt
-      |> exists (exists_type (exists_subtype (fn TFree _ => true | _ => false)))
+fun parametric_type _ (TFree _) = true
+  | parametric_type ctxt typ =
+      exists_subtype (fn TFree _ => true | _ => false) typ
+(*  typ |> constructors_of_type ctxt
+      |> exists (exists_type (exists_subtype (fn TFree _ => true | _ => false)))*)
 
 local
 fun datatype_dependencies' ctxt typ =
@@ -722,7 +733,7 @@ end
 
 fun type_dependencies ctxt prop =
   let val deps = datatype_dependencies ctxt prop
-  in (map TFree (fold Term.add_tfreesT deps [])) @ deps end
+  in deps @ (map TFree (fold Term.add_tfreesT deps [])) end
 
 fun get_definitional_rewrites thy term =
   ([], term)
@@ -819,13 +830,78 @@ fun commute_eq prop =
               | NONE => raise ERROR "Not an equation!")
   end
 
+local 
+fun prep_trm thy env (x, (T, _)) =
+    ((x, Envir.norm_type (Envir.type_env env) T), Thm.cterm_of thy (Envir.norm_term env (Var (x, T))))
+
+fun prep_ty thy env (x, (S, _)) =
+      ((x, S), Thm.ctyp_of thy (Envir.norm_type (Envir.type_env env) (TVar (x, S))))
+
+in
+fun unify_inst ctxt env = 
+    let
+      val ctenv = env |> Envir.term_env
+                      |> Vartab.dest
+                      |> map (prep_trm ctxt env)
+      val ctyenv = env |> Envir.type_env
+                       |> Vartab.dest
+                       |> map (prep_ty ctxt env)
+    in
+      (ctyenv,ctenv)
+    end
+end
+
+fun definitional_dependencies' ctxt (consts : (string * typ) list, term) =
+  let (* FIXME: get mutual simps *)
+      val thy = Proof_Context.theory_of ctxt
+      fun get_rewrites thy (cons_name,typ) =
+        let val simps = safe_eval "" [] (Global_Theory.get_thms thy)
+                                        (cons_name ^ ".simps")
+                          |> map (fn eq => let val (lhs, _) = dest_object_equation eq
+                                               val head = head_of lhs
+                                               val matcher = (Seq.hd o Unify.matchers (Context.Theory thy)) [(head,Const (cons_name,typ))]
+                                               val inst = unify_inst ctxt matcher
+                                           in Drule.instantiate_normalize inst eq end)
+        in simps end
+      fun dependencies (consts, cname) =
+        let val deps = cname |> get_rewrites thy
+                             |> map Thm.full_prop_of
+                             |> pair consts
+                             |> Library.foldl (fn (consts, t) =>
+                                 Term.add_consts t consts)
+        in if length consts = length deps
+           then consts
+           else Library.foldl dependencies (deps, deps)
+        end
+  in
+    consts |> Term.add_consts term
+           |> (fn consts => (consts, consts))
+           |> Library.foldl dependencies
+(*           |> map (fn cname => (cname, Consts.the_constraint thy_consts cname))*)
+           |> filter (fn (name, _) => name <> Const_Names.meta_forall andalso
+                                      name <> Const_Names.meta_imp andalso
+                                      name <> Const_Names.meta_eq andalso
+                                      name <> Const_Names.hol_trueprop andalso
+                                      (* FIXME: Do we really want to take out hol_if and hol_eq*)
+                                      name <> Const_Names.hol_if andalso
+                                      name <> Const_Names.hol_eq andalso
+                                      (* FIXME: Do we really want to take out hol_if and hol_eq*)
+                                      name <> Const_Names.protectC_name)
+  end
+
 fun rulify ctxt prop =
   let val rule_true = @{lemma "P \<equiv> (P = True)" by simp}
+      val rule_false = @{lemma "\<not>P \<equiv> (P = False)" by simp}
   in if can dest_eq prop
      then prop
-     else prop |> Thm.cterm_of ctxt
-               |> (Conv.concl_conv (Logic.count_prems prop) (Conv.arg_conv (Conv.rewr_conv rule_true)))
-               |> (snd o dest_meta_equation)
+     else let fun apply_rule rule prop =
+              prop |> Thm.cterm_of ctxt
+                   |> (Conv.concl_conv (Logic.count_prems prop) (Conv.arg_conv (Conv.rewr_conv rule)))
+                   |> (snd o dest_meta_equation)
+          in case try (apply_rule rule_false) prop of
+              SOME prop => prop
+            | NONE => apply_rule rule_true prop
+          end
   end
 
 fun rhs_is_trivial (_, rhs) =
@@ -833,12 +909,12 @@ fun rhs_is_trivial (_, rhs) =
 
 fun normalise_term ctxt simps term =
   let val ctxt = ctxt addsimps simps
-(*      val timeOut = Config.get ctxt max_time_normalization*)
+      val timeOut = Config.get ctxt max_time_normalization
                (*ctxt |> Context.Proof
                       |> Simplifier.map_ss (fn simpset => simpset addsimps simps)
                       |> Context.the_proof*)
   in
-(*  Timeout.apply (Time.fromSeconds timeOut)*)
+  Timeout.apply (Time.fromSeconds timeOut)
       (fn term => 
               term
                 |> Thm.cterm_of ctxt
@@ -851,7 +927,10 @@ fun normalise_term ctxt simps term =
                           let val _ = tracing ("Timeout normalizing: " ^ Syntax.string_of_term ctxt term)
                               val _ = tracing ("With: " ^ str_of_thms simps)
                           in term end) term
-  end
+          handle Timeout.TIMEOUT _ =>
+                          let val _ = tracing ("Timeout normalizing: " ^ Syntax.string_of_term ctxt term)
+                              val _ = tracing ("With: " ^ str_of_thms simps)
+                          in term end  end
 
 fun normalise_term' ctxt simps prems term =
   let val names = fold Term.add_free_names (term :: prems) []
@@ -886,6 +965,12 @@ fun is_constructor ctxt (Const (n, typ)) =
                     |> constructors_of_type ctxt
       in exists ((fn m => n = m) o fst o dest_Const) constructors end
     | is_constructor _ _ = false
+
+fun varify_global ctxt thm =
+    let
+      val frees = [] |> Term.add_frees (Thm.full_prop_of thm) |> map fst
+    in [thm] |> Variable.export (snd (Variable.add_fixes frees ctxt)) ctxt
+             |> hd end
 
 fun top_symbol_constructor thy (lhs, _) =
   case lhs |> strip_comb
@@ -981,10 +1066,10 @@ fun user_supplied_orientation thy eq =
 
 fun orient_eq thy ord eq =
   let val comm_eq = swap_eq eq
-  in if definitional_orientation thy eq then eq
-     else if definitional_orientation thy comm_eq then comm_eq
-     else if user_supplied_orientation thy eq then eq
+  in if user_supplied_orientation thy eq then eq
      else if user_supplied_orientation thy comm_eq then comm_eq
+     else if definitional_orientation thy eq then eq
+     else if definitional_orientation thy comm_eq then comm_eq
      else if match_simps thy eq then eq
      else if match_simps thy comm_eq then comm_eq
      else
@@ -1022,12 +1107,12 @@ fun generalizations' thy max_generalizations terms =
       fun gen i term =
         if i <= 0 then []
         else
-        let val positions = positions term
-            val subterms = positions |> map_filter (fn (_, typ, pos) =>
-                                            if can dest_funT typ orelse
-                                               null pos
-                                            then NONE
-                                            else SOME (term_at pos term))
+        let val positions = term |> positions
+                                 |> filter_out (fn (_, typ, pos) =>
+                                            can dest_funT typ orelse
+                                            null pos orelse
+                                            Term.is_open (term_at pos term))
+            val subterms = positions |> map (fn (_, _, pos) => (term_at pos term))
                                      |> make_term_set thy
                                      |> filter (Term.exists_Const (fn _ => true))
             val names = Term.add_free_names term []
@@ -1041,6 +1126,7 @@ fun generalizations' thy max_generalizations terms =
                                               |> Library.foldl change)
                            |> make_term_set' thy
         in generalized_terms @ maps (gen (i - 1)) generalized_terms end
+        handle TERM err => (tracing ("Error in generalization: " ^ Syntax.string_of_term_global thy term); raise TERM err)
     in terms |> maps (gen max_generalizations)
 (*             |> map (fn t => if can HOLogic.dest_eq t 
                              then orient_eq thy t
@@ -1215,6 +1301,33 @@ fun dfs' stack goal succesors =
                 SOME (state, stack) => SOME (state, next stack)
                 | NONE => NONE)
   in next stack end
+
+fun surjections domain codomain =
+  let val stack = [[]]
+      fun goal state = forall (fn y => exists (fn (_, y') => y = y') state) codomain andalso
+                       forall (fn x => exists (fn (x', _) => x = x') state) domain
+      fun successors state =
+        case find_first (fn x => forall (fn (x', _) => x <> x') state) domain of
+          SOME x => map (fn y => (x, y) :: state) codomain
+          | NONE => []
+      fun all_surjections stack = 
+        case dfs stack goal successors of
+          SOME (state, stack) => state :: all_surjections stack
+        | NONE => []
+  in all_surjections stack end
+
+fun injections domain codomain =
+  let val stack = [[]]
+      fun goal state = forall (fn x => exists (fn (x', _) => x = x') state) domain
+      fun successors state =
+        case find_first (fn x => forall (fn (x', _) => x <> x') state) domain of
+          SOME x => map (fn y => (x, y) :: state) codomain
+          | NONE => []
+      fun all_surjections stack = 
+        case dfs stack goal successors of
+          SOME (state, stack) => state :: all_surjections stack
+        | NONE => []
+  in all_surjections stack end
 
 (* Fixpoint techniques to count terms *)
 
@@ -1518,6 +1631,16 @@ fun sort_by_general' thy by terms =
            |> map fst
   end handle TERM err => (tracing "sort_by_general'"; raise TERM err)
 
+fun subsumed_set thy terms =
+  let fun check (t1 :: t2 :: ts) =
+          if Pattern.matches thy (the_default t1 (try Logic.varify_global t1), t2)
+          then check (t1 :: ts)
+          else t1 :: check (t2 :: ts)
+        | check ts = ts
+  in terms |> sort_by_general thy
+           |> check
+  end
+
 fun filter_seq bufsize f seq =
   let fun process [] seq =
             Seq.make (fn () =>
@@ -1536,7 +1659,7 @@ fun filter_seq bufsize f seq =
              end)
   in process [] seq end
 
-fun map_filter_seq bufsize f seq =
+fun map_filter_seq bufsize pre_f f seq =
   let fun process [] seq =
             Seq.make (fn () =>
               (case Seq.chop bufsize seq of
@@ -1544,7 +1667,8 @@ fun map_filter_seq bufsize f seq =
               | (xs, seq) => Seq.pull (process xs seq)))
         | process xs seq =
             Seq.make (fn () =>
-              let val ys = xs |> Par_List.map f
+              let val ys = xs |> pre_f
+                              |> Par_List.map f
                               |> map_filter I
               in case ys of
                   y :: ys => SOME (y, Seq.append (Seq.of_list ys) (process [] seq))
@@ -1650,6 +1774,16 @@ fun has_meta_forall th =
   th |> Thm.full_prop_of
      |> Term.exists_subterm (fn (Const (n, _)) =>
       n = Const_Names.meta_forall | _ => false)
+
+fun has_meta_imp th =
+  th |> Thm.full_prop_of
+     |> Logic.strip_imp_prems
+     |> exists (Term.exists_subterm (fn (Const (n, _)) =>
+                n = Const_Names.meta_imp | _ => false))
+
+fun unsupported_rule th =
+  has_meta_forall th orelse
+  has_meta_imp th
 
 (* Antiquotation parsing metavariables *)
 val typ_pat_setup = 
