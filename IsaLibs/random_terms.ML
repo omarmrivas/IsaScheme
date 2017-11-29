@@ -14,8 +14,8 @@ sig
   val random_lambda_term         : typ -> int -> term option
   val enumerate_lambda_terms     : typ -> int -> term list
   val enumerate_all_lambda_terms : typ -> int -> term list
-  val lazy_lambda_terms          : typ -> int -> term Seq.seq
-  val lazy_all_lambda_terms      : typ -> int -> term Seq.seq
+(*  val lazy_lambda_terms          : typ -> int -> term Seq.seq
+  val lazy_all_lambda_terms      : typ -> int -> term Seq.seq*)
   val random_datatype            : Proof.context -> int -> typ -> term option
   val random_term                : Proof.context -> int -> typ -> term option
   val functional_terms           : Proof.context -> int -> typ -> term list
@@ -393,7 +393,7 @@ in
     s |> gen_term A []
       |> map (fn t => normalize_closed_term 0 [] [] t)*)
 
-val memoized_lazy_terms_var =
+(*val memoized_lazy_terms_var =
     Synchronized.var "memoized_lazy_terms"
                      (IntType_Tab.empty : term Seq.seq IntType_Tab.table)
 
@@ -407,7 +407,7 @@ fun lazy_all_lambda_terms A b =
       fun next i = Seq.make(fn () => if i <= b then SOME (i, next (i + 1)) else NONE)
   in 1 |> next
        |> Seq.maps (lazy_lambda_terms A)
-  end
+  end*)
 
 end
 

@@ -226,8 +226,8 @@ definition left_distributive where
 definition right_distributive where
   [prop_scheme]: "right_distributive f g h i \<equiv> \<forall>x y z. f (g x y) z = h (i x z) (i y z)"
 
-definition equivalence_relation where
-  [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"
+(*definition equivalence_relation where
+  [prop_scheme]: "equivalence_relation f \<equiv> \<forall>x y. f x y = (x = y)"*)
   
 definition arguments_output where
   [prop_scheme]: "arguments_output f \<equiv> \<forall>x y. (f x y = x) \<or> (f x y = y)"

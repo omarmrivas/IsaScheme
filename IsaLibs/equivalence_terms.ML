@@ -538,9 +538,8 @@ fun equational_theory_exploration ctxt (table, typsub) lambda_size simps prems p
                    |> tracing
       fun get_terms target =
         let val typ = typ_args ---> target
-            val lambdas = Random_Terms.lazy_all_lambda_terms typ (lambda_size + length typ_args)
-        in lambdas |> Seq.map (fn t => betapplys (t, args))
-                   |> Seq.list_of
+            val lambdas = Random_Terms.enumerate_all_lambda_terms typ (lambda_size + length typ_args)
+        in lambdas |> map (fn t => betapplys (t, args))
                    |> Utils.make_term_set thy
                    |> Utils.sort_by_general thy
                    |> Seq.of_list
@@ -686,9 +685,8 @@ fun equational_theory_exploration2
                 (* FIXME: typs should be polymorphic *)
                 fun get_terms target =
                     let val typ = typ_args ---> target
-                        val lambdas = Random_Terms.lazy_all_lambda_terms typ (lambda_size + length typ_args)
-                    in lambdas |> Seq.map (fn t => betapplys (t, args))
-                               |> Seq.list_of
+                        val lambdas = Random_Terms.enumerate_all_lambda_terms typ (lambda_size + length typ_args)
+                    in lambdas |> map (fn t => betapplys (t, args))
                                |> Utils.make_term_set thy
                                |> Utils.sort_by_general thy
                     end
@@ -728,11 +726,14 @@ fun equational_theory_exploration3
                    |> tracing
       fun get_terms target =
         let val typ = typ_args ---> target
-            val lambdas = Random_Terms.lazy_all_lambda_terms typ (lambda_size + length typ_args)
-        in lambdas |> Seq.map (fn t => betapplys (t, args))
-                   |> Seq.list_of
+(*            val _ = tracing ("Target: " ^ Syntax.string_of_typ ctxt target)
+            val _ = tracing ("Args: " ^ Utils.str_of_terms ctxt args)*)
+            val lambdas = Random_Terms.enumerate_all_lambda_terms typ (lambda_size + length typ_args)
+        in lambdas |> map (fn t => betapplys (t, args))
                    |> Utils.make_term_set thy
                    |> Utils.sort_by_general thy
+(*                   |> tap (fn l => tracing ("Length: " ^ (string_of_int o length) l))
+                   |> tap (tracing o Utils.str_of_terms ctxt)*)
                    |> Seq.of_list
         end
   in typs |> filter_out (can (dest_funT))
@@ -787,9 +788,8 @@ fun equational_theory_exploration_on_conj _ _ NONE _ = Seq.empty
                 (* FIXME: typs should be polymorphic *)
         fun get_terms target =
             let val typ = typ_args ---> target
-                val lambdas = Random_Terms.lazy_all_lambda_terms typ ((lambda_size div 2) + length typ_args)
-            in lambdas |> Seq.map (fn t => betapplys (t, args))
-                       |> Seq.list_of
+                val lambdas = Random_Terms.enumerate_all_lambda_terms typ ((lambda_size div 2) + length typ_args)
+            in lambdas |> map (fn t => betapplys (t, args))
                        |> Utils.make_term_set thy
                        |> Utils.sort_by_general thy
             end

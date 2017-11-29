@@ -148,8 +148,7 @@ fun atomic_tac ctxt i =
 (* Our heuristic is simply the number of premises (in our interpretation... the pending goals)
    plus the depth in search (shorter proofs are preferred). *)
 fun theorem_heuristic i thm =
-  let val _ = tracing ("Proof state: " ^ Utils.str_of_thms [thm])
-  in Thm.nprems_of thm + i end
+  Thm.nprems_of thm + i
 
 (* Recursive tactic that performs induction \<rightarrow> auto until no free datatype variables
    are present in goal. It stores any pending subgoal in sts when frees are exhausted. *)
