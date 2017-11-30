@@ -134,11 +134,21 @@ fun prove_from_spass ctxt0 args conjecture =
   prove_from_method ctxt0 args (sledgehammer_method ctxt0) conjecture
 
 fun prove ctxt args method conjecture timeOut = 
-  let fun prove' ctxt args method conjecture timeOut = 
+  let val start = Timing.start ()
+      fun print_time str res = 
+          let val elapsed = start |> Timing.result
+                                  |> #elapsed
+                                  |> Time.toReal
+              val _ = tracing (str ^ "(" ^ string_of_real elapsed ^ "): " ^ Syntax.string_of_term ctxt conjecture)
+          in res end
+      fun prove' ctxt args method conjecture timeOut =
   (conjecture
     |> Utils.apply_timeout1 (Time.fromSeconds timeOut)
-                           (fn conj => prove_from_method ctxt args method conj))
-      handle Utils.TIMEOUT1 _ => NONE
+                           (fn conj => prove_from_method ctxt args method conj
+                                        |> print_time "Time spent "))
+      handle Utils.TIMEOUT1 _ =>
+          let val _ = print_time "Timeout " ()
+          in NONE end
   in if can Local_Theory.target_of ctxt
      then let val ctxt = Local_Theory.target_of ctxt
           in prove' ctxt args method conjecture timeOut end

@@ -734,11 +734,12 @@ fun equational_theory_exploration3
                    |> Utils.sort_by_general thy
 (*                   |> tap (fn l => tracing ("Length: " ^ (string_of_int o length) l))
                    |> tap (tracing o Utils.str_of_terms ctxt)*)
-                   |> Seq.of_list
         end
   in typs |> filter_out (can (dest_funT))
+          |> maps get_terms
+          |> Utils.sort_by_general thy
+(*          |> Utils.subsumed_set thy*)
           |> Seq.of_list
-          |> Seq.maps get_terms
           |> discover_equations2 ctxt prems TRS tests typsub eq_class safe_rules filter_conj
           |> Seq.map (Logic.list_implies o pair prems) end
     handle TERM err => (tracing "TERM on equational_theory_exploration"; raise TERM err)

@@ -151,7 +151,7 @@ declare [[
   simp_before = false,
   max_time_in_counter_ex = 25,
   max_time_in_proof = 60,
-  max_time_in_inductive_proof = 3600,
+  max_time_in_inductive_proof = 7200,
   max_time_normalization = 5,
   max_lambda_size = 10,
   max_random_terms = 8,
@@ -336,5 +336,6 @@ val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
   val n = length polynomials
   val polynomials = DB_Counting_Terms.count_beta_eta_long @{context} 10 typ'
 *}*)
+  
   
 end

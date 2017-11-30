@@ -211,9 +211,9 @@ fun induct_auto_sledgehammer_failure_tac sts simps ctxt =
      (ind_auto_sledgehammer_failure sts ctxt) end
 
 fun induct_failure_provers_tac safe_rules sts simps ctxt =
-  Par_Tactical.PARALLEL_CHOICE
-        [induct_auto_failure_tac safe_rules sts simps ctxt,
-         induct_auto_sledgehammer_failure_tac sts simps ctxt]
+  (*Par_Tactical.PARALLEL_CHOICE*)
+  SOLVE (induct_auto_failure_tac safe_rules sts simps ctxt) ORELSE
+  SOLVE (induct_auto_sledgehammer_failure_tac sts simps ctxt)
 
 (*val method_setup_inductive_prover =
   Method.setup (Binding.name "induct_auto_failure_tac")
