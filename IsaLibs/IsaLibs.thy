@@ -175,7 +175,7 @@ declare [[
 
 ML {*
   () |> Options.default
-     |> Options.put_int @{system_option sledgehammer_timeout} 5
+     |> Options.put_int @{system_option sledgehammer_timeout} 6
      |> Options.set_default
 *}
 
@@ -336,6 +336,5 @@ val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
   val n = length polynomials
   val polynomials = DB_Counting_Terms.count_beta_eta_long @{context} 10 typ'
 *}*)
-  
   
 end

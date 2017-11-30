@@ -24,6 +24,8 @@ val (theory_exploration_conjectures, setup_theory_exploration_conjectures) = Att
 (*datatype result = Theorem of thm | Failure of term list*)
 datatype result = Theorem of thm * term list | Failure of term list * term list
 
+exception DONE of thm
+
 type conjecture_store =
   {sequence : (string * term) Seq.seq}
 
@@ -382,7 +384,9 @@ fun inductive_prover ctxt tactic timeOut prop =
             if prop |> Utils.normalise_term ctxt_nodefs (EQ_AC @ TRS)
                     |> (fn prop => prop = @{prop "True"})
             then SOME (Theorem (@{thm TrueI}, []))
-            else SOME (try_prove mlemmas simps prop)
+            else case try_prove mlemmas simps prop of
+                    Theorem (thm,_) => raise (DONE thm)
+                  | Failure x => SOME (Failure x)
             val prop' =
                   prop |> Object_Logic.rulify_term ctxt
                        |> Utils.normalise_term ctxt_nodefs (EQ_AC @ TRS)
@@ -425,14 +429,16 @@ fun inductive_prover ctxt tactic timeOut prop =
                                |> SOME
                          end
         in if check
-           then case Future.joins [Future.fork proved,
+           then case Exn.capture (fn () => case Future.joins [Future.fork proved,
                                    Future.fork (obtain (remove (op =) prop' subgoals'))] of
                   [SOME (Theorem _) , _] => NONE
                 | [SOME (Failure x) , NONE] => SOME (Failure x)
                 | [SOME (Failure (x,y)) , SOME (Failure (w,z))] => SOME (Failure (x@w, y@z))
                 | [SOME (Failure _) , SOME (Theorem x)] => SOME (Theorem x)
                 | [_, NONE] => NONE
-                | _ => raise ERROR "Impossible"
+                | _ => raise ERROR "Impossible") () of
+                Exn.Res a => a
+              | Exn.Exn _ => NONE
            else obtain subgoals' ()
         end handle TERM err => (tracing "next_subgoal"; raise TERM err)
       fun next_conjecture thy simps net store =
