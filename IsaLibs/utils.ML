@@ -25,6 +25,8 @@ sig
   val trace_log          : Path.T -> string -> unit
   val create_log         : Path.T -> unit
   val html_table         : string -> string list list -> string
+  val html_begin_document : string -> string
+  val html_end_document  : string
   val write_to_file      : string -> string -> unit
   val extract_filename   : string -> string
   val extract_filename'  : string -> string
@@ -89,7 +91,7 @@ sig
   val orient_rule        : theory -> order -> thm -> thm
   val orient_meta_rule   : theory -> order -> thm -> thm
   val swap_eq            : term -> term
-  val unify_inst         : Proof.context -> Envir.env -> ((indexname * sort) * ctyp) list * ((indexname * typ) * cterm) list
+  val unify_inst         : Proof.context -> Envir.env -> ctyp TVars.table * cterm Vars.table
   val permutative_eq     : term * term -> bool
   val permutative_rule           : thm -> bool
   val order_ints_raw             : term -> int list
@@ -172,52 +174,40 @@ structure DB_Utils
 
 val (max_time_normalization, setup_max_time_normalization) = Attrib.config_int @{binding "max_time_normalization"} (K 5)
 
-val num_processors = Thread.numProcessors ()
+val num_processors = Thread.Thread.numProcessors ()
 
 exception TIMEOUT1 of Time.time;
 exception TIMEOUT2 of Time.time;
 
-fun apply_timeout1 timeout f x =
+(* Like Timeout.apply_physical, but raising a caller-specific exception, so that
+   nested timeouts (TIMEOUT1 inside TIMEOUT2, etc.) can be told apart. *)
+fun apply_timeout' exn timeout f x =
   Thread_Attributes.with_attributes Thread_Attributes.no_interrupts (fn orig_atts =>
     let
-      val self = Thread.self ();
+      val self = Isabelle_Thread.self ();
       val start = Time.now ();
 
       val request =
-        Event_Timer.request (start + timeout)
-          (fn () => Standard_Thread.interrupt_unsynchronized self);
+        Event_Timer.request {physical = true} (start + timeout)
+          (fn () => Isabelle_Thread.interrupt_thread self);
       val result =
-        Exn.capture (fn () => Thread_Attributes.with_attributes orig_atts (fn _ => f x)) ();
+        Exn.capture_body (fn () => Thread_Attributes.with_attributes orig_atts (fn _ => f x));
 
       val stop = Time.now ();
       val was_timeout = not (Event_Timer.cancel request);
-      val test = Exn.capture Thread_Attributes.expose_interrupt ();
+      val test = Isabelle_Thread.expose_interrupt_result ();
     in
+      (* As in Isabelle2017, any interrupt after our timer fired counts as timeout:
+         Exn.is_interrupt_exn also covers Exn.Interrupt_Breakdown, which arises when a
+         thread receives a second interrupt (e.g. timer + future cancellation) after
+         the first one already consumed the "break" flag. *)
       if was_timeout andalso (Exn.is_interrupt_exn result orelse Exn.is_interrupt_exn test)
-      then raise TIMEOUT1 (stop - start)
+      then raise exn (stop - start)
       else (Exn.release test; Exn.release result)
     end);
 
-fun apply_timeout2 timeout f x =
-  Thread_Attributes.with_attributes Thread_Attributes.no_interrupts (fn orig_atts =>
-    let
-      val self = Thread.self ();
-      val start = Time.now ();
-
-      val request =
-        Event_Timer.request (start + timeout)
-          (fn () => Standard_Thread.interrupt_unsynchronized self);
-      val result =
-        Exn.capture (fn () => Thread_Attributes.with_attributes orig_atts (fn _ => f x)) ();
-
-      val stop = Time.now ();
-      val was_timeout = not (Event_Timer.cancel request);
-      val test = Exn.capture Thread_Attributes.expose_interrupt ();
-    in
-      if was_timeout andalso (Exn.is_interrupt_exn result orelse Exn.is_interrupt_exn test)
-      then raise TIMEOUT2 (stop - start)
-      else (Exn.release test; Exn.release result)
-    end);
+fun apply_timeout1 timeout f x = apply_timeout' TIMEOUT1 timeout f x
+fun apply_timeout2 timeout f x = apply_timeout' TIMEOUT2 timeout f x
 
 val to_string = @{make_string}
 
@@ -277,7 +267,7 @@ fun sort_poset rel s =
     |> sort (int_ord o apply2 fst)
 fun classify_poset rel s =
   let fun classify (s as (i, _) :: _) =
-            let val (sl, sr) = take_prefix (fn (i', _) => i = i') s
+            let val (sl, sr) = chop_prefix (fn (i', _) => i = i') s
             in case sl of
                       (_ :: _) => map snd sl :: classify sr
                     |    []    => classify sr
@@ -323,7 +313,7 @@ fun binder_vars bin vars (t $ a) =
 local
   fun dest_binder bin (Const (bin', _) $ Abs (a as (_,T,_))) =
       if bin = bin' then
-        let val (n, body) = Term.dest_abs a in
+        let val ((n, _), body) = Term.dest_abs_global (Abs a) in
           (Free (n, T), body) end
       else raise Match
     | dest_binder _ _ = raise Match
@@ -358,7 +348,7 @@ fun fold_subterms_no_loose f (t $ u) a =
       Library.foldl (fn (ps, term) => fold_subterms_no_loose f term ps) (f (t $ u) a ,arguments)
     end
   | fold_subterms_no_loose f (Abs (V, T, t)) a = 
-      let val t' = (snd o Term.dest_abs) (V, T, t)
+      let val t' = (snd o Term.dest_abs_global) (Abs (V, T, t))
       in fold_subterms_no_loose f t' (f (Abs (V, T, t)) a) end
   | fold_subterms_no_loose f t b = f t b
 
@@ -406,7 +396,7 @@ fun pattern_equiv thy (t1, t2) =
 
 fun pattern_equiv' thy (t1, t2) =
   let val t1' = Logic.varify_global t1
-      val t2' = Logic.incr_indexes ([], [], 1) (Logic.varify_global t2)
+      val t2' = Logic.incr_indexes ([], 1) (Logic.varify_global t2)
   in pattern_equiv thy (t1',t2') end
   handle TERM err => (tracing "pattern_equiv'"; raise TERM err)
 
@@ -424,7 +414,7 @@ fun make_term_set_by thy by tms =
 
 fun make_term_set' thy terms =
   terms |> map_index (fn (i, t) => t |> Logic.varify_global
-                                     |> Logic.incr_indexes ([], [], i))
+                                     |> Logic.incr_indexes ([], i))
         |> make_term_set thy
         |> map (Logic.unvarify_global o Term_Subst.zero_var_indexes)
         |> sort (int_ord o (apply2 size_of_term))
@@ -433,7 +423,7 @@ fun make_term_set' thy terms =
 fun make_term_set_by' thy by terms =
   terms |> map_index (fn (i, t) => (t, t |> by
                                          |> Logic.varify_global
-                                         |> Logic.incr_indexes ([], [], i)))
+                                         |> Logic.incr_indexes ([], i)))
         |> make_term_set_by thy snd
         |> map fst
         |> sort (int_ord o (apply2 size_of_term) o (apply2 by))
@@ -452,7 +442,7 @@ fun subterm_positions pos (t', t) =
   let val ty = type_of t'
   in case (t', t) of
       (Abs (n, T, s'), Abs (_, _, s)) =>
-        let val aa = (snd o Term.dest_abs) (n, T, s')
+        let val aa = (snd o Term.dest_abs_global) (Abs (n, T, s'))
         in (t', ty, rev pos) :: subterm_positions (0 :: pos) (aa, s)
         end
    | (p' $ q', p $ q) =>
@@ -510,11 +500,22 @@ fun string_of_term' ctxt t =
       val ctxt' = ctxt |> Config.put show_markup false
     in Print_Mode.setmp [] (Syntax.string_of_term ctxt') t end
 
+(* Latex.output_ascii as in Isabelle2017: since then, Isabelle appends
+   {\kern0pt} after every character, which bloats the generated reports. *)
+val latex_output_ascii =
+  translate_string
+    (fn " " => "\\ "
+      | "\t" => "\\ "
+      | "\n" => "\\isanewline\n"
+      | s =>
+          if member_string "\"#$%&',-<>\\^_`{}~" s
+          then enclose "{\\char`\\" "}" s else s)
+
 fun latex_string_of_term ctxt t =
     let
       val ctxt' = ctxt |> Config.put show_markup false
                        |> Config.put show_question_marks false
-    in Print_Mode.setmp ["Latex"] (Latex.output_ascii o Syntax.string_of_term ctxt') t end
+    in Print_Mode.setmp ["Latex"] (latex_output_ascii o Syntax.string_of_term ctxt') t end
 
 fun latex_str_of_thms thms =
   let fun to_str thm =
@@ -554,6 +555,26 @@ fun html_table id content =
                |> enclose ("<table id=\"" ^ id ^ "\" border=\"1\">") "</table>"
 (*               |> enclose "<table border=\"1\" style=\"width:100%\">" "</table>"*)
     end
+
+(* Replacement for the former Pure HTML.begin_document / HTML.end_document,
+   which are no longer part of Isabelle/ML. *)
+fun html_begin_document title =
+  let val title' = XML.text title
+  in
+    "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n" ^
+    "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" " ^
+    "\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n" ^
+    "<html xmlns=\"http://www.w3.org/1999/xhtml\">\n" ^
+    "<head>\n" ^
+    "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>\n" ^
+    "<title>" ^ title' ^ " (" ^ Isabelle_System.isabelle_name () ^ ")</title>\n" ^
+    "<link media=\"all\" rel=\"stylesheet\" type=\"text/css\" href=\"isabelle.css\"/>\n" ^
+    "</head>\n\n" ^
+    "<body>\n" ^
+    "<div class=\"head\"><h1>" ^ title' ^ "</h1>\n"
+  end
+
+val html_end_document = "</div>\n</body>\n</html>\n"
 
 fun write_to_file filename str =
     let val path = Path.explode filename
@@ -847,7 +868,7 @@ fun unify_inst ctxt env =
                        |> Vartab.dest
                        |> map (prep_ty ctxt env)
     in
-      (ctyenv,ctenv)
+      (TVars.make ctyenv, Vars.make ctenv)
     end
 end
 
@@ -908,10 +929,10 @@ fun rhs_is_trivial (_, rhs) =
     is_equal (Term_Ord.term_ord (@{const "True"}, rhs))
 
 fun normalise_term ctxt simps term =
-  let val ctxt = ctxt addsimps simps
+  let val ctxt = Simplifier.add_simps simps ctxt
       val timeOut = Config.get ctxt max_time_normalization
                (*ctxt |> Context.Proof
-                      |> Simplifier.map_ss (fn simpset => simpset addsimps simps)
+                      |> Simplifier.map_simpset (Simplifier.add_simps simps)
                       |> Context.the_proof*)
   in
   Timeout.apply (Time.fromSeconds timeOut)
@@ -1612,7 +1633,7 @@ fun sort_by_general thy terms =
         | _ => (list_ord int_ord o apply2 order_ints_raw) (s,t)
 (*        | _ => (int_ord o (apply2 size_of_term)) (s, t)*)
   in terms |> map_index (fn (i, t) => t |> (fn t => the_default t (try Logic.varify_global t))
-                                        |> Logic.incr_indexes ([], [], i))
+                                        |> Logic.incr_indexes ([], i))
            |> sort ord
            |> map (Logic.unvarify_global o Term_Subst.zero_var_indexes)
   end handle TERM err => (tracing "sort_by_general"; raise TERM err)
@@ -1626,7 +1647,7 @@ fun sort_by_general' thy by terms =
 (*        | _ => (int_ord o (apply2 size_of_term)) (s, t)*)
   in terms |> map_index (fn (i, t) => (t, t |> by
                                             |> (fn t => the_default t (try Logic.varify_global t))
-                                            |> Logic.incr_indexes ([], [], i)))
+                                            |> Logic.incr_indexes ([], i)))
            |> sort (ord o apply2 snd)
            |> map fst
   end handle TERM err => (tracing "sort_by_general'"; raise TERM err)
@@ -1740,9 +1761,9 @@ in
 fun print_ss ctxt =
 let
   val ss = simpset_of ctxt
-  val {simps, congs, procs, ...} = Raw_Simplifier.dest_ss ss
+  val {simps, congs, simprocs = procs, ...} = Raw_Simplifier.dest_ss ss
   fun name_sthm (nm, thm) =
-    Pretty.enclose (nm ^ ": ") "" [pretty_thm_no_vars ctxt thm]
+    Pretty.enclose (Thm_Name.print nm ^ ": ") "" [pretty_thm_no_vars ctxt thm]
   fun name_cthm ((_, nm), thm) =
     Pretty.enclose (nm ^ ": ") "" [pretty_thm_no_vars ctxt thm]
   fun name_ctrm (nm, ctrm) =
@@ -1760,8 +1781,8 @@ end
 fun rules_in_simpset ts =
     let val const_names = Library.foldl (fn (ns, t) => Term.add_const_names t ns) ([], ts)
         val set = Str_Tab.make_set const_names
-        val simps = (dest_ss (simpset_of @{context}))
-                      |> (map snd) o #simps
+        val simps = (Raw_Simplifier.dest_simps (simpset_of @{context}))
+                      |> map snd
     in simps
          |> filter (fn thm => thm |> Thm.concl_of
                                   |> fst o Logic.dest_equals
@@ -1788,7 +1809,7 @@ fun unsupported_rule th =
 (* Antiquotation parsing metavariables *)
 val typ_pat_setup = 
     let
-      val parser = Args.context -- Scan.lift Args.embedded_inner_syntax
+      val parser = Args.context -- Scan.lift Parse.embedded_inner_syntax
       fun typ_pat (ctxt, str) = 
         let val ctxt' = Proof_Context.set_mode Proof_Context.mode_schematic ctxt
         in str |> Syntax.read_typ ctxt'
@@ -1803,7 +1824,7 @@ val _ = Context.>> (Context.map_theory typ_pat_setup)
 
 val term_pat_setup =
 let
-  val parser = Args.context -- Scan.lift Args.embedded_inner_syntax
+  val parser = Args.context -- Scan.lift Parse.embedded_inner_syntax
   fun term_pat (ctxt, str) =
      str |> Proof_Context.read_term_pattern ctxt
          |> ML_Syntax.print_term

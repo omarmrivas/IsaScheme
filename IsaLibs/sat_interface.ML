@@ -111,7 +111,7 @@ fun ord_to_sat_prop _ [] = @{term "True"}
       |> snd
 
 fun make_less v v' =
-  (@{term "op < :: nat \<Rightarrow> nat \<Rightarrow> bool"} $ Free (v,@{typ "nat"})) $ Free (v',@{typ "nat"})
+  (@{term "(<) :: nat \<Rightarrow> nat \<Rightarrow> bool"} $ Free (v,@{typ "nat"})) $ Free (v',@{typ "nat"})
 
 fun ord_to_term [] = @{term "True"}
   | ord_to_term (ord :: orders) =

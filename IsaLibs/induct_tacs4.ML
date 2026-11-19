@@ -147,7 +147,7 @@ fun bef_induct_auto_tac set ctxt =
 fun bef_induct_auto_tac' set ctxt =
   ALLGOALS (SUBGOAL (fn (goal, i) =>
     let val ctxt = goal |> global_simps ctxt
-                        |> (fn thms => ctxt addsimps thms)
+                        |> (fn thms => Simplifier.add_simps thms ctxt)
     in
     ASTAR (theorem_proved,theorem_heuristic) (induct_auto_tac set ctxt i) 
     end))

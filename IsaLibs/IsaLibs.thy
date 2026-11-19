@@ -1,19 +1,19 @@
 theory IsaLibs
 (*imports Complex_Main*)
-imports "~~/src/HOL/TPTP/THF_Arith" "~~/src/HOL/Nunchaku/Nunchaku"
+imports "HOL-TPTP.THF_Arith"
 keywords (*"rec_complete" :: thy_decl and*)
          "complete" :: thy_goal and
          "orient_rules" :: thy_decl and
          "schematic_lemma" :: thy_decl
 begin
   
-ML {*
+ML \<open>
   structure PropSchemes = Named_Thms
   (val name = @{binding "prop_scheme"}
    val description = "Propositional Schemes")
-*}
+\<close>
   
-text {* A datatype for dummy free types *}
+text \<open> A datatype for dummy free types \<close>
 datatype two = A | B
   
 instantiation two :: linorder
@@ -58,7 +58,6 @@ text \<open> Invert binary operators? \<close>
 definition invert_bin where
   "invert_bin bin x y = bin y x"
   
-ML_file "$ISABELLE_HOME/src/HOL/TPTP/sledgehammer_tactics.ML"
 (*ML_file "html.ML"*)
 ML_file "const_names.ML"
 ML_file "tables.ML"
@@ -93,11 +92,11 @@ ML_file "papers/ml_database.ML"
 ML_file "papers/ESWA2016.ML"
 ML_file "papers/rectilinear_crossing.ML"
 
-section {* Theorem Attributes *}
+section \<open> Theorem Attributes \<close>
   
 attribute_setup prop_scheme = 
-  {* Attrib.add_del (Thm.declaration_attribute PropSchemes.add_thm) 
-                    (Thm.declaration_attribute PropSchemes.del_thm) *}
+  \<open> Attrib.add_del (Thm.declaration_attribute PropSchemes.add_thm) 
+                    (Thm.declaration_attribute PropSchemes.del_thm) \<close>
   "maintaining a list of proppositional schemes"
   
 (*lemma eval_Suc_nat [code_post]:
@@ -113,7 +112,7 @@ value [code] "Suc 42"
 value [nbe] "Suc 42"
 value [simp] "Suc 42"*)
 
-setup {*
+setup \<open>
 DB_Counter_Example.setup_use_quickcheck #>
 DB_Counter_Example.setup_use_nitpick #>
 DB_Counter_Example.setup_simp_before #>
@@ -142,7 +141,7 @@ DB_Completion.setup_generate_cps #>
 DB_GP.setup_max_time_in_fitness #>
 
 Completion_Rules.setup
-*}
+\<close>
 
 declare [[
   quick_and_dirty = true,
@@ -173,14 +172,12 @@ declare [[
   eta_contract = false
   ]]
 
-ML {*
-  () |> Options.default
-     |> Options.put_int @{system_option sledgehammer_timeout} 6
-     |> Options.set_default
-*}
+ML \<open>
+  Options.update_process_default [Options.spec @{system_option sledgehammer_timeout} "6"]
+\<close>
 
-text {* Associative operators must be oriented this way to avoid non-termination
-        in case they are also Commutative operators. *}
+text \<open> Associative operators must be oriented this way to avoid non-termination
+        in case they are also Commutative operators. \<close>
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?x (?X ?y ?z)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?x (?X ?z ?y)"
 orient_rules "?X (?X (?x :: ?'a) (?y :: ?'a)) (?z :: ?'a) = ?X ?y (?X ?x ?z)"
@@ -248,11 +245,11 @@ definition absorption_right where
   [prop_scheme]: "absorption_right f \<equiv> \<forall>x y z. ((f x y = y) \<longrightarrow> (f x (f y z) = f y z))"*)
   
   
-ML {*
+ML \<open>
 (*  val p1 = Multithreading.max_threads_value ()*)
-  val p2 = Thread.numProcessors ()
-  val _ = Future.ML_statistics := false
-*}
+  val p2 = Thread.Thread.numProcessors ()
+  (* Future.ML_statistics no longer exists: ML statistics are managed by Isabelle/Scala *)
+\<close>
  
 (*
 /Users/omarmrivas/Programs/tip-org-benchmarks/benchmarks/tip2015/list_Interleave.smt2 - list_Interleave.thy 
@@ -328,13 +325,13 @@ ML {*
 val it = [(), (), (), (), (), (), (), (), (), (), ...]: unit list
 *)
   
-(*ML {*
+(*ML \<open>
   val typ = @{typ "('B\<Rightarrow>'C\<Rightarrow>'C)\<Rightarrow>'C\<Rightarrow>'C \<Rightarrow>('B\<Rightarrow>'C\<Rightarrow>'B)\<Rightarrow>('C\<Rightarrow>'C\<Rightarrow>'A)\<Rightarrow>('A\<Rightarrow>'B\<Rightarrow>'A)\<Rightarrow>'A"}
   val typ' = @{typ "((('A\<Rightarrow>('B\<Rightarrow>'N)\<Rightarrow>'N)\<Rightarrow>('A\<Rightarrow>'N))\<Rightarrow>'N)\<Rightarrow>('A\<Rightarrow>'N)\<Rightarrow>'N"}
   val c1 = Random_Terms.count_lambda_terms typ' 13
   val polynomials = DB_Counting_Terms.polynomials @{context} typ'
   val n = length polynomials
   val polynomials = DB_Counting_Terms.count_beta_eta_long @{context} 10 typ'
-*}*)
+\<close>*)
   
 end

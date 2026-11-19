@@ -10,10 +10,18 @@ FILE1=`echo ${FILE%.*}`
 LOGIC=`echo ${FILE1##*/}`
 
 # LOGIC=`echo ${FILE%.*}`
-TARGET="HOL"
+# Parent session: the logic imported by the theory (e.g. IsaLibs)
+TARGET="$INCLUDE_FROM"
 # CDIR=`pwd`
 
 DIR=$(dirname "$FILE")
+
+# Directory holding the ROOT file of the parent session; INCLUDE_TO is the path
+# of the parent theory relative to the copied theory (e.g. ../../../IsaLibs/IsaLibs)
+case "$INCLUDE_TO" in
+  /*) INCLUDE_DIR="$(dirname "$INCLUDE_TO")" ;;
+  *)  INCLUDE_DIR="$DIR/$LOGIC/$(dirname "$INCLUDE_TO")" ;;
+esac
 
 ROOTFILE=$DIR/$LOGIC/ROOT
 
@@ -35,15 +43,17 @@ echo $ROOTFILE
 
 cp $FILE $DIR/$LOGIC
 
-sed -i '.bak' "s|imports $INCLUDE_FROM|imports \"$INCLUDE_TO\"|g" $DIR/$LOGIC/$LOGIC".thy"
+# Isabelle2026: the theory keeps "imports IsaLibs" (a global theory of the
+# parent session) instead of importing IsaLibs.thy by path.
+#sed -i.bak "s|imports $INCLUDE_FROM|imports \"$INCLUDE_TO\"|g" $DIR/$LOGIC/$LOGIC".thy"
 
 #isabelle build -c -v -D $DIR/$LOGIC
-isabelle build -c -v -j 0 -o browser_info -D $DIR/$LOGIC
+isabelle build -c -v -o browser_info -d "$INCLUDE_DIR" -D $DIR/$LOGIC
 
 echo "Copy browser info"
 mkdir -p $DIR/$LOGIC/Browser
 
-BROWSER_PATH=`isabelle getenv -b ISABELLE_HOME_USER`"/browser_info/Unsorted/$LOGIC"
+BROWSER_PATH=`isabelle getenv -b ISABELLE_BROWSER_INFO`"/Unsorted/$LOGIC"
 cp $BROWSER_PATH/*.* $DIR/$LOGIC/Browser
 
 #isabelle build -c -n -D $DIR/$LOGIC

@@ -200,7 +200,7 @@ fun ind_auto_sledgehammer_failure sts ctxt =
 
 fun induct_auto_failure_tac safe_rules sts (simps : thm list) ctxt =
   let val safes = safe_rules simps
-      val ctxt = ctxt addsimps safes
+      val ctxt = Simplifier.add_simps safes ctxt
   in (*IF_UNSOLVED (TRY (auto_tac ctxt)) THEN*)
      (ind_auto_failure sts simps ctxt)
   end

@@ -31,10 +31,13 @@ val (max_time_in_proof, setup_max_time_in_proof) = Attrib.config_int @{binding "
 
 val method_setup =
     Method.setup (Binding.name "spass_auto")
-                 (Scan.succeed (fn ctxt => 
-                                   SIMPLE_METHOD (Sledgehammer_Tactics.sledgehammer_with_metis_tac
+                 (Scan.succeed (fn ctxt =>
+                                   (* SUBGOAL: Isar also runs methods on a goal-less dummy state,
+                                      where sledgehammer_with_metis_tac raises an error *)
+                                   SIMPLE_METHOD (SUBGOAL (fn (_, i) =>
+                                                  Sledgehammer_Tactics.sledgehammer_with_metis_tac
                                                     ctxt [("timeout",Int.toString (Config.get ctxt max_time_in_proof))]
-                                                    Sledgehammer_Fact.no_fact_override [] 1)))
+                                                    Sledgehammer_Fact.no_fact_override [] i) 1)))
                  "interleave spass and ..."
 
 val _ = Context.>> (Context.map_theory method_setup)
@@ -61,15 +64,15 @@ fun parse_schematic_goal ctxt = Utils.parse ctxt (long_statement || short_statem
 
 fun prove_from_method ctxt0 (SOME simps) method conjecture =
   let (* for rewriting methods *)
-      val ctxt = ctxt0 addsimps simps
+      val ctxt = Simplifier.add_simps simps ctxt0
       (* for non-rewriting methods *)
       (* FIXME: for some reason this is not perceived by sledgehammer *)
 (*      val (_, ctxt) = Proof_Context.note_thmss "" [((Binding.empty,[]), [(simps,[])])] ctxt*)
       (*val ctxt = ctxt0 |> Context.Proof
-                       |> Simplifier.map_ss (fn simpset => simpset addsimps simps)
+                       |> Simplifier.map_simpset (Simplifier.add_simps simps)
                        |> Context.the_proof*)
 (*                       |> tap (fn _ => tracing ("Using: " ^ Utils.str_of_thms simps))*)
-(*      val ctxt = put_simpset HOL_basic_ss ctxt0 addsimps simps*)
+(*      val ctxt = Simplifier.add_simps simps (put_simpset HOL_basic_ss ctxt0)*)
   in prove_from_method ctxt NONE method conjecture end
 | prove_from_method ctxt0 NONE method conjecture =
   let val frees = [] |> Term.add_frees conjecture |> map fst
@@ -89,7 +92,7 @@ fun prove_from_method ctxt0 (SOME simps) method conjecture =
                   if 0 = Thm.nprems_of goal 
                   then goal |> Goal.finish ctxt
 (*                               |> Thm.check_shyps (Variable.sorts_of ctxt)*)
-                            |> Assumption.export false ctxt ctxt0
+                            |> Assumption.export ctxt ctxt0
                             |> single
                             |> Variable.export ctxt ctxt0
                             |> hd
@@ -100,7 +103,7 @@ fun prove_from_method ctxt0 (SOME simps) method conjecture =
       end
 
 fun prove_schematic_from_method ctxt0 (SOME simps) method conjecture =
-  let val ctxt = ctxt0 addsimps simps
+  let val ctxt = Simplifier.add_simps simps ctxt0
   in prove_schematic_from_method ctxt NONE method conjecture end
 | prove_schematic_from_method ctxt0 NONE method conjecture =
   let val (long, binding, includes, elems, concl) = 
@@ -116,7 +119,7 @@ fun prove_schematic_from_method ctxt0 (SOME simps) method conjecture =
         | dest_conjecture _ = NONE
   in Utils.safe_eval "" NONE
      (fn ctxt0 =>
-      ctxt0|> Specification.schematic_theorem_cmd long Thm.theoremK NONE (K I) binding includes elems concl false
+      ctxt0|> Specification.schematic_theorem_cmd {verbose = false, long = long, kind = Thm.theoremK} NONE (K I) binding includes elems concl
            |> Proof.apply method
            |> (Seq.hd o Seq.filter_results)
            |> `Proof.goal

@@ -135,19 +135,19 @@ fun mk_subst vars trms =
        |> (fn r => ([], r))
 
 fun prepare (data : gp_data) ((typs, terms) : subst) =
-  (map (fn (ty, ty') => (dest_TVar ty, Thm.ctyp_of (#ctxt data) ty')) typs,
-   map (fn (t, t') => (dest_Var t, Thm.cterm_of (#ctxt data) t')) terms)
+  (TVars.make (map (fn (ty, ty') => (dest_TVar ty, Thm.ctyp_of (#ctxt data) ty')) typs),
+   Vars.make (map (fn (t, t') => (dest_Var t, Thm.cterm_of (#ctxt data) t')) terms))
     |> (fn csubst => Drule.instantiate_normalize csubst (#scheme data))
 (*    |> tap (tracing o Utils.str_of_thms o single)*)
     |> (fn thm => if (#empty_simpset data)
-                  then let val clear_ctxt = (clear_simpset (#ctxt data)) addsimps (#simps data)
+                  then let val clear_ctxt = Simplifier.add_simps (#simps data) (Simplifier.clear_simpset (#ctxt data))
                            val timeOut = Config.get clear_ctxt Utils.max_time_normalization
                        in Timeout.apply 
                                   (Time.fromSeconds timeOut)
                                   (simplify clear_ctxt)
                                   thm
                        end
-                  else let val ctxt = (#ctxt data) addsimps (#simps data)
+                  else let val ctxt = Simplifier.add_simps (#simps data) (#ctxt data)
                            val timeOut = Config.get ctxt Utils.max_time_normalization
                        in Timeout.apply 
                                   (Time.fromSeconds timeOut)
@@ -158,8 +158,8 @@ fun prepare (data : gp_data) ((typs, terms) : subst) =
     |> snd o Logic.dest_equals o Thm.full_prop_of
 
 fun prepare_closure (data : gp_data) simp ((typs, terms) : subst) =
-  (map (fn (ty, ty') => (dest_TVar ty, Thm.ctyp_of (#ctxt data) ty')) typs,
-   map (fn (t, t') => (dest_Var t, Thm.cterm_of (#ctxt data) t')) terms)
+  (TVars.make (map (fn (ty, ty') => (dest_TVar ty, Thm.ctyp_of (#ctxt data) ty')) typs),
+   Vars.make (map (fn (t, t') => (dest_Var t, Thm.cterm_of (#ctxt data) t')) terms))
     |> (fn csubst => Drule.instantiate_normalize csubst simp)
     |> Thm.full_prop_of
     |> HOLogic.dest_Trueprop
@@ -169,8 +169,8 @@ fun prepare_closure (data : gp_data) simp ((typs, terms) : subst) =
     |> list_comb
 
 fun count_rcalls (data : gp_data) f simp ((typs, terms) : subst) =
-  (map (fn (ty, ty') => (dest_TVar ty, Thm.ctyp_of (#ctxt data) ty')) typs,
-   map (fn (t, t') => (dest_Var t, Thm.cterm_of (#ctxt data) t')) terms)
+  (TVars.make (map (fn (ty, ty') => (dest_TVar ty, Thm.ctyp_of (#ctxt data) ty')) typs),
+   Vars.make (map (fn (t, t') => (dest_Var t, Thm.cterm_of (#ctxt data) t')) terms))
     |> (fn csubst => Drule.instantiate_normalize csubst simp)
     |> Thm.full_prop_of
     |> HOLogic.dest_Trueprop
@@ -204,7 +204,7 @@ val fun_config =
 fun mutual_function lthy (names,eqns) =
     let val naming = map (fn x => ((Binding.qualified_name x), NONE, NoSyn)) names
     in
-      Function_Fun.add_fun naming
+      Function_Fun.add_fun {verbose = false} naming
                            (map (fn t => (((Binding.empty, []), t),[],[])) eqns)
                            fun_config
                            lthy
@@ -229,7 +229,7 @@ fun defining_equations scheme =
 fun fname_of ctxt = 
   let val thy = Proof_Context.theory_of ctxt
   in
-    (fn (name, typ) => (Context.theory_name thy ^ "." ^ name, typ)) o dest_Free o fst o strip_comb o fst o HOLogic.dest_eq o
+    (fn (name, typ) => (Context.theory_base_name thy ^ "." ^ name, typ)) o dest_Free o fst o strip_comb o fst o HOLogic.dest_eq o
     HOLogic.dest_Trueprop o Logic.strip_imp_concl o snd o Function_Lib.dest_all_all
   end
 
@@ -301,12 +301,13 @@ fun initial_population (data : gp_data) =
              val rat = if calls_ok closures trms
                        then let (*val time = Date.toString (Date.fromTimeLocal (Time.now ()))
                                 val _ = tracing (time ^ " (ok) " ^ Syntax.string_of_term ctxt i)*)
-                            in (SOME (Timeout.apply (#timeout data) ((#fitness data) ctxt) closures)
-                                  handle Timeout.TIMEOUT _ => (tracing ("Timeout in: " ^ Utils.str_of_terms ctxt trms);
-                                                               NONE)
-                                        | unknown => (tracing ("Unknown error(genome): " ^ Utils.str_of_terms ctxt trms);
-                                                      tracing ("Unknown error(norm): " ^ Utils.string_of_term ctxt i);
-                                                      raise unknown)) end
+                            in Isabelle_Thread.try_catch
+                                  (fn () => SOME (Timeout.apply (#timeout data) ((#fitness data) ctxt) closures)
+                                    handle Timeout.TIMEOUT _ => (tracing ("Timeout in: " ^ Utils.str_of_terms ctxt trms);
+                                                                 NONE))
+                                  (fn unknown => (tracing ("Unknown error(genome): " ^ Utils.str_of_terms ctxt trms);
+                                                  tracing ("Unknown error(norm): " ^ Utils.string_of_term ctxt i);
+                                                  Exn.reraise unknown)) end
                        else let (*val time = Date.toString (Date.fromTimeLocal (Time.now ()))
                                 val _ = tracing (time ^ " (bad) " ^ Syntax.string_of_term ctxt i)*)
                             in NONE end
@@ -649,12 +650,13 @@ fun next_generation (data : gp_data)
                           val rat = if calls_ok closures trms
                                     then let (*val time = Date.toString (Date.fromTimeLocal (Time.now ()))
                                              val _ = tracing (time ^ " (ok) " ^ Syntax.string_of_term ctxt i')*)
-                                         in (Timeout.apply (#timeout data) ((#fitness data) ctxt) closures
-                                           handle Timeout.TIMEOUT _ => (tracing ("Timeout in: " ^ Utils.str_of_terms ctxt trms);
-                                                                        (#bad_fitness data))
-                                                | unknown => (tracing ("Unknown error(genome): " ^ Utils.str_of_terms ctxt trms);
+                                         in Isabelle_Thread.try_catch
+                                              (fn () => Timeout.apply (#timeout data) ((#fitness data) ctxt) closures
+                                                handle Timeout.TIMEOUT _ => (tracing ("Timeout in: " ^ Utils.str_of_terms ctxt trms);
+                                                                             (#bad_fitness data)))
+                                              (fn unknown => (tracing ("Unknown error(genome): " ^ Utils.str_of_terms ctxt trms);
                                                               tracing ("Unknown error(norm): " ^ Utils.string_of_term ctxt i');
-                                                              raise unknown))
+                                                              Exn.reraise unknown))
                                               |> SOME end
 (*                                         in (#fitness data) ctxt closures end*)
                                     else let (*val time = Date.toString (Date.fromTimeLocal (Time.now ()))

@@ -21,6 +21,6 @@ cd $DIR
 
 # Calling the isabelle process
 # timeout -t 120 isabelle_process -e "use_thy \"$THEORY\";" -q -r $LOGIC
-# isabelle process -T nat_acc_plus_same -d /Users/omarmrivas/Programs/IsaLibs/IsaLibs -l IsaLibs
+# isabelle process_theories -O -d /Users/omarmrivas/Programs/IsaLibs/IsaLibs -l IsaLibs -f nat_acc_plus_same.thy
 
-isabelle process -T $THEORY -d $LOGIC_DIR -l $LOGIC
+isabelle process_theories -O -d "$LOGIC_DIR" -l "$LOGIC" -f "$THEORY.thy"

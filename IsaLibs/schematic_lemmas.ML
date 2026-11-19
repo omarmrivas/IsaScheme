@@ -15,7 +15,7 @@ structure DB_Schematic_Lemmas
 (* : SCHEMATIC_LEMMAS *)
 = struct
 
-val parser = Args.embedded_inner_syntax
+val parser = Parse.embedded_inner_syntax
 
 fun memoized_rules rule =
   Utils.memoize_function Term_Tab.lookup Term_Tab.update I Utils.schematic_lemmas_var

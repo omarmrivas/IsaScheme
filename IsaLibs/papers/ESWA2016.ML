@@ -18,17 +18,17 @@ structure DB_ESWA2016
 fun write_simpset () = 
   let
   val simps = Utils.rules_in_simpset
-    [@{term "op +"}, @{term "if x then y else z"}, @{term "[]"},
-     @{term "hd"}, @{term "tl"}, @{term "Suc"}, @{term "op #"}, @{term "op -"}]
+    [@{term "(+)"}, @{term "if x then y else z"}, @{term "[]"},
+     @{term "hd"}, @{term "tl"}, @{term "Suc"}, @{term "(#)"}, @{term "(-)"}]
   val l = length simps
   val content = simps |> map ((Utils.latex_string_of_term @{context}) o (Thm.full_prop_of))
                       |> distinct (op =)
                       |> map single
                       |> map_index (fn (i,e) => string_of_int i :: e)
   val table = Utils.html_table "" (["<b>No.</b>", "<b>Rule</b>"] :: content)
-  val begin = HTML.begin_document HTML.no_symbols "Rewrite Rules"
-  val ed = HTML.end_document
-  val _ = Utils.write_to_file "rewrite_set.html" (begin ^ table ^ ed)
+  val begin = Utils.html_begin_document "Rewrite Rules"
+  val ed = Utils.html_end_document
+  val _ = Utils.write_to_file @{verbatim "rewrite_set.html"} (begin ^ table ^ ed)
   in () end
 
   fun extract_filename str =
@@ -137,7 +137,7 @@ fun write_simpset () =
   then
   let 
       val _ = clean_processes PID
-      val _ = OS.Process.sleep (seconds 5.0)
+      val _ = Time.sleep (seconds 5.0)
   in clean_loop PID () end
   else ()
 
@@ -152,10 +152,10 @@ fun doit () =
   val thy = "IsaLibs"
   val prover = "induct_auto_dep_first"
   fun check foo = if foo then "&#x2713;" else "&#x2717;"
-  val params = ({name="clener", stack_limit=NONE, interrupts=false} : Standard_Thread.params)
+  val params = Isabelle_Thread.params "clener"
   val PID = 27820
-  val thread = Standard_Thread.fork params (clean_loop PID)
-  val _ = tracing ("Is active: " ^ (if Thread.isActive thread then "yes" else "no"))
+  val thread = Isabelle_Thread.fork params (clean_loop PID)
+  val _ = tracing ("Is active: " ^ (if Isabelle_Thread.is_active thread then "yes" else "no"))
   val results = smt_files |> map_index I
                           |> Par_List.map (fn (i, file) => (Utils.trace_log ps_log (string_of_int i ^ ": " ^ file); (i, proof_call_thy file thy prover)))
                           |> map_filter (fn (i, (x, y, goal, z)) => if goal = "BAD" then NONE else SOME (i, (x, y, goal, z)))
@@ -184,12 +184,12 @@ fun doit () =
                          string_of_real average_cpu_time_proved ^ "s", 
                          string_of_real average_cpu_time_not_proved ^ "s"]]
   val table_header = Utils.html_table "statistics" header_content
-  val begin = HTML.begin_document HTML.no_symbols ("Results for " ^ prover)
-  val ed = HTML.end_document
+  val begin = Utils.html_begin_document ("Results for " ^ prover)
+  val ed = Utils.html_end_document
   val _ = Utils.write_to_file ("experiments/inductive_proofs/Isabelle2016/" ^ prover ^ ".html") (begin ^ table_header ^ table ^ ed)
-  val _ = OS.Process.sleep (seconds 6.0)
+  val _ = Time.sleep (seconds 6.0)
   val _ = Synchronized.change process_ref (fn _ => true)
-  val _ = Standard_Thread.join thread
+  val _ = Isabelle_Thread.join thread
   in () end
 
 end

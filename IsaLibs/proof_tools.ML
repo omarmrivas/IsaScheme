@@ -342,8 +342,8 @@ fun inductive_prover ctxt tactic timeOut prop =
       val def_lemmas = Utils.get_definitional_rewrites thy prop
       val _ = tracing "Done"
       val lemmas_ref = Unsynchronized.ref def_lemmas
-      val lthy_nodefs = ctxt delsimps def_lemmas
-      val ctxt_nodefs = (Local_Theory.target_of ctxt) delsimps def_lemmas
+      val lthy_nodefs = Simplifier.del_simps def_lemmas ctxt
+      val ctxt_nodefs = Simplifier.del_simps def_lemmas (Local_Theory.target_of ctxt)
       val _ = tracing "Latex Goal: "
       val _ = tracing (Utils.latex_string_of_term ctxt prop)
       val _ = tracing "Goal: "
@@ -646,13 +646,13 @@ fun inductive_prover_tactic' ctxt =
           in eqs @ rules end
     in
     case inductive_prover ctxt (Inductive_Tacs.induct_auto_failure_tac safe_rules) (Config.get ctxt Prover.max_time_in_proof) goal of
-(*      (ctxt,SOME simps) => (tracing "Proved original goal!"; DB_Inductive_Tacs.final_sledgehammer_tac (ctxt addsimps simps) simps i)*)
+(*      (ctxt,SOME simps) => (tracing "Proved original goal!"; DB_Inductive_Tacs.final_sledgehammer_tac (Simplifier.add_simps simps ctxt) simps i)*)
       (ctxt,SOME simps) => (tracing "Proved original goal!";
               let (*val terminates = Aprove.memoized_terminates ctxt
                   val (equations, rules) = simps |> filter (not o Utils.has_meta_forall)
                                                  |> map Utils.obj_to_meta
                                                  |> DB_Conditional_Completion.memoized_discriminate_rules ctxt terminates
-                  val ctxt = ctxt addsimps (equations @ rules)*)
+                  val ctxt = Simplifier.add_simps (equations @ rules) ctxt*)
               in Inductive_Tacs.induct_auto_failure_tac safe_rules
                                             (Unsynchronized.ref Net.empty)
                                             simps ctxt end)
@@ -662,7 +662,7 @@ fun inductive_prover_tactic' ctxt =
 fun inductive_prover_sledgehammer_tactic' ctxt =
   fn (goal, i) =>
     case inductive_prover ctxt Inductive_Tacs.induct_auto_sledgehammer_failure_tac (Config.get ctxt Prover.max_time_in_proof) goal of
-(*      (ctxt,SOME simps) => (tracing "Proved original goal!"; simp_tac (ctxt addsimps simps) i)*)
+(*      (ctxt,SOME simps) => (tracing "Proved original goal!"; simp_tac (Simplifier.add_simps simps ctxt) i)*)
       (ctxt,SOME simps) => (tracing "Proved original goal!";
               Inductive_Tacs.induct_auto_sledgehammer_failure_tac
                                             (Unsynchronized.ref Net.empty)
@@ -684,7 +684,7 @@ fun inductive_provers_tactic' ctxt =
                   val (equations, rules) = simps |> filter (not o Utils.has_meta_forall)
                                                  |> map Utils.obj_to_meta
                                                  |> DB_Conditional_Completion.memoized_discriminate_rules ctxt terminates
-                  val ctxt = ctxt addsimps (equations @ rules)*)
+                  val ctxt = Simplifier.add_simps (equations @ rules) ctxt*)
               in Inductive_Tacs.induct_failure_provers_tac safe_rules
                                             (Unsynchronized.ref Net.empty)
                                             simps ctxt end)

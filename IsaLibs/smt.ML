@@ -591,9 +591,9 @@ fun check_fun str =
 
 fun test_thy thy_file import import_dir prover =
     (" ./proof_call_thy " ^ thy_file ^ " " ^ import ^ " " ^ import_dir ^ " 2>&1")
-      |> tap (fn _ => Isabelle_System.bash_output ("sed -i '.bak' \"s/" ^ prover ^ "/oops/g\" " ^ thy_file))
+      |> tap (fn _ => Isabelle_System.bash_output ("sed -i.bak \"s/" ^ prover ^ "/oops/g\" " ^ thy_file))
       |> Isabelle_System.bash_output
-      |> tap (fn _ => Isabelle_System.bash_output ("sed -i '.bak' \"s/oops/" ^ prover ^ "/g\" " ^ thy_file))
+      |> tap (fn _ => Isabelle_System.bash_output ("sed -i.bak \"s/oops/" ^ prover ^ "/g\" " ^ thy_file))
       |> fst
 (*      |> tap (fn _ => tracing "SALIDA:")
       |> tap tracing*)

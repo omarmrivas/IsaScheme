@@ -70,7 +70,7 @@ fun thm_to_wst (s,t) =
 
 fun strip_abs frees (Abs (a, T, t)) =
     let val a = singleton (Name.variant_list frees) a
-        val (a',t') = Term.dest_abs (a, T, t)
+        val ((a', _), t') = Term.dest_abs_global (Abs (a, T, t))
         val (a'', t'') = strip_abs (a' :: frees) t'
     in ((a', T) :: a'', t'') end
   | strip_abs _ t = ([], t)
@@ -137,7 +137,7 @@ fun terminates ctxt TRS =
         let
           val timeOut =  Config.get ctxt DPair.max_time_in_termination
           val wst = trs_to_wst TRS
-          val timeOut_threads = "-t " ^ (string_of_int timeOut) ^ " -w " ^ (string_of_int (Thread.numProcessors ()))
+          val timeOut_threads = "-t " ^ (string_of_int timeOut) ^ " -w " ^ (string_of_int (Thread.Thread.numProcessors ()))
           val (out, _) = if getenv "ISABELLE_PLATFORM_FAMILY" = "windows"
                          then
                          Isabelle_System.with_tmp_file
@@ -153,10 +153,12 @@ fun terminates ctxt TRS =
                            "aprove" "trs"
                            (fn path => (File.write path wst;
                                         if Config.get ctxt use_aprove_srv
+                                        (* the final newline matters: the server reads lines, and
+                                           OpenBSD nc (Linux) does not half-close the socket on EOF *)
                                         then Isabelle_System.bash_output ("printf \"2\\n" ^
                                                       Path.implode path ^
                                                       "\\n" ^ string_of_int timeOut ^
-                                                      "\" | nc $APROVE_SERVER $APROVE_SERVER_PORT 2> /dev/null")
+                                                      "\\n\" | nc $APROVE_SERVER $APROVE_SERVER_PORT 2> /dev/null")
                                         else Isabelle_System.bash_output ("$TIMEAOUT_PATH/timeout -t " ^ (string_of_int (timeOut+5)) ^ " java -Xmx512m -jar $APROVE_PATH/aprove.jar " ^ timeOut_threads ^ " -m wst " ^ (Path.implode path) ^ " 2> /dev/null")))
           val foo = String.isSubstring "YES" out
         in if foo
@@ -181,7 +183,7 @@ fun all_terminates ctxt TRS =
 
 fun aprove_path_ok ctxt =
   let val timeOut =  Config.get ctxt DPair.max_time_in_termination
-      val timeOut_threads = "-t " ^ (string_of_int timeOut) ^ " -w " ^ (string_of_int (Thread.numProcessors ()))
+      val timeOut_threads = "-t " ^ (string_of_int timeOut) ^ " -w " ^ (string_of_int (Thread.Thread.numProcessors ()))
       val (out, _) = 
         Isabelle_System.with_tmp_file
               "aprove" "trs"
@@ -211,7 +213,7 @@ fun aprove_server_ok ctxt =
                         ("printf \"2\\n" ^
                          Path.implode path ^
                          "\\n" ^ string_of_int timeOut ^
-                         "\" | nc $APROVE_SERVER $APROVE_SERVER_PORT 2> /dev/null")))
+                         "\\n\" | nc $APROVE_SERVER $APROVE_SERVER_PORT 2> /dev/null")))
       val foo = String.isSubstring "YES" out
     in if foo
        then true

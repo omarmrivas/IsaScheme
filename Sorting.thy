@@ -1,12 +1,12 @@
 theory Sorting
-imports "IsaLibs/IsaLibs"
+imports IsaLibs
 begin
 
-section {* Multiplication on Natural Numbers *}
+section \<open> Multiplication on Natural Numbers \<close>
 
-text {* This theory file shows how to find a function that multiplies natural numbers in Isabelle/HOL *}
+text \<open> This theory file shows how to find a function that multiplies natural numbers in Isabelle/HOL \<close>
 
-text {* We first define the functional space.*}
+text \<open> We first define the functional space.\<close>
 
 fun insert where
 "insert x [] = [x]"|
@@ -22,20 +22,20 @@ definition scheme where
 "scheme P Q R \<equiv> \<exists>(f::int\<Rightarrow>int list\<Rightarrow>int list)
                   (g::int list\<Rightarrow>int list). 
                  \<forall>(x::int) (y::int) (xs::int list).
-  ((f x [] = P x ([] :: int list) (op # :: int\<Rightarrow>int list\<Rightarrow>int list)) \<and>
-   (f x (y # xs) = Q x y ([] :: int list) (op # :: int\<Rightarrow>int list\<Rightarrow>int list)
-                     (\<lambda>x (y::int list) z. if x then y else z) (op \<le> :: int\<Rightarrow>int\<Rightarrow>bool) (f x xs)) \<and>
+  ((f x [] = P x ([] :: int list) ((#) :: int\<Rightarrow>int list\<Rightarrow>int list)) \<and>
+   (f x (y # xs) = Q x y ([] :: int list) ((#) :: int\<Rightarrow>int list\<Rightarrow>int list)
+                     (\<lambda>x (y::int list) z. if x then y else z) ((\<le>) :: int\<Rightarrow>int\<Rightarrow>bool) (f x xs)) \<and>
    (g [] = []) \<and>
    (g (x # xs) = R x y (f x) (g xs)))"
 
 thm scheme_def
 
-text {* We then define the fitness function as the quadratic error, the termination criterion,
+text \<open> We then define the fitness function as the quadratic error, the termination criterion,
   and other GP related parameters. The function we want to synthesise multiplication in terms of 
   addition of natural numbers.
-*}
+\<close>
 
-ML {*
+ML \<open>
   fun fitness ctxt consts =
     let val input1 = @{term "[5, 4, 3, 2, 1, 0::int]"}
         val input2 = @{term "[0, 1, 2, 3, 4, 5::int]"}
@@ -74,20 +74,20 @@ ML {*
   val bests = 10
   val mut_prob = 0.05
   val scheme = @{thm "scheme_def"}
-*}
+\<close>
 
-text {* We finally call the GP algorithm. *}
+text \<open> We finally call the GP algorithm. \<close>
 
-(*local_setup {*
+(*local_setup \<open>
  fn lthy => 
   case DB_EXHAUST.exhaust true lthy scheme term_size [] test of
     SOME (ctxt, t, trms) => 
       let val _ = map (tracing o (Syntax.string_of_term ctxt)) trms
       in ctxt end
   | NONE => lthy
-*}*)
+\<close>*)
 (*
-local_setup {*
+local_setup \<open>
   fn lthy => 
   let val t = @{term "\<exists>f g. \<forall>(x::int). f x [] = [x, x, x, x] \<and>
           (\<forall>y xs. f x (y # xs) = y # y # x # f x xs \<and> g [] = [] \<and> g (x # xs) = f x (g xs))"}
@@ -106,39 +106,39 @@ local_setup {*
                                                  | NONE => NONE)
                                  | NONE => raise ERROR "Info of function not found!")
   in the ctxt end
-*}
+\<close>
 
 thm f.simps g.simps
 
-ML {*
+ML \<open>
   val Const C = @{term "g"}
   val t = Const C $ @{term "[2,5,6,3,9,0,3,3::int]"}
   val r = Value.value @{context} t
 (*  val r2 = Code_Evaluation.dynamic_value @{context} t*)
 (*  val r3 = Code_Evaluation.dynamic_value_strict @{context} t*)
 (*  val r = fitness @{context} [C, C]*)
-*}*)
+\<close>*)
 
 
-local_setup {*
+local_setup \<open>
  fn lthy => 
   case GP.evolve true false scheme lthy fitness finish term_size population_size generations bests mut_prob of
     SOME ind => (#ctxt ind)
   | NONE => lthy
-*}
+\<close>
 
-text {* Genome is composed by: 
+text \<open> Genome is composed by: 
 @{term "\<lambda>x xa xb xc xd. xd"}
 @{term "\<lambda>x xa xb. xb"}
 @{term "\<lambda>x xa xb xc. xb"}
-@{term "\<lambda>x xa xb. x"} *}
+@{term "\<lambda>x xa xb. x"} \<close>
 
 thm f.simps
 thm g.simps
 
 value "g [1, 2, 3, 4]"
 
-text {* Invented functions are well-defined *}
+text \<open> Invented functions are well-defined \<close>
 lemma "scheme (\<lambda>x xa xb. x) (\<lambda>x xa xb xc. xb) (\<lambda>x xa xb. xb) (\<lambda>x xa xb xc xd. xd)"
 apply (unfold scheme_def)
 apply (rule_tac x="f" in exI)

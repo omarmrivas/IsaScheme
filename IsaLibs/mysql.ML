@@ -41,12 +41,12 @@ fun evaluate r name expression =
 
 fun evaluate_real str =
   if match_string "." str
-  then evaluate real_ref "MySQL.real_ref" str
-  else evaluate real_ref "MySQL.real_ref" (str ^ ".0")
-val evaluate_genome = evaluate genome_ref "MySQL.genome_ref"
-val evaluate_subst = evaluate subst_ref "MySQL.subst_ref"
-val evaluate_norm = evaluate norm_ref "MySQL.norm_ref"
-val evaluate_fit = evaluate fit_ref "MySQL.fit_ref"
+  then evaluate real_ref @{verbatim "MySQL.real_ref"} str
+  else evaluate real_ref @{verbatim "MySQL.real_ref"} (str ^ ".0")
+val evaluate_genome = evaluate genome_ref @{verbatim "MySQL.genome_ref"}
+val evaluate_subst = evaluate subst_ref @{verbatim "MySQL.subst_ref"}
+val evaluate_norm = evaluate norm_ref @{verbatim "MySQL.norm_ref"}
+val evaluate_fit = evaluate fit_ref @{verbatim "MySQL.fit_ref"}
 
 (*fun evaluate r expression =
   let val vv = Unsynchronized.ref (!r)

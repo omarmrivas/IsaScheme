@@ -11,6 +11,6 @@ for f in *.thy; do
     echo "Processing $f file..";
 
     # Changing oops to by $PROVER
-    sed -i '.bak' "s/imports $LOGIC1/imports $LOGIC2/g" $f
+    sed -i.bak "s/imports $LOGIC1/imports $LOGIC2/g" $f
 done
 

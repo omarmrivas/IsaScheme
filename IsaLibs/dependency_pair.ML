@@ -140,7 +140,7 @@ fun argument_filtering thy TRS =
 fun safe_b X t =
     let val body = strip_abs_body t
         val (head, args) = strip_comb body
-        fun dest_all_abs (Abs T) = dest_all_abs (snd (Term.dest_abs T))
+        fun dest_all_abs (t as Abs _) = dest_all_abs (snd (Term.dest_abs_global t))
           | dest_all_abs t = t
         val body_with_frees = dest_all_abs t
     in 
@@ -231,7 +231,7 @@ fun static_dependency_pairs DefinedSymbols R =
         val cand_terms = candidate_terms r
         val safe_l = l |> safe
 (*                       |> TSet.fromList*)
-        fun dest_all_abs (Abs T) = dest_all_abs (snd (Term.dest_abs T))
+        fun dest_all_abs (t as Abs _) = dest_all_abs (snd (Term.dest_abs_global t))
           | dest_all_abs t = Logic.varify_global t
     in cand_terms |> filter_out (fn t => member (is_equal o (fn tms => if Term.aconv tms then EQUAL else Term_Ord.term_ord tms)) safe_l (eta_long t))
                   |> filter (fn t => t |> strip_abs_body

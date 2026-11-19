@@ -73,7 +73,7 @@ val Const (Zero_class, _) = @{term "0::int"}
 val Const (Minus, _) $ _ = @{term "-1::int"}
 val Const (Numeral, _) $ _ = @{term "2::int"}
 
-val Const (list_cons, _) = @{term "op #"}
+val Const (list_cons, _) = @{term "(#)"}
 val Const (list_nil, _) = @{term "[]"}
 val Const (product_type, _) $ _ $ _ = @{term "(x,y)"}
 
@@ -87,7 +87,7 @@ val Const (hol_less, _) = @{term "Orderings.ord_class.less"}
 val Const (undefined_name, _) = @{term "undefined"}
 
 (* schematic goals *)
-val Const (schematic_and, _) = @{term "op &&&"}
+val Const (schematic_and, _) = @{term "(&&&)"}
 
 end
 

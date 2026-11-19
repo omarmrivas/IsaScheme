@@ -1,17 +1,17 @@
 theory RCN
-imports "IsaLibs/IsaLibs"
+imports IsaLibs
 begin
 
-section {* RCN *}
+section \<open> RCN \<close>
 
 declare [[max_time_in_fitness = 120]]
 
-text {* This theory file shows how to find a function that adds the elements of a list of natural 
-numbers in Isabelle/HOL. *}
+text \<open> This theory file shows how to find a function that adds the elements of a list of natural 
+numbers in Isabelle/HOL. \<close>
 
-subsection {* Destructor style functional scheme *}
+subsection \<open> Destructor style functional scheme \<close>
 
-text {* We first define the functional space of a destructor style functional scheme. *}
+text \<open> We first define the functional space of a destructor style functional scheme. \<close>
 
 type_synonym vect = "real * real * real"
 
@@ -180,7 +180,7 @@ function w1 and w2 and w3 and f where
 by pat_completeness auto
 termination by size_change
 
-text {* Proof. *}
+text \<open> Proof. \<close>
 
 theorem "scheme P Q R"
 apply (unfold scheme_def)
@@ -190,13 +190,13 @@ apply (rule_tac x="w3" in exI)
 apply (rule_tac x="f" in exI)
 by simp
 
-subsection {* Evaluation of the Evolve algorithm. *}
+subsection \<open> Evaluation of the Evolve algorithm. \<close>
 
-text {* We define the fitness function, the termination criterion,
+text \<open> We define the fitness function, the termination criterion,
   and other GP related parameters.
-*}
+\<close>
 
-ML {*
+ML \<open>
   val points_k6 =
     [(31913,      61624),
      (    0,      39366),
@@ -216,9 +216,9 @@ ML {*
   val SOME (DB_Rectilinear.PGraph {crossing_number, ...}) = graph
   fun cross_number (SOME (DB_Rectilinear.PGraph {crossing_number, ...})) = crossing_number
     | cross_number _ = 14634570
-*}
+\<close>
 
-ML {*
+ML \<open>
   val ctxt = @{context}
   val data = [(@{term "5::nat"}, 3),
               (@{term "8::nat"}, 36),
@@ -281,9 +281,9 @@ ML {*
   val experiments = 20
   val recursive_calls = 1
   val bad_fitness = Rat.rat_of_int 1284914871007569
-*}
+\<close>
 
-text {* We finally call the Evolve algorithm. *}
+text \<open> We finally call the Evolve algorithm. \<close>
 
 (*value "f (\<lambda>x xa xb xc xd xe xf xg xh xi xj xk xl xm xn. xh xb (xj (xm xn) xc)) 15 (1,1,1) (-1,1,-1) (1,-1,1)"
 
@@ -293,7 +293,7 @@ apply simp
 lemma "f (\<lambda>x xa xb xc xd xe xf xg xh xi xj xk xl xm xn. xh xb (xj (xm xn) xc)) n v1 v2 v3 = X"
 apply simp*)
 
-(*ML {*.
+(*ML \<open>.
   val w1 = @{term "w1 (\<lambda>x xa xb xc xd xe xf xg xh xi xj xk xl xm xn.
    xj x (xi (xl (xi (xl xc xn) xa) xn) xc))"}
   val w2 = @{term "w2 (\<lambda>x xa xb xc xd xe xf xg xh xi xj xk xl xm xn.
@@ -303,14 +303,14 @@ apply simp*)
   val f = @{term "f (\<lambda>x xa xb xc xd xe xf xg xh xi xj xk xl xm xn.
    xj x (xi (xl (xi (xl xc xn) xa) xn) xc))"}
   val ff = fitness ctxt [w1, w2, w3, f]
-*}*)
+\<close>*)
 
-local_setup {*
+local_setup \<open>
  fn lthy =>
     let val experiment = GP.evolve true false false "RectilinearCrossing.log" scheme functions recursive_calls bad_fitness lthy fitness finish
                                    term_size max_term_size population_size generations bests mut_prob
         val _ = MySQL.new_experiment "RectilinearCrossing" generations term_size population_size experiment
     in lthy end
-*}
+\<close>
 
 end

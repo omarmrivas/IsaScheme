@@ -187,7 +187,7 @@ fun quickcheck_terms ctxt timeOut n typ =
           | NONE => Term_Tab.keys tab end
   in terms n Term_Tab.empty end
   
-fun counter_example _ _ (_ $ Const ("HOL.True",_)) = false
+fun counter_example _ _ (_ $ Const (@{const_name True},_)) = false
   | counter_example ctxt timeOut conjecture = quickcheck_nitpick_raw ctxt timeOut conjecture
 
 val false_true_set = Synchronized.var "CE_sets" (Net.empty : term Net.net, Net.empty : term Net.net)

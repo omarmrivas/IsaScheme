@@ -61,8 +61,8 @@ fun gp_statistics_to_error_plot file title generations (sts : gp_result list) =
         | reduce (Solved (ind, _ :: sts)) = Solved (ind, sts)
         | reduce (Unsolved []) = raise ERROR "Can not reduce"
         | reduce (Unsolved (_ :: sts)) = Unsolved sts
-      val datafile = file ^ "Error.data"
-      val plotfile = file ^ "Error.plot"
+      val datafile = file ^ @{verbatim "Error.data"}
+      val plotfile = file ^ @{verbatim "Error.plot"}
       val experiments = length sts
       val _ =
         let val header =["set terminal epslatex color\n",
@@ -119,8 +119,8 @@ fun gp_statistics_to_cumulative_prob generations (sts : gp_result list) =
   end
 
 fun gp_statistics_to_cumulative_prob_plot file title generations (sts1 : gp_result list) (sts2 : gp_result list) =
-  let val datafile = file ^ "Cumulative.data"
-      val plotfile = file ^ "Cumulative.plot"
+  let val datafile = file ^ @{verbatim "Cumulative.data"}
+      val plotfile = file ^ @{verbatim "Cumulative.plot"}
       val cums1 = gp_statistics_to_cumulative_prob generations sts1
       val cums2 = gp_statistics_to_cumulative_prob generations sts2
       val _ =

@@ -16,7 +16,7 @@ structure DB_Oriented_Rules
 = struct
 
 (*val parser = Args.context -- Scan.lift Args.name_inner_syntax*)
-val parser = Args.embedded_inner_syntax
+val parser = Parse.embedded_inner_syntax
 
 (*structure Term_Tab = Table(type key = term val ord = Term_Ord.term_ord)
 

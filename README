@@ -1,3 +1,21 @@
+REQUIREMENTS
+
+IsaLibs works with Isabelle2026 (October 2026), https://isabelle.in.tum.de/
+
+The IsaLibs session (IsaLibs/ROOT) is based on HOL and also uses the theory
+THF_Arith from the HOL-TPTP session of the Isabelle distribution. The theory
+IsaLibs is declared "global", so user theories can simply say "imports IsaLibs".
+
+Build the IsaLibs heap image once with:
+
+isabelle build -d path_to_IsaLibs_root_file -b IsaLibs
+
+DOCUMENTATION
+
+doc/IsaLibs_comandos.pdf (Spanish) explains every Isar command, proof method,
+attribute and configuration option of IsaLibs, and the theory behind them.
+Rebuild it with "cd doc && latexmk -pdf IsaLibs_comandos.tex" (or "make -C doc").
+
 WINDOWS INSTALLATION
 
 1) Create a theory file. The name of the theory is not important but you must import IsaLibs.
@@ -37,14 +55,28 @@ begin
 
 end
 
-2) Download the AProVE termination prover (command line version) from the link and place it on any directory such as 'path_to_AProVE_jar_file'.
+2) Download the AProVE termination prover (aprove.jar, it needs Java) from the link and place it on any directory such as 'path_to_AProVE_jar_file'.
 
-http://aprove.informatik.rwth-aachen.de/
+https://github.com/aprove-developers/aprove-releases/releases
 
-3) Create a new settings file or edit your existing one to include the following paths. Note that IsaLibs comes with a working timeout tool.
+AProVE looks for the SAT solver "minisat2" in the PATH. Isabelle ships one, so it is enough to link it, e.g.
+
+mkdir -p path_to_AProVE_jar_file/bin
+ln -s $ISABELLE_HOME/contrib/minisat-*/x86_64-linux/minisat path_to_AProVE_jar_file/bin/minisat2
+
+3) Create a new settings file (e.g. $ISABELLE_HOME_USER/etc/settings, that is ~/.isabelle/Isabelle2026/etc/settings) or edit your existing one to include the following paths. Note that IsaLibs comes with a working timeout tool (the script "timeout" in this directory).
 
 APROVE_PATH=path_to_AProVE_jar_file
 TIMEAOUT_PATH=path_to_timeout
+APROVE_SERVER=localhost
+APROVE_SERVER_PORT=5250
+PATH="path_to_AProVE_jar_file/bin:$PATH"
+
+IsaLibs.thy sets use_aprove_srv = true, so AProVE is called through a server (and nc). Start the server before running IsaLibs:
+
+cd path_to_AProVE_jar_file && PATH="path_to_AProVE_jar_file/bin:$PATH" java -ea -jar aprove.jar -u srv
+
+Alternatively, declare [[use_aprove_srv = false]] to run aprove.jar directly for each termination check (slower).
 
 4) Run the following command to build the heap image and work with your theory
 

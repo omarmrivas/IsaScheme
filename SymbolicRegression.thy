@@ -2,25 +2,25 @@ theory SymbolicRegression
 imports IsaLibs
 begin
 
-section{* Symbolic Regression *}
+section\<open> Symbolic Regression \<close>
 
-text {* This theory file shows how to perform symbolic regression in Isabelle/HOL *}
+text \<open> This theory file shows how to perform symbolic regression in Isabelle/HOL \<close>
 
-text {* We first define the functional space.*}
+text \<open> We first define the functional space.\<close>
 
 definition scheme where
 "scheme P \<equiv> \<exists>f::int\<Rightarrow>int. \<forall>x::int. 
   (f x = P x (1::int)
              (\<lambda>x. x + (1::int))
-             (op + :: int\<Rightarrow>int\<Rightarrow>int)
-             (op - :: int\<Rightarrow>int\<Rightarrow>int)
-             (op * :: int\<Rightarrow>int\<Rightarrow>int))"
+             ((+) :: int\<Rightarrow>int\<Rightarrow>int)
+             ((-) :: int\<Rightarrow>int\<Rightarrow>int)
+             ((*) :: int\<Rightarrow>int\<Rightarrow>int))"
 
-text {* We then define the fitness function as the quadratic error, the termination criterion,
+text \<open> We then define the fitness function as the quadratic error, the termination criterion,
   and other GP related parameters. The function we want to synthesise is @{term " 2 * x * x - x + 5"}.
-*}
+\<close>
 
-ML {*
+ML \<open>
   fun fitness ctxt consts =
     let fun goal x = 2 * x * x - x + 5
         val f = consts |> hd
@@ -40,16 +40,16 @@ ML {*
   val bests = 10
   val mut_prob = 0.05
   val scheme = @{thm "scheme_def"}
-*}
+\<close>
 
-text {* We finally call the GP algorithm. *}
+text \<open> We finally call the GP algorithm. \<close>
 
-local_setup {*
+local_setup \<open>
  fn lthy => 
   case GP.evolve false scheme lthy fitness finish term_size population_size generations bests mut_prob of
     SOME ind => (#ctxt ind)
   | NONE => lthy
-*}
+\<close>
 
 thm f.simps
 

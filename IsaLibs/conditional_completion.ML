@@ -96,7 +96,7 @@ fun scpairs' ctxt (th1, th2) =
                                         handle ListPair.UnequalLengths => Seq.empty
                                               | TERM _ => Seq.empty
                              else Seq.empty
-               val (new_free,new_abs) = Term.dest_abs (Name.bound bounds, T, t)
+               val ((new_free, _), new_abs) = Term.dest_abs_global (Abs (Name.bound bounds, T, t))
              in Seq.append (Seq.map (pair (f,obj)) matcher)
                            (msub (bounds + 1) (new_free :: frees)
                                  new_abs
@@ -131,7 +131,7 @@ fun scpairs' ctxt (th1, th2) =
                       then Conv.fconv_rule
                              ((Conv.concl_conv (Thm.nprems_of r2) o Conv.fun_conv o Conv.arg_conv o conv)
                                  (Conv.rewr_conv r1)) r2
-                      else case rewrite_step (clear_simpset ctxt) r1 r2
+                      else case rewrite_step (Simplifier.clear_simpset ctxt) r1 r2
                                    ((Conv.concl_conv (Thm.nprems_of r2) o
                                          Conv.fun_conv o Conv.arg_conv o conv)) of
                              SOME thm => thm
@@ -159,7 +159,7 @@ fun rewrite_steps ctxt rule th =
 
 fun rewrite_lhs ctxt rule th =
   let (*val thy = Proof_Context.theory_of ctxt*)
-      val termless = (#termless o Raw_Simplifier.internal_ss) (simpset_of ctxt)
+      val termless = is_less o Term_Ord.term_ord  (* default simplifier term order *)
       val rewrites = termless o swap o apply2 Thm.full_prop_of
       fun it th =
         case filter (rewrites o pair th) (scpairs' ctxt (rule, th)) of
@@ -208,7 +208,7 @@ fun scpairs thy (th1, th2) =
                              then Unify.unifiers (Context.Theory thy,(Envir.empty 1),[(pat,obj)]) handle ListPair.UnequalLengths => Seq.empty
                                                                                         | TERM _ => Seq.empty
                              else Seq.empty
-               val (new_free,new_abs) = Term.dest_abs (Name.bound bounds, T, t)
+               val ((new_free, _), new_abs) = Term.dest_abs_global (Abs (Name.bound bounds, T, t))
              in Seq.append (Seq.map (pair f) unifier)
                            (msub (bounds + 1) (new_free :: frees)
                                  new_abs
@@ -241,7 +241,7 @@ fun scpairs thy (th1, th2) =
                       then Conv.fconv_rule
                              ((Conv.concl_conv (Thm.nprems_of r2) o Conv.fun_conv o Conv.arg_conv o conv)
                                  (Conv.rewr_conv r1)) r2
-                      else case rewrite_step (clear_simpset ctxt) r1 r2 
+                      else case rewrite_step (Simplifier.clear_simpset ctxt) r1 r2 
                                    ((Conv.concl_conv (Thm.nprems_of r2) o 
                                          Conv.fun_conv o Conv.arg_conv o conv)) of
                              SOME thm => thm
@@ -285,7 +285,7 @@ fun ac_termination_obj ctxt simps th =
                 net |> Net.insert_term (is_equal o Thm.thm_ord)
                                        (Thm.full_prop_of thm, thm)
            fun test_simp net (rule :: rules) thm =
-              let val thm' = simplify (ctxt addsimps [rule]) thm
+              let val thm' = simplify (Simplifier.add_simps [rule] ctxt) thm
               in if is_equal (Thm.thm_ord (thm, thm'))
                  then test_simp net rules thm
                  else if can (update_net thm') net
@@ -321,7 +321,7 @@ fun ac_termination ctxt (equations, rules) th =
         val _ = tracing ("Rules: " ^ Utils.str_of_thms rules)
         val _ = tracing ("Th: " ^ Utils.str_of_thms [th])*)
         val thy = Proof_Context.theory_of ctxt
-        val termless = (#termless o Raw_Simplifier.internal_ss) (simpset_of ctxt)
+        val termless = is_less o Term_Ord.term_ord  (* default simplifier term order *)
         val rewrites = termless o swap o apply2 Thm.full_prop_of
         val max_size = (equations @ rules)
                          |> map size_of_thm
@@ -450,16 +450,16 @@ fun discriminate_object_rules ctxt terminates =
 | memoized_discriminate_rules _ _ [] = ([], [])*)
 
 fun ordered_simpset_without_simprocs ctxt terminates thms =
-    let (*val ctxt = clear_simpset ctxt*)
+    let (*val ctxt = Simplifier.clear_simpset ctxt*)
 (*        val (_,rules) = memoized_discriminate_rules ctxt terminates thms*)
         val (_,rules) = memoized_discriminate_rules ctxt terminates thms
-    in ctxt addsimps rules
+    in Simplifier.add_simps rules ctxt
     end
 
 (*fun ordered_simpset ctxt terminates thms =
-    let val ctxt = clear_simpset ctxt
+    let val ctxt = Simplifier.clear_simpset ctxt
         val (equations, rules) = memoized_discriminate_rules ctxt terminates thms
-    in ctxt addsimps (equations @ rules)
+    in Simplifier.add_simps (equations @ rules) ctxt
     end*)
 
 fun rewrite_rule ctxt terminates thms =
@@ -487,7 +487,7 @@ fun print_orders ctxt orders = ([], orders)
 fun ground_joinable ctxt terminates f_map (e, E) =
   let (*val s_t = Thm.full_prop_of e
       val thy = Thm.theory_of_thm e*)
-      val ctxt = clear_simpset ctxt
+      val ctxt = Simplifier.clear_simpset ctxt
 (*      val _ = tracing ("E: " ^ Utils.str_of_thms E)
       val _ = tracing ("e: " ^ Utils.str_of_thms [e])*)
 (*      val (equations, rules) = memoized_discriminate_rules ctxt terminates E*)
@@ -511,9 +511,8 @@ fun ground_joinable ctxt terminates f_map (e, E) =
                      |> Orders.map_term_to_int
                      |> Term_Ord.term_lpo
                      |> (fn g_ord =>
-                            let fun termless tu = (g_ord tu = LESS)
-                                val ctxt = ctxt |> Simplifier.set_termless termless
-                                                |> (fn ctxt => ctxt addsimps (equations @ rules))
+                            let val ctxt = ctxt |> Simplifier.set_term_ord g_ord
+                                                |> (fn ctxt => Simplifier.add_simps (equations @ rules) ctxt)
                             in
 (*                            e |> asm_full_simplify ctxt*)
                             e |> simplify ctxt
@@ -636,8 +635,8 @@ fun orient ctxt global_meta_rws ord terminates f_map =
                                          then Utils.obj_to_meta @{thm "refl"}
                                          else th)
 (*              val _ = tracing ("After orientation: " ^ Utils.str_of_thms [th'])*)
-(*              val (_, rules) = memoized_discriminate_rules (empty_simpset ctxt) terminates (S @ R)*)
-              val (_, rules) = memoized_discriminate_rules (empty_simpset ctxt) terminates (S @ R)
+(*              val (_, rules) = memoized_discriminate_rules (Simplifier.empty_simpset ctxt) terminates (S @ R)*)
+              val (_, rules) = memoized_discriminate_rules (Simplifier.empty_simpset ctxt) terminates (S @ R)
 (*              val _ = tracing ("After memoized_discriminate_rules: ")*)
               val joinable = memoized_joinable ctxt terminates f_map (S @ R) th'
 (*              val _ = tracing ("After joinable: ")*)

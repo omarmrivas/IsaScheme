@@ -52,7 +52,7 @@ fun expand_scheme ctxt thm =
     in
       (* FIXME: reverse the variables *)
       (scheme_name, dummyTvfy expanded,
-       Utils.normalise_term (empty_simpset ctxt) [thm] expanded,
+       Utils.normalise_term (Simplifier.empty_simpset ctxt) [thm] expanded,
        [] |> Term.add_frees (dummyTvfy expanded) |> map Free |> rev)
     end
 
@@ -88,7 +88,7 @@ fun combine ctxt def process_method t l store =
           |> (fn r => case r of 
                         SOME t' => 
                         let 
-                          val unfolded = Utils.normalise_term (empty_simpset ctxt) [def] t'
+                          val unfolded = Utils.normalise_term (Simplifier.empty_simpset ctxt) [def] t'
                           val frees = Term.add_frees unfolded []
                           val t2' = filter (fn (Free (name,_),_) => exists (fn (name',_) => name = name') frees
                                               | _ => raise ERROR "") t2
