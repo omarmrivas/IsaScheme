@@ -1,0 +1,12 @@
+(* Examples that terminate with the divergence critic.  The theories in
+   the directory "diverging" do not terminate and are meant to be opened
+   in jEdit. *)
+session Divergence_Examples = IsaLibs +
+  options [document = false, timeout = 1800]
+  theories
+    Ex1_FG
+    Ex1b_FG
+    Ex2_Denzinger
+    Ex2b_Denzinger_LPO
+    Ex4_Peano_Assoc
+    Ex3_Braid_Family

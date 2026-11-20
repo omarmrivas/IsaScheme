@@ -16,6 +16,12 @@ doc/IsaLibs_comandos.pdf (Spanish) explains every Isar command, proof method,
 attribute and configuration option of IsaLibs, and the theory behind them.
 Rebuild it with "cd doc && latexmk -pdf IsaLibs_comandos.tex" (or "make -C doc").
 
+PAPERS
+
+papers/divergent-completion-iterated-functions contains an article (for the
+Journal of Symbolic Computation) on the divergence critic of "complete",
+together with the Isabelle theories of its experiments.
+
 WINDOWS INSTALLATION
 
 1) Create a theory file. The name of the theory is not important but you must import IsaLibs.

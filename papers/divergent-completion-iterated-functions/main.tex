@@ -1,0 +1,841 @@
+%% Taming divergent Knuth--Bendix completion with iterated functions
+%% Prepared for submission to the Journal of Symbolic Computation (Elsevier).
+\documentclass[preprint,12pt]{elsarticle}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs,array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newtheorem{example}{Example}
+
+\newcommand{\R}{\mathcal{R}}
+\newcommand{\E}{\mathcal{E}}
+\newcommand{\rw}{\to}
+\newcommand{\pw}[2]{#1^{#2}}               % power of a unary symbol
+\newcommand{\pp}{\mathbin{\texttt{\^{}\^{}}}}     % HOL function power operator
+\newcommand{\fp}[2]{(#1 \pp #2)}                  % HOL function power
+\newcommand{\isa}[1]{\texttt{#1}}
+\newcommand{\Suc}{\mathit{Suc}}
+\newcommand{\sk}{\mathit{sk}}
+
+\definecolor{kw}{RGB}{0,0,160}
+\lstdefinelanguage{Isar}{
+  morekeywords={theory,imports,begin,end,typedecl,consts,datatype,fun,where,
+    lemma,by,apply,declare,complete,sorry,ML,thm,and},
+  sensitive=true,
+  morecomment=[n]{(*}{*)},
+  morestring=[b]",
+  literate={⇒}{{$\Rightarrow$}}1 {≡}{{$\equiv$}}1
+}
+\lstset{language=Isar,basicstyle=\ttfamily\small,keywordstyle=\color{kw}\bfseries,
+  columns=fullflexible,keepspaces=true,showstringspaces=false,upquote=true,
+  frame=single,framesep=3pt,
+  xleftmargin=4pt,xrightmargin=4pt,breaklines=true}
+
+\journal{Journal of Symbolic Computation}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Taming divergent Knuth--Bendix completion with iterated functions
+in a higher-order theorem prover}
+
+\author[aff]{Omar Monta\~{n}o-Rivas}
+% TODO: complete the affiliation and the corresponding author's e-mail.
+\address[aff]{Affiliation to be completed}
+
+\begin{abstract}
+Knuth--Bendix completion may run forever, generating an infinite family of
+rewrite rules that differ only in the number of times a function is
+iterated, as in $f(\pw{g}{n}(f(x))) \rw f(\pw{g}{n}(x))$. The classical
+remedies schematize such families at the meta level, with meta-rules,
+recurrence terms, terms with integer exponents or primal grammars, and then
+need dedicated unification and rewriting algorithms for the schematic
+objects. We observe that in higher-order logic no new formalism is needed:
+the whole family is a \emph{single theorem} about the function power
+$g^n$, and it can be proved by induction on $n$ inside the logic. We
+present a \emph{divergence critic} for the theorem-producing completion
+procedure of IsaScheme, a theory exploration system for Isabelle/HOL. The
+critic recognizes families of chosen rules whose towers of unary symbols
+grow linearly, generalizes them to a rule with a natural-number exponent,
+proves it by induction, checks the termination of its first instances with
+AProVE and restarts completion with the new rule, which is applied by a
+simplification procedure that unfolds the right instance on demand. Every
+rule of the final system is an Isabelle theorem, so soundness does not
+depend on the critic. We describe the method and evaluate it on examples of
+divergent completion taken from the literature, showing both the cases it
+solves and the ones that are out of its reach.
+\end{abstract}
+
+\begin{keyword}
+Knuth--Bendix completion \sep divergence \sep schematization \sep
+function power \sep theory exploration \sep Isabelle/HOL
+\end{keyword}
+
+\end{frontmatter}
+
+%% ===========================================================================
+\section{Introduction}
+
+Knuth--Bendix completion~\cite{KnuthBendix70} turns a set of equations
+$\E$ into an equivalent convergent term rewriting system $\R$, which then
+decides the word problem of $\E$ by comparing normal forms. A run of the
+procedure has three possible outcomes~\cite{Dershowitz89,BaaderNipkow98}:
+it may \emph{succeed} with a finite convergent system, it may \emph{fail}
+because an equation cannot be oriented, or it may \emph{diverge} and keep
+adding rules forever. Unfailing completion~\cite{BachmairDershowitzPlaisted89}
+removes the second outcome by keeping unorientable equations and using them
+for ordered rewriting, but divergence remains, and it is unavoidable in
+general: some finite theories with decidable word problem have no finite
+convergent presentation at all~\cite{KapurNarendran85}, and the infinite
+systems produced by divergent runs can be arbitrarily
+complex~\cite{HermannPrivara86,SattlerKlein91}.
+
+A small example shows the typical shape of divergence. The single rule
+\[
+  f(g(f(x))) \rw f(g(x))
+\]
+overlaps with itself, and the resulting critical pair produces
+$f(g(g(f(x)))) \rw f(g(g(x)))$, which overlaps again, and so on. In the
+limit, completion produces the infinite convergent system
+\[
+  \{\, f(\pw{g}{n}(f(x))) \rw f(\pw{g}{n}(x)) \mid n \ge 1 \,\}.
+\]
+The infinite system is regular: its rules differ only in the length of a
+tower of the unary symbol $g$. Since the work of H.~Kirchner on
+meta-rules~\cite{Kirchner87,Kirchner89}, a whole line of research has
+represented such families finitely, with recurrence
+terms~\cite{ChenHsiangKong90}, terms with integer
+exponents~\cite{Comon95}, primal grammars~\cite{HermannGalbavy97} or
+enriched signatures~\cite{ThomasWatson93}, and has studied how to detect
+them~\cite{Hermann89,KirchnerHermann90,ThomasJantke89,DershowitzPinchover90}.
+All these approaches live at the \emph{meta level}: the schematic rule is
+not itself a rewrite rule of the object signature, so it needs its own
+matching, unification and critical pair computation, and its validity is
+argued about the infinite family, outside the object logic.
+
+This paper starts from a simple observation. In higher-order logic the
+exponent is a first-class citizen. Isabelle/HOL~\cite{NipkowPaulsonWenzel02}
+defines the function power $g \pp n$ by the two equations
+$g \pp 0 = \mathit{id}$ and
+$g \pp \Suc\;n = g \circ (g \pp n)$,
+and the whole family above is the single HOL theorem
+\[
+  \forall n\,x.\ f(\fp{g}{\Suc\;n}\,(f\,x)) = f(\fp{g}{\Suc\;n}\,x),
+\]
+which can be proved by induction on $n$ from the initial rule. Nothing is
+schematized at the meta level: the generalized rule is an ordinary theorem
+of the logic, and every one of its instances is obtained by instantiating
+$n$ and unfolding the definition of the function power.
+
+We exploit this observation in the completion procedure of
+IsaScheme~\cite{MontanoRivas12}, a theory exploration system for
+Isabelle/HOL whose completion produces Isabelle theorems rather than
+unchecked rewrite rules. Our contributions are:
+\begin{itemize}
+  \item a \emph{divergence critic} that monitors the rules chosen by
+        completion, recognizes families whose towers of unary symbols grow
+        linearly, and generalizes them into a single rule with a natural
+        number exponent (Section~\ref{sec:critic});
+  \item an automatic proof of the generalized rule by induction on the
+        exponent, so that the extension does not compromise the soundness
+        of completion: every rule of the final system is a theorem checked
+        by Isabelle's kernel;
+  \item a way of \emph{using} such a rule during completion without
+        changing the first-order machinery around it: the termination
+        prover and the term orderings only ever see ordinary rules, while
+        a simplification procedure unfolds, for each redex, the instance of
+        the schematic rule that applies to it;
+  \item an evaluation on divergent examples from the literature, including
+        the cases that are out of reach of the method
+        (Section~\ref{sec:examples}).
+\end{itemize}
+
+The paper is organized as follows. Section~\ref{sec:isascheme} gives a
+short introduction to IsaScheme and to its completion procedure.
+Section~\ref{sec:prelim} recalls the necessary notions of rewriting and
+divergence. Section~\ref{sec:critic} presents the critic,
+Section~\ref{sec:examples} the experiments, Section~\ref{sec:related}
+related work and Section~\ref{sec:conclusion} our conclusions and future
+work.
+
+%% ===========================================================================
+\section{IsaScheme in a nutshell}
+\label{sec:isascheme}
+
+IsaScheme~\cite{MontanoRivas12} is a system for \emph{theory exploration}
+in Isabelle/HOL: given a theory, for instance a few recursive functions
+over an inductive datatype, it invents conjectures about them, discards the
+false ones, proves the true ones and organizes the resulting theorems. Its
+distinctive feature is the use of \emph{schemes}, higher-order formulas
+that act as templates of interesting properties. The associativity scheme
+\[
+  \forall x\,y\,z.\ P\,(P\,x\,y)\,z = P\,x\,(P\,y\,z),
+\]
+for instance, yields one conjecture for every binary function $P$ of the
+theory, and a scheme with an existentially quantified function variable
+can be used to \emph{invent} a new function, which is the
+concept-invention side of the system. Each conjecture is first tested with
+counterexample generators (Quickcheck and Nitpick) and then given to an
+automatic inductive prover. The prover analyses its own failures in the
+style of proof critics~\cite{IrelandBundy96,Walsh96} and speculates the
+missing lemmas.
+
+The theorems discovered in this way are highly redundant: an
+associativity law produces infinitely many consequences, all of them
+``interesting'' for a naive filter. IsaScheme therefore keeps the
+discovered theorems as a \emph{convergent rewrite system} and runs
+Knuth--Bendix completion every time a new theorem is added. A conjecture
+is worth proving only if it is not already joinable, and the completed
+system acts as a canonical, non-redundant summary of the theory explored so
+far. Completion also lets the system replace definitions: completing the
+lemma $\mathit{itrev}\;xs\;[\,] = \mathit{rev}\;xs$, for instance, orients
+it as $\mathit{rev}\;xs \rw \mathit{itrev}\;xs\;[\,]$ and deletes the
+quadratic definition of $\mathit{rev}$ in favour of the linear one.
+
+The current implementation of IsaScheme is the library IsaLibs, which we
+have ported to Isabelle2026. It provides, among others, the Isar command
+\isa{complete}, which is the entry point of everything that follows:
+\begin{lstlisting}
+complete "itrev xs [] = rev xs"
+  by inductive_prover
+\end{lstlisting}
+The command opens a proof of the given equation. Once it is proved, the
+equation is added to the defining equations of the functions it mentions
+(and of the functions they depend on) and to the rules discovered before,
+which are kept in the theorem collection \isa{compl}. The union is then
+completed, and the trace reports the rules that were added to and removed
+from \isa{compl}. The completion procedure has the following ingredients:
+\begin{itemize}
+  \item It is \emph{unfailing completion}~\cite{BachmairDershowitzPlaisted89}:
+        unorientable (permutative) equations are kept and used for ordered
+        rewriting, and critical pairs are also computed with them.
+  \item Joinability of permutative equations is checked for all ground
+        instances with the criterion of Martin and
+        Nipkow~\cite{MartinNipkow90}, which tries all the ways of adding the
+        variables of the equation to the precedence of a lexicographic path
+        ordering.
+  \item Instead of a fixed reduction ordering, orientation is decided by
+        a \emph{termination oracle}: a candidate rule is accepted in a given
+        direction when the termination prover
+        AProVE~\cite{Giesl17,ArtsGiesl00} proves the termination of the
+        current rules together with it. Two completions, which differ in
+        the direction of the term ordering they use, run in parallel and
+        the first one to finish is kept.
+  \item Unification uses higher-order patterns~\cite{Miller91}, so the
+        rules may contain $\lambda$-abstractions and function variables.
+  \item Completion is \emph{theorem producing}: every rule is an Isabelle
+        theorem. The initial rule comes from the user's proof, critical
+        pairs are derived by rewriting with theorems (Isabelle conversions),
+        and all other inferences only decide which theorems are kept. As
+        in any LCF-style system, errors in the termination oracle or in the
+        heuristics may affect completeness or efficiency, but never
+        soundness.
+\end{itemize}
+Since the system works on theorems, critical pair generation is optional
+(option \isa{generate\_cps}) and is off by default: in theory exploration
+completion is mainly used to interreduce and orient lemmas proved by
+induction, and critical pairs are only needed when the user wants a
+convergent system. It is precisely when critical pairs are on that
+completion may diverge.
+
+%% ===========================================================================
+\section{Preliminaries}
+\label{sec:prelim}
+
+We use standard notation for term rewriting~\cite{BaaderNipkow98}. Terms
+are built from a signature of typed function symbols and variables; we
+write $s|_p$ for the subterm of $s$ at position $p$ and $s[t]_p$ for the
+result of replacing it by $t$. A rewrite rule $l \rw r$ is an oriented
+equation, and a term rewriting system (TRS) $\R$ is \emph{convergent} if
+its rewrite relation is terminating and confluent. If two rules
+$l_1 \rw r_1$ and $l_2 \rw r_2$ (with disjoint variables) are such that
+$l_1|_p$ is not a variable and $\sigma$ is a most general unifier of
+$l_1|_p$ and $l_2$, then
+$\langle r_1\sigma,\ l_1\sigma[r_2\sigma]_p\rangle$ is a \emph{critical
+pair}. A terminating TRS is confluent iff all its critical pairs are
+joinable.
+
+Completion~\cite{KnuthBendix70,BachmairDershowitzPlaisted89} can be
+presented as an inference system on pairs $(\E,\R)$ of equations and
+rules~\cite{BaaderNipkow98}: \emph{deduce} adds a critical pair to $\E$,
+\emph{orient} moves an equation to $\R$ in a direction compatible with the
+reduction ordering, \emph{simplify} and \emph{delete} normalize and remove
+equations, and \emph{compose} and \emph{collapse} interreduce the rules. A
+fair run that never fails produces in the limit a convergent system
+$\R_\omega$ equivalent to the initial equations, which may be
+infinite~\cite{HirokawaMiddeldorpSternagelWinkler17}. A run
+\emph{diverges} if it never terminates; if the procedure is fair,
+$\R_\omega$ is then infinite.
+
+A function symbol $c$ is \emph{unary} if its type is
+$\tau \Rightarrow \tau$ for a type $\tau$ that is not a function type. We
+write $\pw{c}{k}(s)$ for the tower $c(c(\cdots c(s)\cdots))$ with $k$
+occurrences of $c$. In Isabelle/HOL the function power is the constant
+$\mathit{compow}$, written \isa{c \^{}\^{} n}, with the defining equations
+\[
+  c \pp 0 = \mathit{id}, \qquad
+  c \pp \Suc\;n = c \circ (c \pp n),
+\]
+so that $\fp{c}{\Suc^k\;0}\,s$ unfolds to $\pw{c}{k}(s)$ by rewriting with
+these equations and with the definitions of $\circ$ and $\mathit{id}$.
+
+\begin{example}\label{ex:fg}
+Let $\E = \{ f(g(f(x))) \approx f(g(x)) \}$, oriented from left to right.
+The left-hand side overlaps with itself at position $1.1$ with the unifier
+$x \mapsto g(f(y))$: the term $f(g(f(g(f(y)))))$ rewrites at the root to
+$f(g(g(f(y))))$ and at position $1.1$ to $f(g(f(g(y))))$, which rewrites
+further to $f(g(g(y)))$. The critical pair
+$f(g(g(f(y)))) \approx f(g(g(y)))$ is a new rule, which overlaps with the
+first one in the same way, and completion generates
+$f(\pw{g}{n}(f(x))) \rw f(\pw{g}{n}(x))$ for every $n \ge 1$.
+\end{example}
+
+%% ===========================================================================
+\section{A divergence critic based on function powers}
+\label{sec:critic}
+
+The critic is integrated in the main loop of completion. After the
+procedure \emph{chooses} a rule $\rho$ to compute its critical pairs, the
+critic compares $\rho$ with the rules chosen before. If $\rho$ completes a
+family, the critic tries to replace the whole family by a single rule with
+an exponent. If it succeeds, completion is restarted with the new rule;
+otherwise it continues as usual. The critic is only active when critical
+pairs are generated.
+
+\subsection{Tower signatures}
+
+\begin{definition}[Tower skeleton and signature]
+A \emph{maximal tower} in a term $t$ is a subterm $\pw{c}{k}(s)$, with $c$
+unary and $k \ge 1$, that is not itself an argument of $c$ and such that $s$
+is not headed by $c$. The \emph{skeleton} $\sk(t)$ is obtained by replacing,
+from the root downwards, every maximal tower $\pw{c}{k}(s)$ by
+$\Box_c(\sk(s))$, where $\Box_c$ is a hole labelled with the symbol $c$. The
+\emph{tower lengths} $\ell(t) \in \mathbb{N}^m$ are the exponents $k$ of
+those towers, listed in pre-order. The \emph{signature} of a rule
+$l \rw r$ is the pair $(\sk(l \approx r), \ell(l \approx r))$, computed
+after renaming the variables canonically in order of first occurrence.
+\end{definition}
+
+The rules of Example~\ref{ex:fg} all have the skeleton
+$\Box_f(\Box_g(\Box_f(x))) \approx \Box_f(\Box_g(x))$, and the rule with
+$n$ copies of $g$ has tower lengths $(1,n,1,1,n)$.
+
+\subsection{Recognizing a family}
+
+The critic keeps the history $H$ of the signatures of the chosen rules.
+When a rule with signature $(S, v)$ is chosen, it looks for a previous
+signature $(S, w) \in H$ with the same skeleton such that
+\[
+  d = v - w \in \{0,1\}^m, \qquad d \ne 0, \qquad (S, w - d) \in H.
+\]
+Three rules of the history are then consecutive members of the arithmetic
+progression of tower lengths $u, u + d, u + 2d, \ldots$, where the base $u$
+is obtained by going down from $w - d$ in steps of $d$ while the
+corresponding signature is still in $H$. Requiring three members rather
+than two avoids generalizing coincidences, and restricting the steps to
+$\{0,1\}$ means that all the growing towers grow at the same rate. Each
+skeleton is generalized at most once.
+
+\subsection{Generalization and proof}
+
+The candidate rule is rebuilt from the skeleton: a hole $\Box_c$ whose
+tower does not grow ($d_j = 0$) is filled with the fixed tower
+$\pw{c}{u_j}$, and a hole whose tower grows ($d_j = 1$) is filled with the
+function power $c \pp (\Suc^{u_j}\;n)$, where $n$ is a
+fresh natural number variable. The instance $n = i$ of the candidate is
+then the member of the family with tower lengths $u + i\,d$. In
+Example~\ref{ex:fg}, with $u = (1,1,1,1,1)$ and $d = (0,1,0,0,1)$, the
+candidate is
+\[
+  f\,(\fp{g}{\Suc\;n}\,(f\,x)) = f\,(\fp{g}{\Suc\;n}\,x).
+\]
+The candidate is a conjecture, not a consequence of the rules seen so far,
+so it must be proved. The critic applies induction on $n$, with all the
+other free variables generalized, then simplifies both subgoals with the
+current rules and finally calls the first-order prover
+Metis~\cite{PaulsonSusanto07} with the same rules. The proof has a time
+limit; if it fails, the skeleton is marked as tried and completion goes on
+unchanged.
+
+\subsection{Termination}
+
+A rule with an exponent stands for infinitely many first-order rules, and
+the termination oracle can only check finitely many of them. The critic
+asks AProVE for the termination of the current rules together with the
+instances $n = 0, 1, 2$ of the candidate. This check is a heuristic: it
+does not prove that the infinite system terminates. In the examples of
+Section~\ref{sec:examples} it never rejected a proved rule; most of the
+schematic rules found there remove an occurrence of a symbol, such as the
+inner $f$ of Example~\ref{ex:fg}, at every instance. Proving termination of
+the schematic system itself is left for future work
+(Section~\ref{sec:conclusion}).
+
+\subsection{Rewriting with a schematic rule}
+
+A rule $\hat\rho(n)$ with an exponent cannot be given to the simplifier as
+it is, because its left-hand side contains $g \pp n$,
+which does not match a tower $\pw{g}{k}$, and because the rest of the
+procedure (termination checks, term orderings, critical pairs) works on
+first-order rules. Therefore schematic rules are kept in the proof context,
+not in the rule lists, and are used through a \emph{simplification
+procedure} (simproc). The simproc is triggered on terms headed by the head
+symbol of the left-hand side; for a redex $t$, it tries the instances
+$\hat\rho(0), \hat\rho(1), \ldots$ in turn, each obtained by instantiating
+$n$ with a numeral $\Suc^i\;0$ and unfolding the function power, until one
+of them rewrites $t$. The search is finite, because a tower in $t$ cannot be
+longer than the size of $t$. Each instance is an instance of a theorem, so
+the rewrite step is again justified by Isabelle's kernel, and the instances
+are cached. The simproc is added to every simplifier set used by completion:
+normalization, joinability tests and the final interreduction.
+
+\subsection{Restarting completion}
+
+When the critic succeeds, completion is restarted from the initial
+equations, with the new rule in the context and with the critical pairs
+among its instances $n = 0, 1, 2$ and between them and the initial
+equations. Members of the family that are generated again are now
+joinable, since the simproc rewrites them, and completion can terminate.
+The final system consists of the rules computed by the restarted
+completion and the schematic rules of the context, and it is added to
+\isa{compl}. A schematic rule in \isa{compl}, or a schematic rule given
+directly to \isa{complete}, is recognized by the presence of
+$\mathit{compow}$ and put into the context in the same way. At most five
+schematic rules are introduced in one completion, to avoid an unbounded
+chain of generalizations.
+
+\subsection{Soundness and completeness}
+
+\begin{proposition}
+Every rule of the system returned by \isa{complete}, including the
+schematic ones, is a theorem of the current Isabelle theory.
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+The rules produced by completion without the critic are theorems, as
+discussed in Section~\ref{sec:isascheme}. A schematic rule is accepted only
+after a proof by induction checked by Isabelle's kernel, and its instances
+and critical pairs are obtained from it by instantiation and rewriting with
+theorems.
+\end{proof}
+
+Completeness is a different matter. The critical pairs of a schematic rule
+are only approximated by those of its first three instances, and the
+termination of the infinite family is only tested on those instances.
+Hence the final system is not guaranteed to be convergent, even if every
+check succeeds. A complete treatment would compute the critical pairs of
+the schematic rule by unification of terms with integer
+exponents~\cite{Comon95}; we discuss this in Section~\ref{sec:conclusion}.
+
+%% ===========================================================================
+\section{Examples from the literature}
+\label{sec:examples}
+
+We evaluated the critic on divergent completions reported in the
+literature. Uninterpreted symbols are declared with \isa{typedecl} and
+\isa{consts}, the equations are stated with \isa{axiomatization}, and each
+equation is given to \isa{complete} with critical pairs enabled:
+\begin{lstlisting}
+typedecl T
+consts f :: "T ⇒ T"  g :: "T ⇒ T"
+axiomatization where fg: "f (g (f x)) = f (g x)"
+declare [[generate_cps = true]]
+complete "f (g (f x)) = f (g x)" by (rule fg)
+\end{lstlisting}
+Strings over an alphabet are encoded as compositions of unary functions,
+so that the word $aba$ becomes the term $a(b(a(x)))$. All runs used
+Isabelle2026 with 8 threads on a machine with two Intel Xeon E5645
+processors and 30\,GB of memory, the AProVE server of February 2026, and
+the default options of IsaLibs: 20\,s for each termination check and 60\,s
+for each proof attempted by the critic. Times are wall-clock times of the
+\isa{complete} commands, measured from the trace. Runs without the critic
+(option \isa{divergence\_critic = false}) were stopped after 300\,s; they
+were run two at a time, so the number of rules they reached is only
+indicative. The theories are distributed with the paper (see the
+Availability section).
+Table~\ref{tab:results} summarizes the results.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Divergent completions from the literature. ``Without critic'':
+completion with critical pairs and \isa{divergence\_critic = false},
+stopped after 300\,s. ``With critic'': the default configuration. Times are
+wall-clock times of the \isa{complete} commands.}
+\label{tab:results}
+\begin{tabular}{@{}l>{\raggedright}p{3.3cm}>{\raggedright}p{2.1cm}>{\raggedright}p{2.7cm}>{\raggedright\arraybackslash}p{3.3cm}@{}}
+\toprule
+& Equations & Source & Without critic & With critic\\
+\midrule
+1 & $f(g(f(x))) \approx f(g(x))$ & Example~\ref{ex:fg} &
+  no end; members up to $n = 8$ &
+  ends, 1 schematic rule, 3.8\,s\\
+1b & $f(g(f(x))) \approx g(f(x))$ & variant of 1 &
+  no end; members up to $n = 12$ &
+  ends, 1 schematic rule, 0.4\,s\\
+2 & Denzinger, IsaScheme's orientation & \cite[Fig.~48]{BurghardtHeinz96} &
+  ends, 3 rules, 0.9\,s & same (critic not triggered)\\
+2b & Denzinger, orientation of the LPO & \cite[Fig.~48]{BurghardtHeinz96} &
+  no end & ends, 1 schematic rule, 139\,s; system not confluent\\
+3 & $a(b(a(x))) \approx b(a(b(x)))$ &
+  \cite{KapurNarendran85}, \cite[Ex.~1]{HirokawaMiddeldorpSternagelWinkler17} &
+  not run (no finite convergent system exists) & family found but not proved; no end\\
+4 & associativity of Peano $+$ & \cite[\S4.4]{Dershowitz89} &
+  no end; Dershowitz's sequence up to $n = 10$ & ends, 2 schematic rules, 73\,s\\
+5 & bands & \cite[\S2.4]{Dershowitz89} & not run & not triggered; no end\\
+6 & signed binary trees & \cite[Ex.~2.1]{Kirchner89} & not run & not triggered; no end\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Self-overlapping rules}
+
+For Example~\ref{ex:fg}, completion chooses the rules
+$f(\pw{g}{k}(f(x))) \rw f(\pw{g}{k}(x))$ for $k = 1, 2, 3$ and, when the
+third one is chosen, the critic reports:
+\begin{lstlisting}[language={}]
+Divergence critic: f ((g ^^ Suc n) (f x)) = f ((g ^^ Suc n) x)
+Schematic rule: f ((g ^^ Suc ?n) (f ?x)) ≡ f ((g ^^ Suc ?n) ?x)
+Restarting completion with schematic rule: ...
+Done: f ((g ^^ Suc ?n) (f ?x)) ≡ f ((g ^^ Suc ?n) ?x)
+\end{lstlisting}
+The restarted completion finds that every critical pair is joinable with
+the schematic rule, and the final system is the single schematic rule,
+which subsumes the initial equation (its instance $n = 0$). The variant
+$f(g(f(x))) \approx g(f(x))$ behaves in the same way and ends with
+$f(\fp{g}{\Suc\;n}\,(f\,x)) \rw \fp{g}{\Suc\;n}\,(f\,x)$. Without the
+critic, both completions keep generating the members of the family until
+they are stopped; after 300\,s they had reached $n = 8$ and $n = 12$
+respectively.
+
+\subsection{Two families and the role of the ordering}
+
+\begin{example}[Denzinger]\label{ex:denzinger}
+Burghardt and Heinz~\cite[Fig.~48]{BurghardtHeinz96} report the following
+example of J.~Denzinger. With the lexicographic path ordering for the
+precedence $c \succ b \succ a \succ d \succ f \succ e$, completion of
+\[
+  a(c(x)) \approx x,\quad c(f(x)) \approx e(x),\quad
+  a(e(x)) \approx f(x),\quad c(d(x)) \approx b(c(x))
+\]
+generates the two families $a(\pw{b}{n}(c(x))) \rw \pw{d}{n}(x)$ and
+$a(\pw{b}{n}(e(x))) \rw \pw{d}{n}(f(x))$, for every
+$n \ge 1$.\footnote{In the figure the last equation appears as the first
+step of completion. Since $b$ and $d$ do not occur in the other equations,
+it must be part of the input.}
+\end{example}
+
+Given these equations in this order, IsaScheme does not diverge at all.
+Its termination oracle is not tied to a precedence, and it orients the
+second and fourth equations from right to left, as $e(x) \rw c(f(x))$ and
+$b(c(x)) \rw c(d(x))$. Completion then stops with the finite convergent
+system
+\[
+  \{\, a(c(x)) \rw x,\ \ e(x) \rw c(f(x)),\ \ b(c(x)) \rw c(d(x)) \,\},
+\]
+whose left-hand sides do not overlap, and which proves the third equation
+by $a(e(x)) \rw a(c(f(x))) \rw f(x)$. This is a reminder that divergence
+is a property of a run, and depends on the
+ordering~\cite{Lescanne86,Dershowitz89}.
+
+To reproduce the divergent run, we fixed the orientations of the
+precedence for the input equations with IsaScheme's command
+\isa{orient\_rules}:
+\begin{lstlisting}
+orient_rules "c (f ?x) = e ?x"
+orient_rules "c (d ?x) = b (c ?x)"
+\end{lstlisting}
+The rules derived during completion are still oriented by the oracle,
+which prefers $d(x) \rw a(b(c(x)))$ and $f(x) \rw a(e(x))$, eliminating
+$d$ and $f$. Completion now diverges, and the critic sees three families.
+It first conjectures Denzinger's own family,
+$a(\fp{b}{\Suc\;n}\,(c\,x)) = \fp{d}{\Suc\;n}\,x$. The restart, however,
+comes from a second family, which it detects and proves 1.4\,s later:
+\[
+  c\,(a\,(\fp{b}{\Suc\;n}\,(c\,x))) = \fp{b}{\Suc\;n}\,(c\,x).
+\] After the restart a third family appears,
+$c(a(\pw{b}{n}(e(x)))) \rw \pw{b}{n}(e(x))$. The critic conjectures
+$c\,(a\,(\fp{b}{\Suc\;n}\,(e\,x))) = \fp{b}{\Suc\;n}\,(e\,x)$ but does not
+prove it within the time limit, and completion terminates after 139\,s.
+The final system contains the schematic rule and the first three members
+of the third family as separate rules.
+
+This system is \emph{not} confluent. The terms
+$c(a(\pw{b}{4}(e(x))))$ and $\pw{b}{4}(e(x))$ are equal, but both are
+irreducible. The missing rule is the critical pair between the instance
+$n = 3$ of the schematic rule and the rule $c(a(e(y))) \rw e(y)$, at the
+position of the inner $c$, and the critic only computes the critical pairs
+of the instances $n = 0, 1, 2$. The example shows concretely both
+approximations discussed in Section~\ref{sec:critic}. It also shows what an
+exact computation would buy. The critical pair of the schematic rule
+itself with $c(a(e(y))) \rw e(y)$ is the whole third family as a schematic
+rule, obtained by unification and rewriting, so it would need no proof by
+induction.
+
+\subsection{The braid monoid}
+
+The three-strand positive braid monoid $\langle a, b \mid aba = bab\rangle$
+has no finite convergent presentation over $\{a, b\}$~\cite{KapurNarendran85}.
+With a Knuth--Bendix order where $a > b$, completion produces in the limit
+the system $\{aba \rw bab\} \cup \{ab^nab \rw babba^{n-1} \mid n \ge 2\}$
+\cite[Example~1]{HirokawaMiddeldorpSternagelWinkler17}. IsaScheme orients
+the equation in the same direction and the critic recognizes exactly this
+family, with exponent $n + 2$:
+\begin{lstlisting}[language={}]
+Divergence critic: a ((b ^^ Suc (Suc n)) (a (b x)))
+                     = b (a (b (b ((a ^^ Suc n) x))))
+Schematic rule not proved
+\end{lstlisting}
+The conjecture is a theorem, but the critic's tactic does not prove it
+within 60\,s, so completion goes on diverging. The induction step needs
+to rewrite $b(a(b(x)))$ to $a(b(a(x)))$ at the \emph{bottom} of the tower
+$b^{n+3}$, while the definition of the function power exposes the copy of
+$b$ at the \emph{top}. With the standard lemma
+$f\,(\fp{f}{n}\,x) = \fp{f}{n}\,(f\,x)$ (\isa{funpow\_swap1}) as an extra
+simplification rule, the proof is found by the same tactic in 0.1\,s:
+\begin{lstlisting}
+lemma "a ((b ^^ Suc (Suc n)) (a (b x))) = b (a (b (b ((a ^^ Suc n) x))))"
+  apply (induction n arbitrary: x)
+   apply (simp_all add: funpow_swap1)
+  by (metis ab)+
+\end{lstlisting}
+This failure is therefore a limitation of the proof tactic rather than of
+the method (Section~\ref{sec:conclusion}). Note that a finite convergent
+system for the braid monoid needs a new symbol~\cite{Burckel01}; with the
+schematic rule, the infinite system of the literature would be represented
+by two rules over the original signature.
+
+\subsection{An inductive example: associativity of addition}
+
+Dershowitz~\cite[Section~4.4]{Dershowitz89} uses the associativity of
+Peano addition, with addition defined by recursion on its second argument,
+to show that whether completion proves an inductive theorem depends on the
+ordering: with one ordering completion succeeds, with another it generates
+the infinite sequence
+\begin{gather*}
+  (x+y)+z \approx x+(y+z),\qquad s(x+y)+z \approx x+(s(y)+z),\\
+  s(s(x+y))+z \approx x+(s(s(y))+z),\quad \ldots
+\end{gather*}
+This example is closer to the intended use of IsaScheme, where completion
+runs on the defining equations of recursive functions and on inductive
+lemmas:
+\begin{lstlisting}
+datatype N = Z | S N
+fun plus :: "N ⇒ N ⇒ N" where
+  "plus x Z = x"
+| "plus x (S y) = S (plus x y)"
+declare [[generate_cps = true]]
+complete "plus (plus x y) z = plus x (plus y z)"
+  by (induction z, auto)
+\end{lstlisting}
+IsaScheme's completion orients associativity from left to right and runs
+into Dershowitz's sequence. Along the way, its heuristic for equations of
+the form $c(s) = c(t)$ proves the inductive lemma $\mathit{plus}\;Z\;z = z$,
+and a second family appears. The critic generalizes both, in this order:
+\begin{lstlisting}[language={}]
+Schematic rule: plus ?x (plus ((S ^^ Suc ?n) Z) ?y)
+                  ≡ plus ((S ^^ Suc ?n) ?x) ?y
+Schematic rule: plus ((S ^^ Suc ?n) (plus ?x ?y)) ?z
+                  ≡ plus ?x (plus ((S ^^ Suc ?n) ?y) ?z)
+\end{lstlisting}
+The second rule is exactly the family of Dershowitz's sequence. Completion
+then terminates with the system
+\begin{gather*}
+  \mathit{plus}\;x\;Z \rw x, \qquad
+  \mathit{plus}\;x\;(S\,y) \rw S\,(\mathit{plus}\;x\;y), \qquad
+  \mathit{plus}\;Z\;z \rw z, \\
+  \mathit{plus}\;(\mathit{plus}\;x\;y)\;z \rw \mathit{plus}\;x\;(\mathit{plus}\;y\;z), \\
+  \mathit{plus}\;x\;(\mathit{plus}\;(\fp{S}{\Suc\;n}\,Z)\;y)
+     \rw \mathit{plus}\;(\fp{S}{\Suc\;n}\,x)\;y, \\
+  \mathit{plus}\;(\fp{S}{\Suc\;n}\,(\mathit{plus}\;x\;y))\;z
+     \rw \mathit{plus}\;x\;(\mathit{plus}\;(\fp{S}{\Suc\;n}\,y)\;z)
+\end{gather*}
+in 73\,s. Both schematic rules are inductive theorems, proved by the
+critic by induction on $n$ from the rules available at that point. Without
+the critic, completion follows Dershowitz's sequence, together with the
+second family, and has reached $n = 10$ when it is stopped after 300\,s.
+
+\subsection{Families out of reach}
+
+The last two examples diverge for reasons that the critic cannot address.
+Completion of the theory of \emph{bands} (idempotent semigroups),
+\[
+  (x \cdot y) \cdot z \approx x \cdot (y \cdot z), \qquad x \cdot x \approx x,
+\]
+produces an infinite system with rules such as
+$x \cdot (y \cdot (x \cdot y)) \rw x \cdot y$ and
+$x \cdot (y \cdot (x \cdot (y \cdot z))) \rw x \cdot (y \cdot z)$
+\cite[Section~2.4]{Dershowitz89}. Kirchner's \emph{signed binary
+trees}~\cite[Example~2.1]{Kirchner89},
+\begin{gather*}
+  -(-x) \approx x,\qquad -f(x,y) \approx f(-y,-x),\\
+  f(f(y,x),-x) \approx y,\qquad f(-x,f(x,y)) \approx y,
+\end{gather*}
+produce two families whose members grow as nested binary terms, such as
+\begin{gather*}
+  f(f(y,f(x_1,x_2)),f(-x_2,-x_1)) \rw y, \\
+  f(f(y,f(x_1,f(x_2,x_3))),f(f(-x_3,-x_2),-x_1)) \rw y.
+\end{gather*}
+Kirchner schematizes them with meta-rules modulo the first two
+equations~\cite{Kirchner89,BurghardtHeinz96}. In both theories the growing
+part is a binary context, not a tower of a unary symbol, so the critic is
+never triggered. IsaScheme reproduces the beginning of Kirchner's families,
+and neither completion terminates within 300\,s. Representing these
+families inside HOL needs a recursive function that builds the growing
+context, which we discuss in Section~\ref{sec:conclusion}.
+
+%% ===========================================================================
+\section{Related work}
+\label{sec:related}
+
+\paragraph{Schematization of infinite rule sets.}
+H.~Kirchner introduced \emph{meta-rules}, rules with meta-variables ranging
+over terms, recognized by generalization modulo an equational theory, to
+schematize the infinite families produced by divergent
+completion~\cite{Kirchner87,Kirchner89}. Hermann characterized
+\emph{crossed} rewrite systems, a syntactic source of
+divergence~\cite{Hermann89}, and with Kirchner synthesized meta-rules from
+them~\cite{KirchnerHermann90}. Chen, Hsiang and Kong proposed
+\emph{recurrence terms}, terms with recursive definitions over a natural
+number parameter, as finite representations of infinite sequences of
+terms~\cite{ChenHsiangKong90}. Comon defined terms with integer exponents,
+whose unification problem is decidable~\cite{Comon95}, and Hermann and
+Galbav\'y generalized them to primal grammars~\cite{HermannGalbavy97}. Our
+function powers are the special case of integer exponents applied to unary
+contexts, which is also the case that Burghardt and Heinz identify as the
+appropriate background theory for divergent examples like the one of
+Example~\ref{ex:denzinger}~\cite{BurghardtHeinz96}. The difference is that
+in HOL the exponent is part of the logic: the schematic rule is a theorem,
+its instances are obtained by instantiation and its correctness is proved
+by induction inside the prover, rather than argued about at the meta level.
+
+\paragraph{Recognizing divergence.}
+Thomas and Jantke used inductive inference to replace an infinite sequence
+of critical pairs by finitely many
+generalizations~\cite{ThomasJantke89}, and Thomas and Watson replaced an
+infinite rule set by a finite one over an enriched order-sorted
+signature~\cite{ThomasWatson93}. Avenhaus achieved termination of
+completion by introducing new function symbols and
+equations~\cite{Avenhaus89}. Dershowitz and Pinchover used most specific
+generalization to find divergence patterns among critical
+pairs~\cite{DershowitzPinchover90}, and Burghardt and Heinz studied
+anti-unification modulo equational theories as a tool for the same
+purpose~\cite{BurghardtHeinz96}. Our detection is much simpler than
+generalization modulo a theory: it is exact matching of skeletons plus an
+arithmetic check on tower lengths. It is cheap enough to run after every
+choice of a rule, and it succeeds exactly on the families that a single
+exponent can describe.
+
+\paragraph{Divergence critics in inductive proof.}
+Walsh's divergence critic~\cite{Walsh94,Walsh96} monitors an inductive
+prover (Spike), recognizes accumulating term structure by difference
+matching and speculates lemmas that ripple it away~\cite{Bundy05}. It is a
+proof-planning critic in the sense of Ireland and Bundy~\cite{IrelandBundy96}.
+Our critic shares its spirit, monitoring a procedure and proposing a lemma
+that cuts the divergence, but the lemma it proposes is not a wave rule: it
+is the generalization of the diverging sequence itself, which becomes
+expressible thanks to the function power of HOL. IsaScheme's inductive
+prover already includes a Walsh-style critic for its own proofs; the one
+described here acts on completion.
+
+\paragraph{Infinite and negative results.}
+Some theories have no finite convergent presentation in their own
+signature, the braid monoid $\langle a, b \mid aba = bab\rangle$ being the
+classical example~\cite{KapurNarendran85}; Burckel gave a finite complete
+system with an extra symbol~\cite{Burckel01}. Infinite complete systems can
+still be useful: Hirokawa et al.\ formalized in Isabelle/HOL that fair
+infinite runs produce complete presentations, with the braid monoid as
+their running example~\cite{HirokawaMiddeldorpSternagelWinkler17}, and
+the automatic groups programs of Epstein, Holt and Rees represent infinite
+string rewriting systems by finite automata~\cite{EpsteinHoltRees91}.
+Hermann and Pr\'{\i}vara studied the non-termination of the Knuth--Bendix
+procedure~\cite{HermannPrivara86}; divergence depends on the reduction
+ordering~\cite{Lescanne86,Dershowitz89}; and Sattler-Klein showed that the
+infinite systems produced by completion can be very
+complex~\cite{SattlerKlein91}. No critic based on a fixed class of
+schematizations can therefore handle every divergent run.
+
+\paragraph{Completion in proof assistants.}
+Completion and Knuth--Bendix orders have been formalized in Isabelle/HOL as
+part of the IsaFoR library~\cite{SternagelThiemann13,HirokawaMiddeldorpSternagel14,HirokawaMiddeldorpSternagelWinkler17}.
+That work verifies completion as an algorithm; IsaScheme instead runs
+completion \emph{inside} Isabelle on the user's theorems, and it is this
+setting, where rules are theorems and induction is available, that makes
+our generalization possible. Theory exploration systems such as
+IsaCoSy~\cite{JohanssonDixonBundy11} and QuickSpec~\cite{ClaessenSmallboneHughes10}
+face the same need for a non-redundant summary of the discovered equations.
+
+%% ===========================================================================
+\section{Limitations, future work and conclusion}
+\label{sec:conclusion}
+
+The critic is deliberately simple, and the experiments show where its
+limits lie.
+
+\paragraph{Shape of the families.}
+Only towers of one unary symbol are recognized, all growing towers must
+grow at the same rate, and the generalized rule has a single exponent.
+Families such as $f(\pw{g}{2n}(x))$, families with two independent
+exponents, and families that grow in non-unary contexts, like those of
+bands and of Kirchner's signed binary trees, are out of reach. The first
+two cases fit naturally in the same framework, since HOL can express
+$g \pp (2 * n)$ and rules with several exponent
+variables. The third one needs a recursive function that builds the
+growing context. Inventing such functions is exactly what IsaScheme's
+concept invention does with schemes~\cite{MontanoRivas12}, and connecting
+the critic with it is the most interesting direction for future work.
+
+\paragraph{Proving the generalization.}
+The proof tactic (induction, simplification and Metis with the current
+rules) fails on the braid monoid although the family is a theorem: the
+induction step needs to move one copy of the iterated symbol from the top
+to the bottom of the tower, which Metis does not find without the lemma
+$f\,(\fp{f}{n}\,x) = \fp{f}{n}\,(f\,x)$. Adding a small library of lemmas
+about the function power, or calling IsaScheme's own inductive prover with
+lemma speculation, should close this gap.
+
+\paragraph{Completeness of the restarted completion.}
+The critical pairs of a schematic rule are approximated by those of its
+first three instances, and the termination of the infinite family is
+tested on the same instances. Both approximations could be replaced by
+exact methods: critical pairs of rules with exponents can be computed by
+unification of terms with integer exponents~\cite{Comon95}, and the
+termination of the schematic system could be proved by a reduction ordering
+extended to function powers, or by proving termination of the instance
+$n$ by induction. With both, the final system would be convergent whenever
+completion terminates.
+
+\paragraph{Conclusion.}
+In higher-order logic, the infinite families of rules produced by
+divergent completion are often a single theorem about the function power.
+We have shown how a theorem-producing completion procedure can detect such
+families, state and prove the corresponding theorem by induction, and use
+it to finish completion, without leaving the logic and without changing
+the first-order machinery of termination checks and term orderings. The
+method solves the classical examples whose divergence is a growing tower of
+a unary symbol, including Dershowitz's inductive example on Peano addition,
+and the examples it does not solve point to natural extensions within the
+same framework.
+
+%% ===========================================================================
+\section*{Availability}
+{\sloppy
+IsaScheme/IsaLibs is available at
+\url{https://github.com/omarmrivas/IsaScheme}. The theories used in
+Section~\ref{sec:examples} are in the directory
+\url{papers/divergent-completion-iterated-functions/experiments} of the
+repository.\par}
+
+\bibliographystyle{elsarticle-num}
+\bibliography{references}
+
+\end{document}
