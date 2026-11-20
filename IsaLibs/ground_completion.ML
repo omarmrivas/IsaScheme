@@ -15,6 +15,8 @@ sig
   val max_time_in_completion        : int Config.T
 
   val generate_cps                  : bool Config.T
+  val divergence_critic             : bool Config.T
+  val schematic_instance            : Proof.context -> thm -> int -> thm
 
   val match_inst                    :  Proof.context -> Envir.env -> (ctyp * ctyp) list * (cterm * cterm) list
   val linear_if_possible            :  thm -> thm
@@ -53,6 +55,8 @@ exception RESTART_COMPLETION of string * thm list
 
 val (max_time_in_completion, setup_max_time_in_completion) = Attrib.config_int @{binding "max_time_in_completion"} (K 180)
 val (generate_cps, setup_generate_cps) = Attrib.config_bool @{binding "generate_cps"} (K true)
+(* only used when critical pairs are generated *)
+val (divergence_critic, setup_divergence_critic) = Attrib.config_bool @{binding "divergence_critic"} (K true)
 
 (*fun ord_to_str l = 
     l |> map (fn (Const (n,_),i) => n ^ string_of_int i
@@ -340,16 +344,97 @@ fun memoized_discriminate_rules ctxt terminates thms =
   end
 | memoized_discriminate_rules _ _ [] = ([], [])*)
 
+(* Schematic rules.
+
+   A schematic rule is a meta equation where some towers c (c (... s)) of
+   a unary function c are written (c ^^ e) s, and all exponents e depend
+   on one natural number variable ?n, e.g.
+
+     f ((g ^^ Suc ?n) (f ?x)) == f ((g ^^ Suc ?n) ?x)
+
+   It stands for the infinite family of its instances ?n = 0, 1, 2, ...
+   Completion keeps the terms plain (no ^^): a simproc unfolds the
+   instance that matches the redex and rewrites with it. Schematic rules
+   live in the proof context, not in the rule lists, so AProVE and the
+   term orderings only ever see plain first-order rules. *)
+
+fun compow_exponents t =
+  let fun exps (Const (@{const_name compow}, _) $ e $ c) acc = exps c (e :: acc)
+        | exps (t $ u) acc = exps t (exps u acc)
+        | exps (Abs (_, _, b)) acc = exps b acc
+        | exps _ acc = acc
+  in exps t [] end
+
+fun is_schematic_rule th = not (null (compow_exponents (Thm.prop_of th)))
+
+(* the natural number variable of the exponents, if there is exactly one *)
+fun exponent_var th =
+  case fold Term.add_vars (compow_exponents (Thm.prop_of th)) [] of
+      [v as (_, @{typ nat})] => SOME v
+    | _ => NONE
+
+(* the instance n = k, with the towers unfolded *)
+fun schematic_instance ctxt th k =
+  case exponent_var th of
+      SOME (v, _) =>
+        let val nat_k = funpow k HOLogic.mk_Suc HOLogic.zero
+            val unfold_ctxt = put_simpset HOL_basic_ss ctxt
+                                |> Simplifier.add_simps @{thms funpow.simps comp_apply id_apply}
+        in th |> Drule.infer_instantiate ctxt [(v, Thm.cterm_of ctxt nat_k)]
+              |> simplify unfold_ctxt
+        end
+    | NONE => raise THM ("schematic_instance: no exponent variable", 0, [th])
+
+fun schematic_simproc ctxt0 th =
+  let val cache = Synchronized.var "schematic_instances" (Inttab.empty : thm Inttab.table)
+      fun instance ctxt k =
+        case Inttab.lookup (Synchronized.value cache) k of
+            SOME r => r
+          | NONE => let val r = schematic_instance ctxt th k
+                        val _ = Synchronized.change cache (Inttab.update (k, r))
+                    in r end
+      val (head, args) = instance ctxt0 0 |> Thm.prop_of |> Logic.dest_equals |> fst |> strip_comb
+      val pat = list_comb (head, map_index (fn (i, a) => Var (("x", i), fastype_of a)) args)
+  in Simplifier.make_simproc ctxt0
+       {name = "schematic_rule",
+        kind = Simplifier.Simproc,
+        lhss = [pat],
+        (* a tower in the redex is at most as long as the redex itself *)
+        proc = fn _ => fn ctxt => fn ct =>
+          let val bound = size_of_term (Thm.term_of ct)
+              fun try_instance k =
+                if k > bound then NONE
+                else SOME (Conv.rewr_conv (instance ctxt k) ct)
+                     handle CTERM _ => try_instance (k + 1)
+                          | THM _ => try_instance (k + 1)
+          in try_instance 0 end,
+        identifier = []}
+  end
+
+structure Schematic_Rules = Proof_Data
+(
+  type T = (thm * simproc) list
+  fun init _ = []
+)
+
+val schematic_rules = map fst o Schematic_Rules.get
+
+fun add_schematic_rule th ctxt =
+  Schematic_Rules.map (fn rs => rs @ [(th, schematic_simproc ctxt th)]) ctxt
+
+fun add_schematic_simprocs ctxt =
+  fold (Simplifier.add_proc o snd) (Schematic_Rules.get ctxt) ctxt
+
 fun ordered_simpset_without_simprocs ctxt terminates thms =
     let val ctxt = Simplifier.empty_simpset ctxt
         val (_,rules) = memoized_discriminate_rules ctxt terminates thms
-    in Simplifier.add_simps rules ctxt
+    in Simplifier.add_simps rules (add_schematic_simprocs ctxt)
     end
 
 fun ordered_simpset ctxt terminates thms =
     let val ctxt = Simplifier.empty_simpset ctxt
         val (equations, rules) = memoized_discriminate_rules ctxt terminates thms
-    in Simplifier.add_simps (equations @ rules) ctxt
+    in Simplifier.add_simps (equations @ rules) (add_schematic_simprocs ctxt)
     end
 
 fun rewrite_rule ctxt terminates thms =
@@ -401,6 +486,7 @@ fun ground_joinable ctxt terminates f_map (e, E) =
                      |> Term_Ord.term_lpo
                      |> (fn g_ord =>
                             let val ctxt = ctxt |> Simplifier.set_term_ord g_ord
+                                                |> add_schematic_simprocs
                                                 |> (fn ctxt => Simplifier.add_simps (equations @ rules) ctxt)
                             in
                             e |> simplify ctxt
@@ -416,10 +502,12 @@ fun ground_joinable ctxt terminates f_map (e, E) =
 val memoized_joinability_var = Synchronized.var "memoized_joinability"
                       (Thm_Thm_List_Tab.empty : bool Thm_Thm_List_Tab.table)
 
+(* the schematic rules of ctxt also decide joinability, so they are part of the key *)
 fun memoized_joinable ctxt terminates f_map E e =
   let val E = sort Thm.thm_ord E
+      val key_E = E @ schematic_rules ctxt
   in Utils.memoize_function Thm_Thm_List_Tab.lookup Thm_Thm_List_Tab.update I memoized_joinability_var
-                            (ground_joinable ctxt terminates f_map) (e, E) end
+                            (fn _ => ground_joinable ctxt terminates f_map (e, E)) (e, key_E) end
 
 fun memoized_joinable' ctxt terminates f_map E e =
   let val e = Prover.cheat_prover ctxt e
@@ -547,21 +635,171 @@ fun make_irreducible _ _ _ TRS [] = TRS
     then make_irreducible ctxt terminates f_map R TRS
     else make_irreducible ctxt terminates f_map (th :: R) TRS
 
+(* Divergence critic for completion.
+
+   When completion diverges it often produces a family of rules that only
+   differ in the length of some towers of a unary function, e.g.
+
+     f (g (f x)) = f (g x),  f (g (g (f x))) = f (g (g x)),  ...
+
+   (cf. the meta-rules of H. Kirchner, TCS 67, 1989, the recurrence terms
+   of Chen, Hsiang and Kong, CTRS 1990, and the divergence critic of
+   T. Walsh for induction, JAIR 4, 1996). Every chosen rule is abstracted
+   into a skeleton plus the lengths of its towers. Three chosen rules with
+   the same skeleton whose tower lengths grow by 0 or 1 in each step
+   suggest the schematic rule where the growing towers have length k + n,
+   written c ^^ Suc^k n. It is proved by induction on n with the current
+   rules (simp, then metis), and completion restarts with it. *)
+
+fun is_funT (Type ("fun", _)) = true
+  | is_funT _ = false
+
+fun unary_symbol (Const (_, Type ("fun", [T, U]))) = T = U andalso not (is_funT T)
+  | unary_symbol (Free (_, Type ("fun", [T, U]))) = T = U andalso not (is_funT T)
+  | unary_symbol _ = false
+
+val tower_hole = "__tower"
+
+(* skeleton of t (maximal towers replaced by holes) and the tower lengths,
+   in pre-order *)
+fun tower_skeleton t =
+  let fun tower c (t as c' $ s) k = if c' aconv c then tower c s (k + 1) else (k, t)
+        | tower _ t k = (k, t)
+      fun skel (t as c $ s) =
+            if unary_symbol c then
+              let val (k, base) = tower c t 0
+                  val (base', ks) = skel base
+                  val T = fastype_of c
+              in (Free (tower_hole, T --> T) $ c $ base', k :: ks) end
+            else
+              let val (c', ks1) = skel c
+                  val (s', ks2) = skel s
+              in (c' $ s', ks1 @ ks2) end
+        | skel (Abs (x, T, b)) = let val (b', ks) = skel b in (Abs (x, T, b'), ks) end
+        | skel t = (t, [])
+  in skel t end
+
+(* variables renamed ?x, ?y, ... in order of first occurrence; the name n
+   is kept for the exponent variable *)
+fun canonical_vars t =
+  let val vs = rev (Term.add_vars t [])
+      val names = Name.invent (Name.make_context ["n"]) "x" (length vs)
+      fun ren (Var (xi, T)) =
+            Var ((nth names (find_index (fn (xi', _) => xi' = xi) vs), 0), T)
+        | ren t = t
+  in map_aterms ren t end
+
+fun rule_signature th = th |> Thm.prop_of |> canonical_vars |> tower_skeleton
+
+(* the skeleton with the given tower lengths; a tower whose length grows
+   (delta 1) gets the exponent Suc^k n *)
+fun build_from_skeleton n (Free (h, _) $ c $ base) ((k, delta) :: kds) =
+      if h = tower_hole then
+        let val (base', kds') = build_from_skeleton n base kds
+            val T = fastype_of c
+            val t = if delta = 0 then funpow k (fn s => c $ s) base'
+                    else Const (@{const_name compow}, HOLogic.natT --> T --> T)
+                           $ funpow k HOLogic.mk_Suc n $ c $ base'
+        in (t, kds') end
+      else raise TERM ("build_from_skeleton", [base])
+  | build_from_skeleton n (t $ u) kds =
+      let val (t', kds1) = build_from_skeleton n t kds
+          val (u', kds2) = build_from_skeleton n u kds1
+      in (t' $ u', kds2) end
+  | build_from_skeleton n (Abs (x, T, b)) kds =
+      let val (b', kds') = build_from_skeleton n b kds in (Abs (x, T, b'), kds') end
+  | build_from_skeleton _ t kds = (t, kds)
+
+(* a family among the chosen rules: tower lengths u, u + d, u + 2 d, ...
+   with d in {0,1}^m, d <> 0, and the newest rule as its last member *)
+fun find_family history (skel, v) =
+  let val same = filter (fn (s, _) => s aconv skel) history
+      fun present ks = exists (fn (_, ks') => ks' = ks) same
+      fun minus (a, b) = map2 (fn x => fn y => x - y) a b
+      fun delta_ok d = forall (fn x => x = 0 orelse x = 1) d andalso exists (fn x => x = 1) d
+      fun lowest d u = if present (minus (u, d)) then lowest d (minus (u, d)) else u
+  in get_first (fn (_, w) =>
+        if length w <> length v then NONE
+        else let val d = minus (v, w)
+             in if delta_ok d andalso present (minus (w, d))
+                then SOME (lowest d (minus (w, d)), d)
+                else NONE
+             end) same
+  end
+
+fun family_tac rules n others ctxt =
+  Induct.induct_tac ctxt false [[SOME (NONE, (n, false))]] [others] [] NONE [] 1
+  THEN ALLGOALS (TRY o asm_full_simp_tac (Simplifier.add_simps rules ctxt))
+  THEN ALLGOALS (Metis_Tactic.metis_tac [] ATP_Problem_Generate.combsN ctxt rules)
+
+(* SOME schematic rule (meta equation) proved for the family of rl *)
+fun apply_divergence_critic ctxt terminates rules history rl =
+  case find_family history (rule_signature rl) of
+      NONE => NONE
+    | SOME (u, d) =>
+        let val (skel, _) = rule_signature rl
+            val n = Var (("n", 0), HOLogic.natT)
+            val (prop, _) = build_from_skeleton n skel (u ~~ d)
+            val (lhs, rhs) = Logic.dest_equals prop
+            val conj = HOLogic.mk_Trueprop (HOLogic.mk_eq (lhs, rhs)) |> Logic.unvarify_global
+            val n_free = Free ("n", HOLogic.natT)
+            val others = Term.add_frees conj [] |> filter_out (fn v => v = ("n", HOLogic.natT))
+            val rules_obj = map Utils.meta_to_obj rules
+            val _ = tracing ("Divergence critic: " ^ Syntax.string_of_term ctxt conj)
+            val time_out = Config.get ctxt Prover.max_time_in_proof
+        in case Prover.prove_from_tactic ctxt NONE (family_tac rules_obj n_free others) conj time_out of
+               SOME th =>
+                 let val gen = Utils.obj_to_meta th
+                     val instances = map (schematic_instance ctxt gen) [0, 1, 2]
+                 in if exponent_var gen <> NONE andalso terminates (instances @ rules)
+                    then (tracing ("Schematic rule: " ^ Utils.str_of_thms [gen]); SOME gen)
+                    else (tracing "Schematic rule rejected (termination)"; NONE)
+                 end
+             | NONE => (tracing "Schematic rule not proved"; NONE)
+        end
+
+datatype COMPL = DONE of thm list | FINAL of thm list
+
 fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
     let
       val proof_timeOut = Config.get ctxt Prover.max_time_in_proof
+      val use_critic = generate_cps andalso Config.get ctxt divergence_critic
+                       andalso length (schematic_rules ctxt) < 5
       val E = E |> map (fn th => (Utils.rule_int_ord th, th))
                 |> sort ((list_ord int_ord) o (apply2 fst))
                 |> map snd
       val E' = E
-      fun compl (E,S,R) = case (if !completion_debug then print_completion (E,S,R) else ();
+      fun restart_with gen =
+        let val ctxt' = add_schematic_rule gen ctxt
+            (* the critical pairs of the schematic rule are approximated by
+               those of its first instances *)
+            val instances = map (schematic_instance ctxt' gen) [0, 1, 2]
+            val cps = semi_critical_pairs thy ord instances instances @
+                      semi_critical_pairs thy ord instances E' @
+                      semi_critical_pairs thy ord E' instances
+            val _ = tracing ("Restarting completion with schematic rule: " ^ Utils.str_of_thms [gen])
+        in complete global_meta_rws thy ctxt' ord generate_cps terminates f_map (E' @ cps) end
+      (* history: signatures of the chosen rules; tried: skeletons already generalized *)
+      fun compl (history, tried) (E,S,R) =
+                          case (if !completion_debug then print_completion (E,S,R) else ();
                                 orient ctxt global_meta_rws ord terminates f_map (E,S,R)) of
-                            NORMAL ([],R') => R'
+                            NORMAL ([],R') => DONE R'
                           | NORMAL (S',R') => let (*val lemmas = (S @ R) |> memoized_discriminate_rules terminates
                                                                            |> (fn (x, y) => x @ y)*)
                                                   val (rl,S'') = choose ctxt proof_timeOut E' S'
                                                   val _ = if !completion_debug then tracing ("Choosed: " ^ Utils.str_of_thms [rl])
                                                           else ()
+                                                  val sg = rule_signature rl
+                                                  val gen = if use_critic andalso
+                                                               not (exists (fn s => s aconv fst sg) tried)
+                                                            then apply_divergence_critic ctxt terminates (rl :: R') history rl
+                                                            else NONE
+                                              in case gen of
+                                                   SOME gen => FINAL (restart_with gen)
+                                                 | NONE =>
+                                                let
+                                                  val tried = if use_critic andalso is_some (find_family history sg)
+                                                              then fst sg :: tried else tried
                                                   val cps = if generate_cps then
                                                               ((semi_critical_pairs thy ord [rl] R') @
                                                                (semi_critical_pairs thy ord R' [rl]) @
@@ -573,14 +811,17 @@ fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
 (*                                                                |> map (Raw_Simplifier.rewrite_rule ctxt global_meta_rws)*)
                                                             else []
                                                   val _ = if !completion_debug then tracing ("Critical pairs: " ^ Utils.str_of_thms cps) else ()
-                                              in compl (cps,S'',rl :: R') end
+                                              in compl (sg :: history, tried) (cps,S'',rl :: R') end
+                                              end
                           | RESTART thms => (tracing ("Restarting completion..." ^ Utils.str_of_thms (E' @ thms));
-                                             complete global_meta_rws thy ctxt ord generate_cps terminates f_map (E' @ thms))
+                                             FINAL (complete global_meta_rws thy ctxt ord generate_cps terminates f_map (E' @ thms)))
     in
-      (E,[],[]) |> compl
-(*                |> tap (fn TRS => tracing ("Done 0: " ^ Utils.str_of_thms TRS))*)
-                |> make_irreducible ctxt terminates f_map []
-                |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms TRS))
+      case (E,[],[]) |> compl ([], []) of
+        FINAL TRS => TRS
+      | DONE R =>
+          R |> make_irreducible ctxt terminates f_map []
+            |> (fn TRS => TRS @ schematic_rules ctxt)
+            |> tap (fn TRS => tracing ("Done: " ^ Utils.str_of_thms TRS))
     end
 
 fun run_completion global_meta_rws ctxt terminates E e =
@@ -598,9 +839,15 @@ fun run_completion global_meta_rws ctxt terminates E e =
 (*     val f_map_less = map_index (fn (x,y) => (y,x)) deps
      val f_map_greater = map_index (fn (x,y) => (y,x)) (rev deps)*)
      val f_maps = f_map_eq
+     (* schematic rules (from compl, or e itself) go to the context *)
+     val (schematic, plain) = List.partition is_schematic_rule (e :: E)
+     val (schematic, rejected) = List.partition (is_some o exponent_var) schematic
+     val _ = if null rejected then ()
+             else tracing ("Ignored (several exponent variables): " ^ Utils.str_of_thms rejected)
+     val ctxt = fold add_schematic_rule schematic ctxt
   in [complete global_meta_rws thy ctxt LESS generate_cps terminates f_maps,
       complete global_meta_rws thy ctxt GREATER generate_cps terminates f_maps]
-      |> Par_List.get_some (fn f => SOME (f (e :: E)))
+      |> Par_List.get_some (fn f => SOME (f plain))
       |> the
   end
 

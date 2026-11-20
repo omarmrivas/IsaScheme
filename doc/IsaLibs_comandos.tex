@@ -11,6 +11,7 @@
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{listings}
+\usepackage{needspace}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc}
 \usepackage[hidelinks]{hyperref}
@@ -54,6 +55,7 @@
   columns=fullflexible,
   keepspaces=true,
   showstringspaces=false,
+  upquote=true,
   frame=single,
   framesep=4pt,
   xleftmargin=6pt,xrightmargin=6pt,
@@ -112,6 +114,7 @@ basado en \emph{esquemas}~\cite{montano2012}. A partir de ese núcleo se añadie
 \end{itemize}
 
 \subsection{Cómo se carga}
+\label{sec:carga}
 
 La sesión \isa{IsaLibs} (archivo \isa{IsaLibs/ROOT}) se basa en \isa{HOL} y en la
 teoría \isa{THF\_Arith} de \isa{HOL-TPTP}. La teoría \isa{IsaLibs} está declarada
@@ -138,9 +141,33 @@ Si AProVE no responde, \emph{todas} las comprobaciones de terminación devuelven
 ``falso''. Entonces ninguna regla se puede orientar y \cmd{inductive\_prover} no
 demuestra ni siquiera metas triviales, sin dar ningún mensaje de error.
 
+\paragraph{Comprobar y reiniciar el servidor.} El servidor puede quedar bloqueado,
+sobre todo después de interrumpir una compleción que diverge: sigue escuchando en
+el puerto 5250 pero contesta \texttt{TIMEOUT} a todo, incluso a sistemas triviales.
+Para comprobarlo se le envía un TRS trivial; la primera línea de la respuesta debe
+ser \texttt{YES}:
+\begin{lstlisting}[language={}]
+printf '(VAR x)\n(RULES f(s(x)) -> f(x))\n' > /tmp/prueba.trs
+printf '2\n/tmp/prueba.trs\n5\n' | nc localhost 5250 | head -1
+\end{lstlisting}
+Si no contesta \texttt{YES}, se detiene el servidor y se lanza de nuevo:
+\begin{lstlisting}[language={}]
+pkill -f 'aprove.jar -u srv'
+cd ~/AProVE && PATH="$HOME/AProVE/bin:$PATH" java -ea -jar aprove.jar -u srv
+\end{lstlisting}
+\needspace{5\baselineskip}
+Para que no ocupe una terminal, la segunda línea puede lanzarse en segundo plano:
+\begin{lstlisting}[language={}]
+cd ~/AProVE && PATH="$HOME/AProVE/bin:$PATH" \
+  nohup java -ea -jar aprove.jar -u srv > server.out 2>&1 &
+\end{lstlisting}
+Después hay que reiniciar también Isabelle (jEdit): \isa{Aprove.memoized\_terminates}
+guarda en una tabla global los ``falso'' que dio el servidor bloqueado, y esas
+respuestas se seguirían usando mientras viva el proceso.
+
 \subsection{Resumen de la interfaz Isar}
 
-\begin{longtable}{@{}p{4.6cm}p{2.2cm}p{7.6cm}@{}}
+\begin{longtable}{@{}p{5.6cm}>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{6.6cm}@{}}
 \toprule
 \textbf{Nombre} & \textbf{Tipo} & \textbf{Propósito}\\
 \midrule
@@ -606,9 +633,89 @@ La compleción decidió que la definición eficiente \isa{itrev} sustituye a la
 definición original de \isa{rev}.
 \end{ejemplo}
 
-\paragraph{Opciones relevantes.} \isa{generate\_cps}, \isa{max\_time\_in\_termination},
-\isa{use\_aprove}, \isa{use\_aprove\_srv}, \isa{max\_time\_in\_proof} (para
-\isa{heuristic1}) y \isa{max\_time\_in\_counter\_ex}.
+{\raggedright
+\paragraph{Opciones relevantes.} \isa{generate\_cps}, \isa{divergence\_critic},
+\isa{max\_time\_in\_termination}, \isa{use\_aprove}, \isa{use\_aprove\_srv},
+\isa{max\_time\_in\_proof} (para \isa{heuristic1} y el crítico de divergencia) y
+\isa{max\_time\_in\_counter\_ex}.\par}
+
+\paragraph{Crítico de divergencia (prototipo).}
+Con pares críticos, la compleción puede no terminar. El caso típico es una familia
+infinita de reglas que sólo difieren en la longitud de una torre de una función
+unaria. Por ejemplo, la regla $f(g(f\,x)) = f(g\,x)$ genera
+$f(g^n(f\,x)) = f(g^n\,x)$ para todo $n \ge 1$. La literatura representa esas
+familias con meta-reglas (H.~Kirchner~\cite{kirchner89}), términos de recurrencia
+(Chen, Hsiang y Kong~\cite{chen-hsiang-kong}), términos con exponentes
+enteros (Comon~\cite{comon95}) o una signatura enriquecida (Thomas y
+Watson~\cite{thomas-watson}). En HOL basta la iteración de funciones
+\isa{g \textasciicircum\textasciicircum\ n}: la familia es \emph{un} teorema,
+\isa{f ((g \textasciicircum\textasciicircum\ Suc n) (f x)) = f ((g \textasciicircum\textasciicircum\ Suc n) x)},
+que se demuestra por inducción sobre \isa{n}.
+
+\cmd{complete} lleva un crítico (\isa{divergence\_critic}, activo por omisión, pero
+sólo actúa con \isa{generate\_cps = true}) que hace lo siguiente:
+\begin{enumerate}[nosep]
+  \item \textbf{Detectar.} Cada regla elegida se abstrae en un \emph{esqueleto},
+        donde las torres maximales $c(c(\dots s))$ de símbolos unarios se
+        sustituyen por huecos, más la lista de longitudes de esas torres. Si tres
+        reglas elegidas tienen el mismo esqueleto y sus longitudes crecen en 0 o 1
+        en cada paso (y en alguna crecen), se conjetura la familia.
+  \item \textbf{Generalizar.} Las torres que crecen se escriben
+        \isa{c \textasciicircum\textasciicircum\ Suc$^k$ n}, donde $k$ es su
+        longitud en el miembro más pequeño. Las que no crecen se quedan igual.
+  \item \textbf{Demostrar} la regla esquemática por inducción sobre \isa{n} (con
+        las demás variables arbitrarias), simplificación y \isa{metis} con las
+        reglas del momento.
+  \item \textbf{Comprobar la terminación} con AProVE de las reglas más las
+        instancias $n = 0, 1, 2$.
+  \item \textbf{Reiniciar} la compleción con la regla esquemática. Esta regla no
+        entra en las listas de reglas, sino en el contexto: un \emph{simproc}
+        busca la instancia $n = k$ que encaja con cada redex, la despliega y
+        reescribe con ella. Así AProVE y los órdenes de términos sólo ven reglas
+        de primer orden sin \isa{\textasciicircum\textasciicircum}. Los pares
+        críticos de la regla esquemática se aproximan con los de sus primeras
+        instancias.
+\end{enumerate}
+
+\needspace{16\baselineskip}
+\begin{ejemplo}
+\begin{lstlisting}
+typedecl T
+consts f :: "T ⇒ T"
+       g :: "T ⇒ T"
+
+declare [[generate_cps = true]]
+
+complete "f (g (f x)) = f (g x)"
+  sorry
+(* Divergence critic: f ((g ^^ Suc n) (f x)) = f ((g ^^ Suc n) x)
+   Restarting completion with schematic rule: ...
+   Done: f ((g ^^ Suc ?n) (f ?x)) ≡ f ((g ^^ Suc ?n) ?x)
+   Additions: f ((g ^^ Suc ?n) (f ?x)) = f ((g ^^ Suc ?n) ?x) *)
+\end{lstlisting}
+Sin el crítico, esta compleción no termina. Con él termina en unos segundos y deja
+en \isa{compl} la regla esquemática. Las reglas esquemáticas de \isa{compl}, y la
+de \cmd{complete} si ya es esquemática, pasan al contexto de las compleciones
+siguientes.
+\end{ejemplo}
+
+Es un prototipo, con estas limitaciones:
+\begin{itemize}[nosep]
+  \item Sólo reconoce torres de un símbolo unario (\isa{Const} o \isa{Free} de tipo
+        $\tau \Rightarrow \tau$) que crecen de uno en uno, con una sola variable de
+        exponente.
+  \item Los pares críticos de la regla esquemática con las demás se aproximan con
+        sus instancias $n = 0, 1, 2$. Unificar con exponentes variables
+        (Comon~\cite{comon95}) sería lo completo.
+  \item La terminación de la familia se comprueba con esas tres instancias, no con
+        la familia entera.
+  \item Ningún método general basta: Sattler-Klein~\cite{sattler-klein} demostró
+        que una compleción divergente puede codificar cualquier conjunto
+        recursivamente enumerable.
+  \item El simplificador normal de Isabelle no aplica la regla guardada en
+        \isa{compl} a términos sin \isa{\textasciicircum\textasciicircum}; el simproc
+        sólo existe dentro de la compleción.
+\end{itemize}
 
 % ---------------------------------------------------------------------------
 \subsection{\texttt{rec\_complete} (desactivado)}
@@ -1008,6 +1115,7 @@ el valor que fija \isa{IsaLibs.thy}, que es el que rige en las teorías de usuar
 \isa{use\_aprove\_srv} & false & \textbf{true} & Hablar con el servidor de AProVE vía \isa{nc} en lugar de ejecutar el \isa{jar}.\\
 \isa{max\_time\_in\_termination} & 180 & 20 & Segundos para AProVE (\isa{-t}) y para el método de pares de dependencia interno.\\
 \isa{generate\_cps} & true & \textbf{false} & Deducir pares críticos en la compleción.\\
+\isa{divergence\_critic} & true & true & Con \isa{generate\_cps}, generalizar familias divergentes de reglas con \isa{\textasciicircum\textasciicircum} (prototipo).\\
 \isa{use\_quickcheck} & true & true & Buscar contraejemplos con Quickcheck.\\
 \isa{use\_nitpick} & true & true & Buscar contraejemplos con Nitpick.\\
 \isa{simp\_before} & false & false & Simplificar la conjetura antes de buscar contraejemplos.\\
@@ -1061,7 +1169,7 @@ Leen el texto en modo esquemático, por lo que admiten \isa{?x} y \isa{?'a}, que
 \isa{schematic\_lemmas.ML} & Comando \cmd{schematic\_lemma}.\\
 \isa{tables.ML} & Tablas auxiliares y el conjunto \isa{compl}.\\
 \isa{utils.ML} & Utilidades generales: orientación, normalización, dependencias definicionales, plazos (\isa{apply\_timeout}), HTML y \LaTeX, antiquotaciones.\\
-\isa{ground\_completion.ML} & Compleción sin fallo con ecuaciones incondicionales.\\
+\isa{ground\_completion.ML} & Compleción sin fallo con ecuaciones incondicionales, reglas esquemáticas y crítico de divergencia.\\
 \isa{conditional\_completion.ML} & Compleción con reglas condicionales (la usa \cmd{inductive\_prover}).\\
 \isa{orders.ML} & Extensiones de precedencias y LPO para unibilidad en términos cerrados.\\
 \isa{aprove.ML} & Traducción a WST e interfaz con AProVE.\\
@@ -1090,7 +1198,8 @@ Leen el texto en modo esquemático, por lo que admiten \isa{?x} y \isa{?'a}, que
   \item \textbf{AProVE es imprescindible.} Sin él (o sin su servidor, con
         \isa{use\_aprove\_srv = true}) ninguna regla pasa la prueba de
         terminación. El síntoma es que \cmd{inductive\_prover} falla siempre y
-        \cmd{complete} no orienta nada nuevo.
+        \cmd{complete} no orienta nada nuevo. Lo mismo pasa si el servidor queda
+        bloqueado; la sección~\ref{sec:carga} explica cómo comprobarlo y reiniciarlo.
   \item \textbf{Estado global.} Las tablas de \cmd{orient\_rules},
         \cmd{schematic\_lemma}, terminación, contraejemplos, discriminación de reglas
         y unibilidad son variables ML globales. Duran todo el proceso, quedan en el
@@ -1185,6 +1294,32 @@ A.~Ireland, A.~Bundy.
 T.~Walsh.
 \newblock A divergence critic for inductive proof.
 \newblock \emph{Journal of Artificial Intelligence Research} 4, 1996.
+
+\bibitem{kirchner89}
+H.~Kirchner.
+\newblock Schematization of infinite sets of rewrite rules generated by divergent
+  completion processes.
+\newblock \emph{Theoretical Computer Science} 67(2--3), 1989.
+
+\bibitem{chen-hsiang-kong}
+H.~Chen, J.~Hsiang, H.-C.~Kong.
+\newblock On finite representations of infinite sequences of terms.
+\newblock En \emph{CTRS 1990}, LNCS 516, Springer, 1991.
+
+\bibitem{comon95}
+H.~Comon.
+\newblock On unification of terms with integer exponents.
+\newblock \emph{Mathematical Systems Theory} 28, 1995.
+
+\bibitem{thomas-watson}
+M.~Thomas, P.~Watson.
+\newblock Solving divergence in Knuth--Bendix completion by enriching signatures.
+\newblock \emph{Theoretical Computer Science} 112, 1993.
+
+\bibitem{sattler-klein}
+A.~Sattler-Klein.
+\newblock Divergence phenomena during completion.
+\newblock En \emph{RTA 1991}, LNCS 488, Springer, 1991.
 
 \bibitem{rippling}
 A.~Bundy, D.~Basin, D.~Hutter, A.~Ireland.

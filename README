@@ -78,6 +78,20 @@ cd path_to_AProVE_jar_file && PATH="path_to_AProVE_jar_file/bin:$PATH" java -ea 
 
 Alternatively, declare [[use_aprove_srv = false]] to run aprove.jar directly for each termination check (slower).
 
+The server can get stuck (typically after interrupting a diverging "complete"): it keeps listening on port 5250 but answers TIMEOUT to everything. Check it with a trivial TRS; the first line of the answer must be YES:
+
+printf '(VAR x)\n(RULES f(s(x)) -> f(x))\n' > /tmp/prueba.trs
+printf '2\n/tmp/prueba.trs\n5\n' | nc localhost 5250 | head -1
+
+If it does not answer YES, restart the server:
+
+pkill -f 'aprove.jar -u srv'
+cd path_to_AProVE_jar_file && PATH="path_to_AProVE_jar_file/bin:$PATH" java -ea -jar aprove.jar -u srv
+
+(or, in the background: ... nohup java -ea -jar aprove.jar -u srv > server.out 2>&1 &)
+
+Then restart Isabelle/jEdit as well: termination results, including the false ones given by the stuck server, are memoized for the lifetime of the Isabelle process.
+
 4) Run the following command to build the heap image and work with your theory
 
 isabelle jedit -d path_to_IsaLibs_root_file -l IsaLibs your_theory.thy

@@ -137,6 +137,7 @@ DB_Aprove.setup_use_aprove_srv #>
 DB_DPair.setup_max_time_in_termination #>
 
 DB_Completion.setup_generate_cps #>
+DB_Completion.setup_divergence_critic #>
 
 DB_GP.setup_max_time_in_fitness #>
 
