@@ -295,15 +295,34 @@ fun discriminate_rules ctxt terminates thms =
 (*         |> apply2 Utils.make_theorem_set*)
   end
 
+(* The cache maps the propositions of the (sorted) input rules to positions
+   in that list, each with a flag telling whether the rule was commuted.
+   It must not store theorems: the cache outlives the theory where they
+   were proved (e.g. when Isabelle/jEdit re-executes a command), and
+   reusing them fails with "Cannot transfer: not a super theory". *)
 val discriminate_rules_var
       = Synchronized.var "discriminate_rules"
-                         (Thm_List_Tab.empty : (thm list * thm list) Thm_List_Tab.table)
+                         (Term_List_Tab.empty : ((int * bool) list * (int * bool) list) Term_List_Tab.table)
 
 fun memoized_discriminate_rules ctxt terminates thms =
-  let val thms = thms |> Utils.make_theorem_set
+  let val thy = Proof_Context.theory_of ctxt
+      val thms = thms |> Utils.make_theorem_set
                       |> sort Thm.thm_ord
-  in Utils.memoize_function Thm_List_Tab.lookup Thm_List_Tab.update I discriminate_rules_var
-                            (discriminate_rules ctxt terminates) thms
+      fun is_index th' th =
+        if Thm.equiv_thm thy (th', th)
+        then SOME false
+        else if Thm.equiv_thm thy (th', Utils.commute_meta_eq th)
+        then SOME true
+        else NONE
+      val to_indices = map_filter (fn th' => get_index (is_index th') thms)
+      fun dest_index (i, comm) =
+            if comm
+            then Utils.commute_meta_eq (nth thms i)
+            else nth thms i
+  in Utils.memoize_function Term_List_Tab.lookup Term_List_Tab.update (map Thm.full_prop_of)
+                            discriminate_rules_var
+                            (apply2 to_indices o discriminate_rules ctxt terminates) thms
+       |> apply2 (map dest_index)
   end
 
 (*fun memoized_discriminate_rules ctxt terminates (thms as th :: _) =

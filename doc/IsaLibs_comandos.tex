@@ -1097,6 +1097,13 @@ Leen el texto en modo esquemático, por lo que admiten \isa{?x} y \isa{?'a}, que
         heap y no siguen el contexto de la teoría. AProVE recibe los nombres
         \emph{base} de las constantes, pero la clave de la memoria es el término
         completo, así que no se confunden constantes homónimas de teorías distintas.
+        Por la misma razón, estas tablas guardan términos o posiciones, nunca
+        teoremas. jEdit vuelve a ejecutar los comandos sobre versiones nuevas de la
+        teoría, y un teorema guardado de una ejecución anterior no se puede
+        transferir a la nueva. Antes, la tabla de \isa{discriminate\_rules} de la
+        compleción básica guardaba teoremas, y \cmd{complete} fallaba con
+        ``\isa{Cannot transfer: not a super theory}''. Ahora guarda posiciones,
+        igual que la de la compleción condicional.
   \item \textbf{\isa{quick\_and\_dirty}} está activado. Antes de dar por buena una
         teoría conviene comprobar que no quedan \isa{sorry}.
   \item \textbf{Pares críticos desactivados} por omisión
