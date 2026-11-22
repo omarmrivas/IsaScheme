@@ -69,7 +69,7 @@
     {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ñ}{{\~n}}1
 }
 
-\title{\textbf{IsaLibs}: comandos Isar, métodos de prueba\\ y la teoría que hay detrás\\[4pt]
+\title{\textbf{IsaLibs}\\[2pt] Comandos Isar, métodos de prueba\\ y la teoría que hay detrás\\[4pt]
 \large Guía técnica para la versión portada a Isabelle2026}
 \author{Documentación de IsaScheme / IsaLibs}
 \date{Noviembre de 2026}
@@ -83,9 +83,10 @@ en Isabelle/ML. Implementa demostración inductiva con descubrimiento de lemas,
 compleción de Knuth--Bendix sin fallo (\emph{unfailing}), exploración de teorías
 guiada por pruebas aleatorias, críticos de prueba (divergencia de Walsh, reglas de
 onda transversales) y comprobación de terminación con el demostrador externo AProVE.
-Este documento describe cada elemento de la interfaz Isar que exporta la biblioteca
-(comandos, métodos de prueba, atributos y opciones de configuración): su sintaxis,
-lo que hace exactamente según el código fuente y la teoría en la que se basa. Al
+Para cada elemento de la interfaz Isar que exporta la biblioteca (comandos, métodos
+de prueba, atributos y opciones de configuración), este documento describe su
+sintaxis, lo que hace exactamente según el código fuente y la teoría en la que se
+basa. Al
 final hay un mapa de módulos ML y una lista de advertencias prácticas.
 \end{abstract}
 
@@ -142,8 +143,9 @@ Si AProVE no responde, \emph{todas} las comprobaciones de terminación devuelven
 demuestra ni siquiera metas triviales, sin dar ningún mensaje de error.
 
 \paragraph{Comprobar y reiniciar el servidor.} El servidor puede quedar bloqueado,
-sobre todo después de interrumpir una compleción que diverge: sigue escuchando en
-el puerto 5250 pero contesta \texttt{TIMEOUT} a todo, incluso a sistemas triviales.
+sobre todo después de interrumpir una compleción que diverge. En ese estado sigue
+escuchando en el puerto 5250, pero contesta \texttt{TIMEOUT} a todo, incluso a
+sistemas triviales.
 Para comprobarlo se le envía un TRS trivial; la primera línea de la respuesta debe
 ser \texttt{YES}:
 \begin{lstlisting}[language={}]
@@ -161,9 +163,10 @@ Para que no ocupe una terminal, la segunda línea puede lanzarse en segundo plan
 cd ~/AProVE && PATH="$HOME/AProVE/bin:$PATH" \
   nohup java -ea -jar aprove.jar -u srv > server.out 2>&1 &
 \end{lstlisting}
-Después hay que reiniciar también Isabelle (jEdit): \isa{Aprove.memoized\_terminates}
-guarda en una tabla global los ``falso'' que dio el servidor bloqueado, y esas
-respuestas se seguirían usando mientras viva el proceso.
+Después hay que reiniciar también Isabelle (jEdit), porque
+\isa{Aprove.memoized\_terminates} guarda en una tabla global los ``falso'' que dio
+el servidor bloqueado, y esas respuestas se seguirían usando mientras viva el
+proceso.
 
 \subsection{Resumen de la interfaz Isar}
 
@@ -220,12 +223,13 @@ siguientes remiten aquí.
 Un \emph{sistema de reescritura} (TRS) $\R$ es un conjunto de reglas $l \rw r$ en el
 que $l$ no es una variable y toda variable de $r$ aparece en $l$. La relación $\rw_\R$
 reemplaza una instancia $l\sigma$ de un lado izquierdo por $r\sigma$ en cualquier
-posición. Las propiedades clave son:
+posición. Las propiedades que importan son tres.
 \begin{itemize}[nosep]
-  \item \textbf{Terminación}: no existen cadenas infinitas $t_1 \rw_\R t_2 \rw_\R \cdots$.
-  \item \textbf{Confluencia}: si $s \rws t_1$ y $s \rws t_2$, existe $u$ con
-        $t_1 \rws u$ y $t_2 \rws u$.
-  \item \textbf{Convergencia}: terminación y confluencia a la vez. En un TRS
+  \item $\R$ es \textbf{terminante} si no existen cadenas infinitas
+        $t_1 \rw_\R t_2 \rw_\R \cdots$.
+  \item $\R$ es \textbf{confluente} si, siempre que $s \rws t_1$ y $s \rws t_2$,
+        existe $u$ con $t_1 \rws u$ y $t_2 \rws u$.
+  \item $\R$ es \textbf{convergente} si es terminante y confluente. En un TRS
         convergente cada término tiene una forma normal única. Por tanto la
         igualdad ecuacional se decide normalizando ambos lados y comparándolos.
 \end{itemize}
@@ -262,8 +266,8 @@ cumple alguna de estas condiciones:
 Hay ecuaciones que ninguna orientación vuelve terminantes, como la conmutatividad
 $x + y = y + x$. A estas ecuaciones \emph{permutativas} (ambos lados son iguales
 salvo un renombramiento de variables, \isa{Utils.permutative\_eq}) se les aplica
-\textbf{reescritura ordenada}~\cite{martin-nipkow}: una instancia $l\sigma \rw r\sigma$
-sólo se aplica si $l\sigma \succ r\sigma$ en un orden total sobre términos cerrados.
+\textbf{reescritura ordenada}~\cite{martin-nipkow}, en la que una instancia
+$l\sigma \rw r\sigma$ sólo se aplica si $l\sigma \succ r\sigma$ en un orden total sobre términos cerrados.
 El simplificador de Isabelle ya hace esto con las reglas permutativas usando su orden
 de términos, que IsaLibs puede sustituir con \isa{Simplifier.set\_term\_ord}.
 
@@ -311,7 +315,7 @@ izquierdos son patrones (\isa{Pattern.pattern}), y busca subtérminos también b
 $\lambda$. Los críticos de divergencia (sección~\ref{sec:criticos}) también usan
 unificación de patrones (\isa{Pattern.unify}).
 
-\subsection{Terminación automática: AProVE y pares de dependencia}
+\subsection{Terminación automática con AProVE y pares de dependencia}
 \label{sec:aprove}
 
 Cada vez que IsaLibs quiere usar un conjunto de reglas para simplificar, primero
@@ -329,9 +333,9 @@ cuya clave es el conjunto de reglas ordenado. Funciona así:
             \isa{and}, \isa{or}, \isa{implies} y \isa{not};
       \item las variables \isa{?x$_i$} se escriben \isa{x$i$};
       \item las fórmulas cuantificadas se rechazan;
-      \item las $\lambda$-abstracciones se eliminan por \emph{$\lambda$-lifting}:
-            cada $\lambda$ se reemplaza por una constante nueva \isa{f} aplicada a
-            sus variables libres, y se añade la regla que la define;
+      \item las $\lambda$-abstracciones se eliminan por \emph{$\lambda$-lifting},
+            que reemplaza cada $\lambda$ por una constante nueva \isa{f} aplicada a
+            sus variables libres y añade la regla que la define;
       \item una regla condicional se escribe \isa{l -> r | c1, c2}, y las
             premisas que no son ecuaciones $P$ (o $\neg P$) se convierten antes
             en $P = \mathit{True}$ (o $P = \mathit{False}$).
@@ -350,20 +354,20 @@ y criterios de subtérmino.
 
 IsaLibs trae además su propia implementación del método \emph{estático} de pares de
 dependencia para sistemas de reescritura de orden superior ``plain function-passing''
-(\isa{dependency\_pair.ML}, \cite{kusakari}): grafo de dependencias, componentes
+(\isa{dependency\_pair.ML}, \cite{kusakari}), con grafo de dependencias, componentes
 fuertemente conexas, criterio de subtérmino, filtrado de argumentos y LPO débil
 codificado en SAT (\isa{sat\_interface.ML}). En el código actual esta implementación
-\emph{no} interviene en \isa{memoized\_terminates}: sólo la usa
+\emph{no} interviene en \isa{memoized\_terminates}, porque sólo la usa
 \isa{Aprove.all\_terminates}, que no se llama desde ningún sitio.
 
 \subsection{Inducción en Isabelle}
 
 IsaLibs usa dos clases de inducción:
 \begin{itemize}[nosep]
-  \item \textbf{Estructural}: sobre una variable libre cuyo tipo es un tipo de datos
-        (\isa{Induct.find\_inductT}).
-  \item \textbf{Computacional} (de recursión): con la regla \isa{f.induct} que
-        \isa{fun} genera para una función recursiva $f$. Se usa cuando la meta
+  \item La inducción \textbf{estructural} se hace sobre una variable libre cuyo
+        tipo es un tipo de datos (\isa{Induct.find\_inductT}).
+  \item La inducción \textbf{computacional} (de recursión) usa la regla
+        \isa{f.induct} que \isa{fun} genera para una función recursiva $f$. Se usa cuando la meta
         contiene un subtérmino $f\,x_1\ldots x_n$ cuyos argumentos son todos
         variables libres. Esta regla sigue exactamente el esquema de recursión de
         $f$, lo que suele dejar hipótesis de inducción más útiles.
@@ -377,24 +381,27 @@ En ambos casos el resto de las variables libres se puede generalizar
 Una prueba inductiva suele atascarse porque hace falta un lema auxiliar.
 \cmd{inductive\_prover} combina varias fuentes clásicas de conjeturas:
 \begin{description}[nosep,font=\normalfont\bfseries]
-  \item[Generalización] (Boyer--Moore~\cite{boyer-moore}): reemplazar por una
-        variable nueva un subtérmino que aparece varias veces, o eliminar
-        hipótesis, siempre que la conjetura resultante no se refute.
-  \item[Análisis de fallos] (\emph{proof critics}, Ireland--Bundy~\cite{ireland-bundy}):
-        las submetas en las que se atascó la prueba se convierten en conjeturas.
-  \item[Crítico de divergencia] (Walsh~\cite{walsh}): si las submetas sucesivas
-        tienen la forma $G(U),\ G(H(U)),\ G(H(H(U))),\ldots$, conviene un lema
-        ``de onda'' que mueva $H$ hacia fuera: $G(H(U)) = H'(G(U))$.
-  \item[Reglas de onda transversales] (de \emph{rippling}~\cite{rippling}): para
-        funciones con acumulador, a partir de $G(U,\mathit{Acc})$ y
-        $G(H(U),\mathit{Acc})$ se propone $G(H(U),\mathit{Acc}) = G(U, F(\mathit{Acc}))$
-        con $F$ desconocida, y $F$ se sintetiza demostrando la meta esquemática.
-  \item[Exploración de teorías] (QuickSpec~\cite{quickspec}, IsaCoSy~\cite{isacosy}):
-        enumerar términos pequeños sobre la signatura del problema, agruparlos por
-        su comportamiento con valores de prueba y proponer como ecuaciones los
-        términos de una misma clase.
-  \item[Esquemas] (IsaScheme~\cite{montano2012}): instanciar plantillas de
-        propiedades conocidas (asociatividad, distributividad, \ldots) con las
+  \item[Generalización] Se reemplaza por una variable nueva un subtérmino que
+        aparece varias veces, o se eliminan hipótesis, siempre que la conjetura
+        resultante no se refute (Boyer y Moore~\cite{boyer-moore}).
+  \item[Análisis de fallos] Las submetas en las que se atascó la prueba se
+        convierten en conjeturas, como en los \emph{proof critics} de Ireland y
+        Bundy~\cite{ireland-bundy}.
+  \item[Crítico de divergencia] Si las submetas sucesivas tienen la forma
+        $G(U),\ G(H(U)),\ G(H(H(U))),\ldots$, el crítico de Walsh~\cite{walsh}
+        propone un lema ``de onda'' de la forma $G(H(U)) = H'(G(U))$, que mueve
+        $H$ hacia fuera.
+  \item[Reglas de onda transversales] Esta técnica de
+        \emph{rippling}~\cite{rippling} sirve para funciones con acumulador. A
+        partir de $G(U,\mathit{Acc})$ y $G(H(U),\mathit{Acc})$ se propone
+        $G(H(U),\mathit{Acc}) = G(U, F(\mathit{Acc}))$ con $F$ desconocida, y $F$
+        se sintetiza demostrando la meta esquemática.
+  \item[Exploración de teorías] Como en QuickSpec~\cite{quickspec} e
+        IsaCoSy~\cite{isacosy}, se enumeran términos pequeños sobre la signatura
+        del problema, se agrupan por su comportamiento con valores de prueba y se
+        proponen como ecuaciones los términos de una misma clase.
+  \item[Esquemas] Como en IsaScheme~\cite{montano2012}, se instancian plantillas
+        de propiedades conocidas (asociatividad, distributividad, \ldots) con las
         funciones del problema.
 \end{description}
 
@@ -403,7 +410,7 @@ Una prueba inductiva suele atascarse porque hace falta un lema auxiliar.
 Antes de intentar probar una conjetura, IsaLibs busca un contraejemplo con
 Quickcheck~\cite{quickcheck} y, si no lo encuentra, con Nitpick~\cite{nitpick}
 (\isa{Counter\_Example.counter\_example}). Los resultados se memorizan en dos redes de
-discriminación globales: una de conjeturas refutadas y otra de no refutadas. Así, una
+discriminación globales, una de conjeturas refutadas y otra de no refutadas. Así, una
 instancia de una conjetura ya refutada se descarta sin volver a llamar a las
 herramientas, y lo mismo ocurre con las conjeturas que generalizan a una ya validada.
 
@@ -439,16 +446,16 @@ una \isa{Synchronized.var}). La tabla se consulta en dos lugares:
       \item si la ecuación encaja (\isa{Pattern.first\_order\_match}) con un patrón de
             \cmd{orient\_rules}, se deja como está; si encaja la ecuación girada,
             se gira;
-      \item \emph{heurística de Lucas} (\isa{definitional\_orientation}): si $f_1$ y
-            $f_2$ son los símbolos de cabeza de $s$ y $t$, y $f_2$ está entre las
-            dependencias definicionales de $f_1$ (o $f_2$ no tiene definición),
-            la orientación es $s = t$;
+      \item la \emph{heurística de Lucas} (\isa{definitional\_orientation}) elige
+            la orientación $s = t$ si $f_1$ y $f_2$ son los símbolos de cabeza de
+            $s$ y $t$, y $f_2$ está entre las dependencias definicionales de $f_1$
+            (o $f_2$ no tiene definición);
       \item si la ecuación es una instancia de una ecuación \isa{.simps}
             existente, se orienta igual;
       \item en otro caso, se usa el orden de términos (\isa{ac\_orient}) y se evitan
-            las orientaciones ``malas'' (\isa{bad\_equation}): lado derecho trivial,
-            lado izquierdo contenido en el derecho, constructor en la cabeza del lado
-            izquierdo, o variables nuevas a la derecha.
+            las orientaciones ``malas'' (\isa{bad\_equation}), que son las de lado
+            derecho trivial, lado izquierdo contenido en el derecho, constructor en
+            la cabeza del lado izquierdo o variables nuevas a la derecha.
     \end{enumerate}
   \item En \isa{discriminate\_rules} (compleción básica y condicional). Antes de
         separar reglas terminantes de ecuaciones, cada ecuación se orienta según
@@ -512,10 +519,11 @@ equivalente en activo son las conjeturas por esquemas de \isa{prop\_scheme}
 complete "ecuación"
   by método
 \end{lstlisting}
-Es un comando de meta (\isa{thy\_goal}): abre una prueba de la proposición dada, que
-se cierra como cualquier otra (\isa{by induct\_auto}, \isa{by inductive\_prover},
-\isa{by simp}, una prueba estructurada, \ldots). No acepta nombre ni atributos, y el
-teorema \emph{no} queda con nombre: sólo puede llegar al conjunto \isa{compl}.
+Es un comando de meta (\isa{thy\_goal}) que abre una prueba de la proposición dada.
+Esa prueba se cierra como cualquier otra (\isa{by induct\_auto},
+\isa{by inductive\_prover}, \isa{by simp}, una prueba estructurada, \ldots). No
+acepta nombre ni atributos, y el teorema \emph{no} queda con nombre, de modo que
+sólo puede llegar al conjunto \isa{compl}.
 
 \paragraph{Qué hace después de la prueba.}
 El código (\isa{commands.ML}, \isa{after\_qed}) sigue estos pasos:
@@ -534,26 +542,28 @@ El código (\isa{commands.ML}, \isa{after\_qed}) sigue estos pasos:
         \isa{Aprove.memoized\_terminates} como oráculo de terminación.
   \item Calcula y muestra en la traza:
         \begin{itemize}[nosep]
-          \item \textbf{Additions}: reglas del sistema final que no estaban en $E$;
-          \item \textbf{Deletions}: elementos de $E$ que ya no están en el sistema
-                final porque quedaron redundantes, por ejemplo al colapsar.
+          \item las \textbf{Additions}, que son las reglas del sistema final que
+                no estaban en $E$;
+          \item las \textbf{Deletions}, que son los elementos de $E$ que ya no
+                están en el sistema final porque quedaron redundantes, por ejemplo
+                al colapsar.
         \end{itemize}
   \item Añade las \emph{Additions} a \isa{compl} y quita de \isa{compl} las
         \emph{Deletions}. La actualización se hace en la teoría de fondo, en el
         destino local y en el contexto de prueba. Las ecuaciones \isa{.simps} nunca
-        se quitan del simplificador: ``Deletions'' sólo informa que son
-        redundantes en el sistema completado.
+        se quitan del simplificador, y que aparezcan en ``Deletions'' sólo indica
+        que son redundantes en el sistema completado.
 \end{enumerate}
 
 \paragraph{El algoritmo de compleción} (\isa{ground\_completion.ML}).
-Es la compleción sin fallo de la sección~\ref{sec:kb}, con tres conjuntos:
+Es la compleción sin fallo de la sección~\ref{sec:kb} y trabaja con tres conjuntos,
 $\E$ (ecuaciones por procesar), $\Sset$ (reglas nuevas aún no usadas para generar
 pares críticos) y $\R$ (reglas procesadas).
 \begin{enumerate}
-  \item \textbf{Inicio}: $\E$ se ordena por tamaño, de modo que primero van los
+  \item Al \textbf{inicio}, $\E$ se ordena por tamaño, de modo que primero van los
         términos más pequeños, con más variables y con menor diferencia de
         variables entre lados (\isa{rule\_int\_ord}).
-  \item \textbf{Orientar} (\isa{orient}): para cada $e \in \E$,
+  \item Cada $e \in \E$ se \textbf{orienta} (\isa{orient}) en estos pasos:
     \begin{enumerate}[nosep]
       \item si es posible, se elige la orientación lineal por la izquierda
             (\isa{linear\_if\_possible});
@@ -565,23 +575,23 @@ pares críticos) y $\R$ (reglas procesadas).
       \item si $\{e\} \cup \R$ es terminante según AProVE, se añade orientada; si no,
             se añade girada.
     \end{enumerate}
-  \item \textbf{Añadir regla} (\isa{add\_rule}): interreducción. Cada regla de
+  \item Al \textbf{añadir una regla} (\isa{add\_rule}) se hace la interreducción. Cada regla de
         $\Sset$ y $\R$ cuyo lado izquierdo reescribe la nueva regla vuelve a $\E$
         (\emph{colapsar}). En las demás se normaliza el lado derecho
         (\emph{componer}).
-  \item \textbf{Elegir} (\isa{choose}): de $\Sset$ se toma la regla mínima según
+  \item Para \textbf{elegir} (\isa{choose}) se toma de $\Sset$ la regla mínima según
         \isa{rule\_int\_ord}. Si tiene la forma $c(x) = c(y)$, \isa{heuristic1}
         intenta demostrar la ecuación más fuerte $x = y$ (primero busca un
         contraejemplo; si no lo hay, la prueba con \cmd{induct\_auto}) y, si lo
         logra, la usa en su lugar.
-  \item \textbf{Deducir}: si la opción \isa{generate\_cps} está activa, se calculan los
+  \item Para \textbf{deducir}, si la opción \isa{generate\_cps} está activa, se calculan los
         pares semicríticos de la regla elegida con $\R$, de $\R$ con la regla y de la
         regla consigo misma. Se usan las cuatro combinaciones de orientación, se
         unifica con patrones de orden superior en posiciones no variables (también
         bajo $\lambda$), y cada par se obtiene como un \emph{teorema} de Isabelle por
         conversiones (\isa{Conv.rewr\_conv}). Los pares pasan a $\E$ y se repite el
         proceso.
-  \item \textbf{Fin}: cuando $\Sset$ queda vacío, \isa{make\_irreducible} elimina las
+  \item Al \textbf{final}, cuando $\Sset$ queda vacío, \isa{make\_irreducible} elimina las
         reglas que son unibles con el resto.
 \end{enumerate}
 Para la unibilidad en términos cerrados, todas las constantes de la clausura
@@ -592,8 +602,8 @@ inserciones de las variables (sección~\ref{sec:kb}). Para usar las reglas,
   \item las \emph{ecuaciones} permutativas, que se usan con reescritura ordenada;
   \item las \emph{reglas}, que se aceptan de una en una, de menor a mayor tamaño,
         mientras el conjunto siga siendo terminante según AProVE y pase una prueba
-        empírica de terminación AC (\isa{ac\_termination}: reescribir y comprobar que
-        no se repite ningún término ni se excede una cota de tamaño).
+        empírica de terminación AC (\isa{ac\_termination}, que reescribe y comprueba
+        que no se repite ningún término ni se excede una cota de tamaño).
 \end{itemize}
 Las reglas incompatibles (``\isa{Incompatible rule}'' en la traza) se quedan fuera
 del conjunto de simplificación.
@@ -602,8 +612,8 @@ Hay dos detalles más. Primero, \isa{run\_completion} lanza en paralelo dos
 compleciones, con el orden de términos en sentido \isa{LESS} y en sentido
 \isa{GREATER}, y se queda con la que termina primero (\isa{Par\_List.get\_some}).
 Segundo, \textbf{\isa{IsaLibs.thy} pone \isa{generate\_cps = false}}, así que por
-omisión \cmd{complete} no deduce pares críticos: orienta, interreduce y elimina
-reglas unibles. Para una compleción completa se declara
+omisión \cmd{complete} no deduce pares críticos y se limita a orientar, interreducir
+y eliminar reglas unibles. Para una compleción completa se declara
 \isa{declare [[generate\_cps = true]]}.
 
 \paragraph{Corrección.}
@@ -657,7 +667,7 @@ familias con meta-reglas (H.~Kirchner~\cite{kirchner89}), términos de recurrenc
 (Chen, Hsiang y Kong~\cite{chen-hsiang-kong}), términos con exponentes
 enteros (Comon~\cite{comon95}) o una signatura enriquecida (Thomas y
 Watson~\cite{thomas-watson}). En HOL basta la iteración de funciones
-\isa{g \textasciicircum\textasciicircum\ n}: la familia es \emph{un} teorema,
+\isa{g \textasciicircum\textasciicircum\ n}, porque la familia es \emph{un} teorema,
 \isa{f ((g \textasciicircum\textasciicircum\ Suc n) (f x)) = f ((g \textasciicircum\textasciicircum\ Suc n) x)},
 que se demuestra por inducción sobre \isa{n}.
 
@@ -679,9 +689,9 @@ sólo actúa con \isa{generate\_cps = true}) que hace lo siguiente:
   \item \textbf{Comprobar la terminación} con AProVE de las reglas más las
         instancias $n = 0, 1, 2$.
   \item \textbf{Reiniciar} la compleción con la regla esquemática. Esta regla no
-        entra en las listas de reglas, sino en el contexto: un \emph{simproc}
-        busca la instancia $n = k$ que encaja con cada redex, la despliega y
-        reescribe con ella. Así AProVE y los órdenes de términos sólo ven reglas
+        entra en las listas de reglas sino en el contexto, donde un
+        \emph{simproc} busca la instancia $n = k$ que encaja con cada redex, la
+        despliega y reescribe con ella. Así AProVE y los órdenes de términos sólo ven reglas
         de primer orden sin \isa{\textasciicircum\textasciicircum}. Los pares
         críticos de la regla esquemática se aproximan con los de sus primeras
         instancias.
@@ -710,9 +720,10 @@ siguientes.
 \end{ejemplo}
 
 \paragraph{Método de prueba del crítico.}
-Por omisión, el crítico demuestra cada conjetura con una táctica predefinida:
-inducción sobre el exponente con las demás variables arbitrarias,
-simplificación y \isa{metis}, ambas con las reglas de la compleción en curso.
+Por omisión, el crítico demuestra cada conjetura con una táctica predefinida que
+hace inducción sobre el exponente, con las demás variables arbitrarias, y después
+aplica simplificación y \isa{metis}, ambas con las reglas de la compleción en
+curso.
 Hay dos maneras de cambiarlo:
 \begin{itemize}[nosep]
   \item \textbf{Añadir lemas} a la táctica predefinida con el atributo
@@ -743,15 +754,15 @@ hay dos ayudas:
 \end{itemize}
 Cada intento tiene un límite de \isa{max\_time\_in\_critic\_proof} segundos. Si
 falla, la traza lo indica con el método usado
-(\isa{Schematic rule not proved (\ldots)}). Cualquier método es seguro: el
-resultado pasa por el núcleo de Isabelle, y el método sólo decide qué
+(\isa{Schematic rule not proved (\ldots)}). Cualquier método es seguro, porque
+el resultado pasa por el núcleo de Isabelle y el método sólo decide qué
 conjeturas se aceptan.
 
 \needspace{20\baselineskip}
 \begin{ejemplo}
 Con el método predefinido, la compleción del monoide de trenzas
-$\langle a, b \mid aba = bab\rangle$ no termina: el crítico encuentra la familia
-pero no la demuestra, porque el paso de inducción necesita mover una copia de
+$\langle a, b \mid aba = bab\rangle$ no termina. El crítico encuentra la familia,
+pero no la demuestra porque el paso de inducción necesita mover una copia de
 \isa{b} de la cima de la torre a su base. Cualquiera de estas dos líneas lo
 resuelve:
 \begin{lstlisting}
@@ -782,8 +793,8 @@ Es un prototipo, con estas limitaciones:
         (Comon~\cite{comon95}) sería lo completo.
   \item La terminación de la familia se comprueba con esas tres instancias, no con
         la familia entera.
-  \item Ningún método general basta: Sattler-Klein~\cite{sattler-klein} mostró
-        que los sistemas infinitos que produce una compleción divergente pueden
+  \item Ningún método general basta, ya que Sattler-Klein~\cite{sattler-klein}
+        mostró que los sistemas infinitos que produce una compleción divergente pueden
         ser muy complejos.
   \item El simplificador normal de Isabelle no aplica la regla guardada en
         \isa{compl} a términos sin \isa{\textasciicircum\textasciicircum}; el simproc
@@ -866,9 +877,9 @@ figura~\ref{fig:ip} resume el flujo.
   \node[box] (pre) {Preprocesar la meta $P$;\\ lemas $:=$ \isa{.simps} de la clausura};
   \node[box,below=of pre] (round) {Ronda en paralelo:\\ (a) probar $P$\\ (b) probar las conjeturas pendientes};
   \node[dec,below=of round] (res) {¿resultado?};
-  \node[box,right=of res] (lemma) {Lema nuevo $\ell$:\\ compleción condicional\\ de lemas $\cup\{\ell\}$};
-  \node[box,left=of res] (done) {$P$ probado: repetir\\ la prueba con los\\ lemas hallados};
-  \node[box,below=of res] (fail) {Fallo: submetas atascadas};
+  \node[box,right=of res] (lemma) {Compleción condicional\\ de lemas $\cup\{\ell\}$ con\\ el lema nuevo $\ell$};
+  \node[box,left=of res] (done) {Repetir la prueba\\ de $P$ con los\\ lemas hallados};
+  \node[box,below=of res] (fail) {Submetas atascadas};
   \node[box,below=of fail] (gen) {Generar conjeturas (fallos,\\ exploración, Walsh, transversales)};
   \node[box,below=of gen] (filt) {Generalizar, normalizar,\\ orientar, refutar, subsunción};
   \draw[arr] (pre) -- (round);
@@ -905,9 +916,9 @@ Es una búsqueda A* con el mismo coste que \cmd{induct\_auto}. Cada paso aplica 
 todas las submetas \isa{TRY} (inducción) seguido de \isa{TRY auto}, con el
 simplificador extendido con \isa{safe\_rules(lemas)}. La inducción puede ser:
 \begin{itemize}[nosep]
-  \item \emph{computacional}: sobre cada aplicación $f\,\vec x$ con argumentos libres,
+  \item \emph{computacional}, sobre cada aplicación $f\,\vec x$ con argumentos libres,
         de menor a mayor, con y sin \isa{arbitrary} para el resto de variables;
-  \item \emph{estructural}: sobre cada variable libre de tipo inductivo, también con
+  \item \emph{estructural}, sobre cada variable libre de tipo inductivo, también con
         y sin \isa{arbitrary}.
 \end{itemize}
 Cuando una submeta pendiente ya no tiene variables libres (todas quedaron
@@ -922,14 +933,14 @@ Con el conjunto actual de lemas se lanzan dos futuros en paralelo:
         \isa{True}, o si el demostrador atómico la prueba, se lanza la excepción
         \isa{DONE}, que cancela todo lo pendiente;
   \item normalizar, orientar, deduplicar y filtrar las conjeturas pendientes, y
-        probarlas todas en paralelo (\isa{Par\_List.get\_some}): la primera que
-        se demuestra gana.
+        probarlas todas en paralelo (\isa{Par\_List.get\_some}), de modo que gana
+        la primera que se demuestra.
 \end{enumerate}
 Si en la ronda anterior no se añadió ningún lema, (a) no se repite.
 
 \paragraph{4. Integración de un lema.}
 Si el lema contiene $\bigwedge$ o $\Longrightarrow$ (\isa{unsupported\_rule}), pasa a
-una lista aparte (\isa{mlemmas}): el demostrador atómico lo usa como regla, pero no
+una lista aparte (\isa{mlemmas}), y el demostrador atómico lo usa como regla, pero no
 entra en la compleción. En otro caso se recalcula el conjunto de lemas con
 \textbf{compleción condicional} (\isa{build\_trs}, que llama a
 \isa{Conditional\_Completion.run\_completion}). Esta variante de la
@@ -983,17 +994,17 @@ consumen antes que las generadas por los fallos porque las nuevas se añaden al 
 Cada conjetura pasa en paralelo por \isa{generalize1} y \isa{generalize2}. Ambas hacen
 lo mismo en distinto orden:
 \begin{itemize}[nosep]
-  \item \textbf{Generalizar hipótesis} (\isa{generalize\_assumptions}): se elige el
-        subconjunto más pequeño de premisas, ordenadas por tamaño, con el que la
+  \item Para \textbf{generalizar hipótesis} (\isa{generalize\_assumptions}) se elige
+        el subconjunto más pequeño de premisas, ordenadas por tamaño, con el que la
         conjetura no se refuta.
-  \item \textbf{Generalizar subtérminos comunes} (\isa{generalize\_cond\_eq}): los
-        subtérminos de tipo base que aparecen más de una vez se sustituyen por
+  \item Para \textbf{generalizar subtérminos comunes} (\isa{generalize\_cond\_eq}),
+        los subtérminos de tipo base que aparecen más de una vez se sustituyen por
         variables nuevas. La generalización se conserva sólo si no se refuta.
-  \item \textbf{Simplificar} (\isa{gen\_simplify}):
+  \item Para \textbf{simplificar} (\isa{gen\_simplify}) se siguen estos pasos:
     \begin{itemize}[nosep]
       \item normalizar con las reglas seguras;
-      \item aplicar heurísticas (\isa{apply\_heuristics}): si $C$ es un constructor,
-            $C\,x = C\,y$ se cambia por $x = y$, y
+      \item aplicar las heurísticas de \isa{apply\_heuristics}, que cambian
+            $C\,x = C\,y$ por $x = y$ si $C$ es un constructor, y
             $(\lambda x.\,s) = (\lambda y.\,t)$ por $s = t$ (extensionalidad);
       \item orientar;
       \item descartar si es trivial o si está subsumida por algo ya intentado.
@@ -1006,22 +1017,22 @@ contienen conectivos lógicos y constructores (\isa{filter\_conjectures}).
 \paragraph{7. Exploración de teorías} (\isa{equivalence\_terms.ML}).
 Es una versión de QuickSpec~\cite{quickspec} construida sobre Isabelle:
 \begin{enumerate}[nosep]
-  \item \textbf{Datos de prueba}: los tipos de la clausura definicional se
+  \item Para los \textbf{datos de prueba}, los tipos de la clausura definicional se
         \emph{monomorfizan}. Las variables de tipo se sustituyen por un tipo no
         paramétrico del problema o, si no lo hay, por el tipo auxiliar
         \isa{datatype two = A | B} de \isa{IsaLibs.thy}. Para cada tipo se enumeran
         \isa{max\_random\_terms} valores cerrados
         (\isa{Counter\_Example.enumerate\_terms}).
-  \item \textbf{Términos}: con las constantes de la clausura y \isa{max\_vars\_in\_tx}
-        variables por tipo se enumeran \emph{todos} los $\lambda$-términos en forma
+  \item Para obtener los \textbf{términos}, con las constantes de la clausura y
+        \isa{max\_vars\_in\_tx} variables por tipo se enumeran \emph{todos} los $\lambda$-términos en forma
         $\beta$-normal del tipo $\tau_1 \Rightarrow \cdots \Rightarrow \tau_n
         \Rightarrow \sigma$, hasta tamaño \isa{max\_lambda\_size}$+n$
         (\isa{Random\_Terms.enumerate\_all\_lambda\_terms}, basado en el conteo de
         términos de Zaionc). Se aplican a la signatura, de modo que cada uno
         representa un término sobre las funciones del problema, y se ordenan de más
         general a menos general.
-  \item \textbf{Clases de equivalencia}: cada término se normaliza con las reglas
-        seguras. Su \emph{huella} es la lista de formas normales de sus instancias
+  \item Para formar las \textbf{clases de equivalencia}, cada término se normaliza
+        con las reglas seguras. Su \emph{huella} es la lista de formas normales de sus instancias
         con los valores de prueba. Dos términos con la misma huella generan la
         conjetura $t = s$ (bajo las premisas de la meta), que se normaliza y se
         filtra con Quickcheck y Nitpick.
@@ -1092,7 +1103,7 @@ rapidez de la primera con la fuerza de la segunda. Por ejemplo,
 Llama a \isa{Sledgehammer\_Tactics.sledgehammer\_with\_metis\_tac} sobre la primera
 submeta, con un límite de \isa{max\_time\_in\_proof} segundos y los demostradores
 por omisión de Sledgehammer, y reconstruye la prueba con \isa{metis}. El nombre es
-histórico: cuando se escribió, SPASS era el demostrador por omisión. Internamente
+histórico, porque cuando se escribió SPASS era el demostrador por omisión. Internamente
 lo usa \isa{Prover.prove\_from\_spass}.
 \begin{lstlisting}
 lemma "rev (xs @ ys) = rev ys @ rev xs"
@@ -1113,8 +1124,8 @@ que no tenían el problema.
 
 Expone como método el demostrador atómico de
 \cmd{inductive\_sledgehammer\_prover}, sin conjunto de lemas y descartando los
-fallos registrados. Es útil para depurar: muestra qué puede probar el paso atómico
-por sí solo.
+fallos registrados. Es útil para depurar, ya que muestra qué puede probar el paso
+atómico por sí solo.
 
 % ===========================================================================
 \section{Atributos y conjuntos de teoremas}
@@ -1141,7 +1152,7 @@ Cada esquema es una definición cuyos parámetros son funciones:
 definition associativity where
   [prop_scheme]: "associativity R ≡ ∀x y z. R (R x y) z = R x (R y z)"
 \end{lstlisting}
-\isa{IsaLibs.thy} predefine estos esquemas:
+\isa{IsaLibs.thy} predefine los esquemas
 \isa{associativity}, \isa{commutativity}, \isa{associativity\_commutativity},
 \isa{left\_identity}, \isa{right\_identity}, \isa{absorbing\_element},
 \isa{left\_absorbing\_element}, \isa{right\_absorbing\_element}, \isa{idempotent},
@@ -1168,7 +1179,7 @@ add (add x y) z = add x (add y z)     (associativity)
 add x (add y z) = add y (add x z)     (associativity_commutativity)
 \end{lstlisting}
 \end{ejemplo}
-Es la idea central de IsaScheme~\cite{montano2012}: el conocimiento matemático
+La idea central de IsaScheme~\cite{montano2012} es que el conocimiento matemático
 general entra como plantillas de orden superior. Un usuario puede añadir sus propios
 esquemas con el atributo.
 
@@ -1202,7 +1213,7 @@ el valor que fija \isa{IsaLibs.thy}, que es el que rige en las teorías de usuar
 \isa{max\_lambda\_size} & 10 & 10 & Tamaño máximo de los $\lambda$-términos enumerados.\\
 \isa{max\_random\_terms} & 10 & 8 & Valores de prueba por tipo.\\
 \isa{max\_vars\_in\_tx} & 3 & 3 & Variables por tipo en la exploración.\\
-\isa{max\_num\_generalizations} & 2 & 2 & Sin efecto: sólo lo usa código comentado.\\
+\isa{max\_num\_generalizations} & 2 & 2 & Sin efecto, porque sólo lo usa código comentado.\\
 \isa{max\_time\_in\_fitness} & 30 & 15 & Programación genética (sólo ML).\\
 \bottomrule
 \end{longtable}
@@ -1242,7 +1253,7 @@ Leen el texto en modo esquemático, por lo que admiten \isa{?x} y \isa{?'a}, que
 \isa{oriented\_rules.ML} & Comando \cmd{orient\_rules}.\\
 \isa{schematic\_lemmas.ML} & Comando \cmd{schematic\_lemma}.\\
 \isa{tables.ML} & Tablas auxiliares y el conjunto \isa{compl}.\\
-\isa{utils.ML} & Utilidades generales: orientación, normalización, dependencias definicionales, plazos (\isa{apply\_timeout}), HTML y \LaTeX, antiquotaciones.\\
+\isa{utils.ML} & Utilidades generales de orientación, normalización, dependencias definicionales, plazos (\isa{apply\_timeout}), HTML y \LaTeX, y antiquotaciones.\\
 \isa{ground\_completion.ML} & Compleción sin fallo con ecuaciones incondicionales, reglas esquemáticas y crítico de divergencia (con el comando \cmd{divergence\_critic\_method} y el método \cmd{exponent\_induct}).\\
 \isa{conditional\_completion.ML} & Compleción con reglas condicionales (la usa \cmd{inductive\_prover}).\\
 \isa{orders.ML} & Extensiones de precedencias y LPO para unibilidad en términos cerrados.\\
@@ -1294,8 +1305,8 @@ Leen el texto en modo esquemático, por lo que admiten \isa{?x} y \isa{?'a}, que
   \item \textbf{Paralelismo.} \cmd{inductive\_prover} usa muchos hilos (futuros,
         \isa{Par\_List}). Los tiempos dependen mucho del número de núcleos y de
         \isa{threads}.
-  \item \textbf{Trazas.} El progreso se ve en el panel de \emph{tracing} de jEdit:
-        \isa{Proving:}, \isa{Proved!:}, \isa{Normalising (EQ\_TX):},
+  \item \textbf{Trazas.} El progreso se ve en el panel de \emph{tracing} de jEdit,
+        con mensajes como \isa{Proving:}, \isa{Proved!:}, \isa{Normalising (EQ\_TX):},
         \isa{subsumed or rejected}, \isa{Completing:}, \isa{Done:},
         \isa{Elapsed time}. Las referencias ML \isa{Ground\_Completion.completion\_debug}
         y similares activan más detalle. En \isa{isabelle build} la traza no queda en

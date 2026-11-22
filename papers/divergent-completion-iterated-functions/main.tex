@@ -61,9 +61,9 @@ iterated, as in $f(\pw{g}{n}(f(x))) \rw f(\pw{g}{n}(x))$. The classical
 remedies schematize such families at the meta level, with meta-rules,
 recurrence terms, terms with integer exponents or primal grammars, and then
 need dedicated unification and rewriting algorithms for the schematic
-objects. We observe that in higher-order logic no new formalism is needed:
-the whole family is a \emph{single theorem} about the function power
-$g^n$, and it can be proved by induction on $n$ inside the logic. We
+objects. We observe that no new formalism is needed in higher-order logic,
+where the whole family is a \emph{single theorem} about the function power
+$g^n$ that can be proved by induction on $n$ inside the logic. We
 present a \emph{divergence critic} for the theorem-producing completion
 procedure of IsaScheme, a theory exploration system for Isabelle/HOL. The
 critic recognizes families of chosen rules whose towers of unary symbols
@@ -91,14 +91,14 @@ function power \sep theory exploration \sep Isabelle/HOL
 Knuth--Bendix completion~\cite{KnuthBendix70} turns a set of equations
 $\E$ into an equivalent convergent term rewriting system $\R$, which then
 decides the word problem of $\E$ by comparing normal forms. A run of the
-procedure has three possible outcomes~\cite{Dershowitz89,BaaderNipkow98}:
-it may \emph{succeed} with a finite convergent system, it may \emph{fail}
-because an equation cannot be oriented, or it may \emph{diverge} and keep
-adding rules forever. Unfailing completion~\cite{BachmairDershowitzPlaisted89}
-removes the second outcome by keeping unorientable equations and using them
-for ordered rewriting, but divergence remains, and it is unavoidable in
-general: some finite theories with decidable word problem have no finite
-convergent presentation at all~\cite{KapurNarendran85}, and the infinite
+procedure may \emph{succeed} with a finite convergent system, \emph{fail}
+because an equation cannot be oriented, or \emph{diverge} and keep adding
+rules forever~\cite{Dershowitz89,BaaderNipkow98}. Unfailing
+completion~\cite{BachmairDershowitzPlaisted89} removes the second outcome
+by keeping unorientable equations and using them for ordered rewriting,
+but divergence remains. It cannot be avoided in general, because some
+finite theories with decidable word problem have no finite convergent
+presentation at all~\cite{KapurNarendran85}, and the infinite
 systems produced by divergent runs can be arbitrarily
 complex~\cite{HermannPrivara86,SattlerKlein91}.
 
@@ -112,18 +112,18 @@ limit, completion produces the infinite convergent system
 \[
   \{\, f(\pw{g}{n}(f(x))) \rw f(\pw{g}{n}(x)) \mid n \ge 1 \,\}.
 \]
-The infinite system is regular: its rules differ only in the length of a
-tower of the unary symbol $g$. Since the work of H.~Kirchner on
+The infinite system is regular, since its rules differ only in the length
+of a tower of the unary symbol $g$. Since the work of H.~Kirchner on
 meta-rules~\cite{Kirchner87,Kirchner89}, a whole line of research has
 represented such families finitely, with recurrence
 terms~\cite{ChenHsiangKong90}, terms with integer
 exponents~\cite{Comon95}, primal grammars~\cite{HermannGalbavy97} or
 enriched signatures~\cite{ThomasWatson93}, and has studied how to detect
 them~\cite{Hermann89,KirchnerHermann90,ThomasJantke89,DershowitzPinchover90}.
-All these approaches live at the \emph{meta level}: the schematic rule is
-not itself a rewrite rule of the object signature, so it needs its own
-matching, unification and critical pair computation, and its validity is
-argued about the infinite family, outside the object logic.
+In all these approaches the schematic rule lives at the \emph{meta level}.
+Since it is not a rewrite rule of the object signature, it needs its own
+matching, unification and critical pair computation, and its validity must
+be argued about the infinite family outside the object logic.
 
 This paper starts from a simple observation. In higher-order logic the
 exponent is a first-class citizen. Isabelle/HOL~\cite{NipkowPaulsonWenzel02}
@@ -134,10 +134,10 @@ and the whole family above is the single HOL theorem
 \[
   \forall n\,x.\ f(\fp{g}{\Suc\;n}\,(f\,x)) = f(\fp{g}{\Suc\;n}\,x),
 \]
-which can be proved by induction on $n$ from the initial rule. Nothing is
-schematized at the meta level: the generalized rule is an ordinary theorem
-of the logic, and every one of its instances is obtained by instantiating
-$n$ and unfolding the definition of the function power.
+which can be proved by induction on $n$ from the initial rule. The
+generalized rule is an ordinary theorem of the logic, so nothing needs to
+be schematized at the meta level. Each of its instances is obtained by
+instantiating $n$ and unfolding the definition of the function power.
 
 We exploit this observation in the completion procedure of
 IsaScheme~\cite{MontanoRivas12}, a theory exploration system for
@@ -150,14 +150,13 @@ unchecked rewrite rules. Our contributions are:
         number exponent (Section~\ref{sec:critic});
   \item an automatic proof of the generalized rule by induction on the
         exponent, with a proof method that the user can replace by any Isar
-        method, so that the extension does not compromise the soundness
-        of completion: every rule of the final system is a theorem checked
-        by Isabelle's kernel;
+        method, which keeps completion sound because every rule of the
+        final system is a theorem checked by Isabelle's kernel;
   \item a way of \emph{using} such a rule during completion without
-        changing the first-order machinery around it: the termination
-        prover and the term orderings only ever see ordinary rules, while
-        a simplification procedure unfolds, for each redex, the instance of
-        the schematic rule that applies to it;
+        changing the first-order machinery around it, in which the
+        termination prover and the term orderings only ever see ordinary
+        rules and a simplification procedure unfolds, for each redex, the
+        instance of the schematic rule that applies to it;
   \item an evaluation on divergent examples from the literature, including
         the cases that are out of reach of the method
         (Section~\ref{sec:examples}).
@@ -176,7 +175,7 @@ work.
 \label{sec:isascheme}
 
 IsaScheme~\cite{MontanoRivas12} is a system for \emph{theory exploration}
-in Isabelle/HOL: given a theory, for instance a few recursive functions
+in Isabelle/HOL. Given a theory, for instance a few recursive functions
 over an inductive datatype, it invents conjectures about them, discards the
 false ones, proves the true ones and organizes the resulting theorems. Its
 distinctive feature is the use of \emph{schemes}, higher-order formulas
@@ -193,14 +192,14 @@ automatic inductive prover. The prover analyses its own failures in the
 style of proof critics~\cite{IrelandBundy96,Walsh96} and speculates the
 missing lemmas.
 
-The theorems discovered in this way are highly redundant: an
+The theorems discovered in this way are highly redundant, since an
 associativity law produces infinitely many consequences, all of them
 ``interesting'' for a naive filter. IsaScheme therefore keeps the
 discovered theorems as a \emph{convergent rewrite system} and runs
 Knuth--Bendix completion every time a new theorem is added. A conjecture
 is worth proving only if it is not already joinable, and the completed
 system acts as a canonical, non-redundant summary of the theory explored so
-far. Completion also lets the system replace definitions: completing the
+far. Completion also lets the system replace definitions. Completing the
 lemma $\mathit{itrev}\;xs\;[\,] = \mathit{rev}\;xs$, for instance, orients
 it as $\mathit{rev}\;xs \rw \mathit{itrev}\;xs\;[\,]$ and deletes the
 quadratic definition of $\mathit{rev}$ in favour of the linear one.
@@ -219,25 +218,25 @@ which are kept in the theorem collection \isa{compl}. The union is then
 completed, and the trace reports the rules that were added to and removed
 from \isa{compl}. The completion procedure has the following ingredients:
 \begin{itemize}
-  \item It is \emph{unfailing completion}~\cite{BachmairDershowitzPlaisted89}:
-        unorientable (permutative) equations are kept and used for ordered
-        rewriting, and critical pairs are also computed with them.
+  \item It is \emph{unfailing completion}~\cite{BachmairDershowitzPlaisted89},
+        which keeps unorientable (permutative) equations, uses them for
+        ordered rewriting and also computes critical pairs with them.
   \item Joinability of permutative equations is checked for all ground
         instances with the criterion of Martin and
         Nipkow~\cite{MartinNipkow90}, which tries all the ways of adding the
         variables of the equation to the precedence of a lexicographic path
         ordering.
   \item Instead of a fixed reduction ordering, orientation is decided by
-        a \emph{termination oracle}: a candidate rule is accepted in a given
-        direction when the termination prover
+        a \emph{termination oracle}, which accepts a candidate rule in a
+        given direction when the termination prover
         AProVE~\cite{Giesl17,ArtsGiesl00} proves the termination of the
         current rules together with it. Two completions, which differ in
         the direction of the term ordering they use, run in parallel and
         the first one to finish is kept.
   \item Unification uses higher-order patterns~\cite{Miller91}, so the
         rules may contain $\lambda$-abstractions and function variables.
-  \item Completion is \emph{theorem producing}: every rule is an Isabelle
-        theorem. The initial rule comes from the user's proof, critical
+  \item Completion is \emph{theorem producing}, in the sense that every
+        rule is an Isabelle theorem. The initial rule comes from the user's proof, critical
         pairs are derived by rewriting with theorems (Isabelle conversions),
         and all other inferences only decide which theorems are kept. As
         in any LCF-style system, errors in the termination oracle or in the
@@ -245,11 +244,11 @@ from \isa{compl}. The completion procedure has the following ingredients:
         soundness.
 \end{itemize}
 Since the system works on theorems, critical pair generation is optional
-(option \isa{generate\_cps}) and is off by default: in theory exploration
+(option \isa{generate\_cps}) and off by default. In theory exploration,
 completion is mainly used to interreduce and orient lemmas proved by
 induction, and critical pairs are only needed when the user wants a
-convergent system. It is precisely when critical pairs are on that
-completion may diverge.
+convergent system, which is precisely the situation in which completion
+may diverge.
 
 %% ===========================================================================
 \section{Preliminaries}
@@ -270,7 +269,7 @@ joinable.
 
 Completion~\cite{KnuthBendix70,BachmairDershowitzPlaisted89} can be
 presented as an inference system on pairs $(\E,\R)$ of equations and
-rules~\cite{BaaderNipkow98}: \emph{deduce} adds a critical pair to $\E$,
+rules~\cite{BaaderNipkow98}, in which \emph{deduce} adds a critical pair to $\E$,
 \emph{orient} moves an equation to $\R$ in a direction compatible with the
 reduction ordering, \emph{simplify} and \emph{delete} normalize and remove
 equations, and \emph{compose} and \emph{collapse} interreduce the rules. A
@@ -295,7 +294,7 @@ these equations and with the definitions of $\circ$ and $\mathit{id}$.
 \begin{example}\label{ex:fg}
 Let $\E = \{ f(g(f(x))) \approx f(g(x)) \}$, oriented from left to right.
 The left-hand side overlaps with itself at position $1.1$ with the unifier
-$x \mapsto g(f(y))$: the term $f(g(f(g(f(y)))))$ rewrites at the root to
+$x \mapsto g(f(y))$, so the term $f(g(f(g(f(y)))))$ rewrites at the root to
 $f(g(g(f(y))))$ and at position $1.1$ to $f(g(f(g(y))))$, which rewrites
 further to $f(g(g(y)))$. The critical pair
 $f(g(g(f(y)))) \approx f(g(g(y)))$ is a new rule, which overlaps with the
@@ -351,9 +350,9 @@ skeleton is generalized at most once.
 
 \subsection{Generalization and proof}
 
-The candidate rule is rebuilt from the skeleton: a hole $\Box_c$ whose
-tower does not grow ($d_j = 0$) is filled with the fixed tower
-$\pw{c}{u_j}$, and a hole whose tower grows ($d_j = 1$) is filled with the
+The candidate rule is rebuilt by filling the holes of the skeleton. A hole
+$\Box_c$ whose tower does not grow ($d_j = 0$) receives the fixed tower
+$\pw{c}{u_j}$, and a hole whose tower grows ($d_j = 1$) receives the
 function power $c \pp (\Suc^{u_j}\;n)$, where $n$ is a
 fresh natural number variable. The instance $n = i$ of the candidate is
 then the member of the family with tower lengths $u + i\,d$. In
@@ -398,7 +397,7 @@ choice of method affects which families are accepted, never soundness.
 A rule with an exponent stands for infinitely many first-order rules, and
 the termination oracle can only check finitely many of them. The critic
 asks AProVE for the termination of the current rules together with the
-instances $n = 0, 1, 2$ of the candidate. This check is a heuristic: it
+instances $n = 0, 1, 2$ of the candidate. This check is a heuristic and
 does not prove that the infinite system terminates. In the examples of
 Section~\ref{sec:examples} it never rejected a proved rule; most of the
 schematic rules found there remove an occurrence of a symbol, such as the
@@ -421,8 +420,9 @@ $n$ with a numeral $\Suc^i\;0$ and unfolding the function power, until one
 of them rewrites $t$. The search is finite, because a tower in $t$ cannot be
 longer than the size of $t$. Each instance is an instance of a theorem, so
 the rewrite step is again justified by Isabelle's kernel, and the instances
-are cached. The simproc is added to every simplifier set used by completion:
-normalization, joinability tests and the final interreduction.
+are cached. The simproc is added to every simplifier set used by
+completion, namely those of normalization, of the joinability tests and of
+the final interreduction.
 
 \subsection{Restarting completion}
 
@@ -481,8 +481,8 @@ Strings over an alphabet are encoded as compositions of unary functions,
 so that the word $aba$ becomes the term $a(b(a(x)))$. All runs used
 Isabelle2026 with 8 threads on a machine with two Intel Xeon E5645
 processors and 30\,GB of memory, the AProVE server of February 2026, and
-the default options of IsaLibs: 20\,s for each termination check and 60\,s
-for each proof attempted by the critic. Times are wall-clock times of the
+the default options of IsaLibs, which allow 20\,s for each termination
+check and 60\,s for each proof attempted by the critic. Times are wall-clock times of the
 \isa{complete} commands, measured from the trace. Runs without the critic
 (option \isa{divergence\_critic = false}) were stopped after 300\,s; they
 were run two at a time, so the number of rules they reached is only
@@ -493,10 +493,11 @@ Table~\ref{tab:results} summarizes the results.
 \begin{table}[t]
 \centering
 \small
-\caption{Divergent completions from the literature. ``Without critic'':
-completion with critical pairs and \isa{divergence\_critic = false},
-stopped after 300\,s. ``With critic'': the default configuration, except
-for row 3b. Times are wall-clock times of the \isa{complete} commands.}
+\caption{Divergent completions from the literature. The column ``Without
+critic'' runs completion with critical pairs and
+\isa{divergence\_critic = false} and stops it after 300\,s. The column
+``With critic'' uses the default configuration, except for row 3b. Times
+are wall-clock times of the \isa{complete} commands.}
 \label{tab:results}
 \begin{tabular}{@{}l>{\raggedright}p{3.3cm}>{\raggedright}p{2.1cm}>{\raggedright}p{2.7cm}>{\raggedright\arraybackslash}p{3.3cm}@{}}
 \toprule
@@ -646,21 +647,21 @@ terminates after 2\,s with the system
 \end{gather*}
 The instances of the second rule, for $n \ge 0$, are exactly the rules
 $ab^mab \rw babba^{m-1}$, $m \ge 2$, so this system has the same rewrite
-relation as the infinite convergent system of the literature: completion
-has computed it, as two rules over the original signature. (A finite
+relation as the infinite convergent system of the literature, and
+completion has computed it as two rules over the original signature. (A finite
 convergent system for the braid monoid needs an additional
 symbol~\cite{Burckel01}.) With the second declaration the run that
 finishes first is the one that orients the equation the other way,
 $b(a(b(x))) \rw a(b(a(x)))$, and it ends after 3\,s with the mirror image
 of this system.
 
-\subsection{An inductive example: associativity of addition}
+\subsection{Associativity of Peano addition}
 
 Dershowitz~\cite[Section~4.4]{Dershowitz89} uses the associativity of
 Peano addition, with addition defined by recursion on its second argument,
 to show that whether completion proves an inductive theorem depends on the
-ordering: with one ordering completion succeeds, with another it generates
-the infinite sequence
+ordering. With one ordering completion succeeds, and with another it
+generates the infinite sequence
 \begin{gather*}
   (x+y)+z \approx x+(y+z),\qquad s(x+y)+z \approx x+(s(y)+z),\\
   s(s(x+y))+z \approx x+(s(s(y))+z),\quad \ldots
@@ -754,9 +755,10 @@ function powers are the special case of integer exponents applied to unary
 contexts, which is also the case that Burghardt and Heinz identify as the
 appropriate background theory for divergent examples like the one of
 Example~\ref{ex:denzinger}~\cite{BurghardtHeinz96}. The difference is that
-in HOL the exponent is part of the logic: the schematic rule is a theorem,
-its instances are obtained by instantiation and its correctness is proved
-by induction inside the prover, rather than argued about at the meta level.
+in HOL the exponent is part of the logic, so the schematic rule is a
+theorem whose instances are obtained by instantiation and whose correctness
+is proved by induction inside the prover, rather than argued about at the
+meta level.
 
 \paragraph{Recognizing divergence.}
 Thomas and Jantke used inductive inference to replace an infinite sequence
@@ -770,8 +772,8 @@ generalization to find divergence patterns among critical
 pairs~\cite{DershowitzPinchover90}, and Burghardt and Heinz studied
 anti-unification modulo equational theories as a tool for the same
 purpose~\cite{BurghardtHeinz96}. Our detection is much simpler than
-generalization modulo a theory: it is exact matching of skeletons plus an
-arithmetic check on tower lengths. It is cheap enough to run after every
+generalization modulo a theory, since it consists of exact matching of
+skeletons plus an arithmetic check on tower lengths. It is cheap enough to run after every
 choice of a rule, and it succeeds exactly on the families that a single
 exponent can describe.
 
@@ -781,9 +783,9 @@ prover (Spike), recognizes accumulating term structure by difference
 matching and speculates lemmas that ripple it away~\cite{Bundy05}. It is a
 proof-planning critic in the sense of Ireland and Bundy~\cite{IrelandBundy96}.
 Our critic shares its spirit, monitoring a procedure and proposing a lemma
-that cuts the divergence, but the lemma it proposes is not a wave rule: it
-is the generalization of the diverging sequence itself, which becomes
-expressible thanks to the function power of HOL. IsaScheme's inductive
+that cuts the divergence. The lemma, however, is not a wave rule but the
+generalization of the diverging sequence itself, which becomes expressible
+thanks to the function power of HOL. IsaScheme's inductive
 prover already includes a Walsh-style critic for its own proofs; the one
 described here acts on completion.
 
@@ -792,7 +794,7 @@ Some theories have no finite convergent presentation in their own
 signature, the braid monoid $\langle a, b \mid aba = bab\rangle$ being the
 classical example~\cite{KapurNarendran85}; Burckel gave a finite complete
 system with an extra symbol~\cite{Burckel01}. Infinite complete systems can
-still be useful: Hirokawa et al.\ formalized in Isabelle/HOL that fair
+still be useful. Hirokawa et al.\ formalized in Isabelle/HOL that fair
 infinite runs produce complete presentations, with the braid monoid as
 their running example~\cite{HirokawaMiddeldorpSternagelWinkler17}, and
 the automatic groups programs of Epstein, Holt and Rees represent infinite
@@ -836,15 +838,16 @@ the critic with it is the most interesting direction for future work.
 
 \paragraph{Proving the generalization.}
 The default tactic (induction, simplification and Metis with the current
-rules) fails on the braid monoid although the family is a theorem: the
-induction step needs to move one copy of the iterated symbol from the top
-to the bottom of the tower, which Metis does not find without the lemma
-$f\,(\fp{f}{n}\,x) = \fp{f}{n}\,(f\,x)$. The configurable proof method lets
-the user supply that lemma, or any other method, and then the example is
-solved; but the user has to know what is missing. Two directions would make
-this automatic: a small default library of lemmas about the function power,
-and a method that calls IsaScheme's own inductive prover, which analyses
-its failures and speculates lemmas. The second one is already expressible
+rules) fails on the braid monoid although the family is a theorem, because
+the induction step needs to move one copy of the iterated symbol from the
+top to the bottom of the tower, and Metis does not find this step without
+the lemma $f\,(\fp{f}{n}\,x) = \fp{f}{n}\,(f\,x)$. The configurable proof
+method lets the user supply that lemma, or any other method, and then the
+example is solved, but the user has to know what is missing. This could be
+automated with a small default library of lemmas about the function power,
+or with a method that calls IsaScheme's own inductive prover, which
+analyses its failures and speculates lemmas. The second option is already
+expressible
 with \isa{divergence\_critic\_method}, but its cost has to be balanced
 against the time limit of the critic.
 
@@ -852,11 +855,11 @@ against the time limit of the critic.
 The critical pairs of a schematic rule are approximated by those of its
 first three instances, and the termination of the infinite family is
 tested on the same instances. Both approximations could be replaced by
-exact methods: critical pairs of rules with exponents can be computed by
-unification of terms with integer exponents~\cite{Comon95}, and the
-termination of the schematic system could be proved by a reduction ordering
-extended to function powers, or by proving termination of the instance
-$n$ by induction. With both, the final system would be convergent whenever
+exact methods. The critical pairs of rules with exponents can be computed
+by unification of terms with integer exponents~\cite{Comon95}, and the
+termination of the schematic system could be proved with a reduction
+ordering extended to function powers, or by proving the termination of the
+instance $n$ by induction on $n$. With both, the final system would be convergent whenever
 completion terminates.
 
 \paragraph{Conclusion.}
