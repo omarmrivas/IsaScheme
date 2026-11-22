@@ -34,6 +34,7 @@
   morecomment=[n]{(*}{*)},
   morestring=[b]",
   literate={⇒}{{$\Rightarrow$}}1 {≡}{{$\equiv$}}1
+    {‹}{{$\langle$}}1 {›}{{$\rangle$}}1
 }
 \lstset{language=Isar,basicstyle=\ttfamily\small,keywordstyle=\color{kw}\bfseries,
   columns=fullflexible,keepspaces=true,showstringspaces=false,upquote=true,
@@ -67,7 +68,8 @@ present a \emph{divergence critic} for the theorem-producing completion
 procedure of IsaScheme, a theory exploration system for Isabelle/HOL. The
 critic recognizes families of chosen rules whose towers of unary symbols
 grow linearly, generalizes them to a rule with a natural-number exponent,
-proves it by induction, checks the termination of its first instances with
+proves it by induction with a proof method that the user can configure,
+checks the termination of its first instances with
 AProVE and restarts completion with the new rule, which is applied by a
 simplification procedure that unfolds the right instance on demand. Every
 rule of the final system is an Isabelle theorem, so soundness does not
@@ -147,7 +149,8 @@ unchecked rewrite rules. Our contributions are:
         linearly, and generalizes them into a single rule with a natural
         number exponent (Section~\ref{sec:critic});
   \item an automatic proof of the generalized rule by induction on the
-        exponent, so that the extension does not compromise the soundness
+        exponent, with a proof method that the user can replace by any Isar
+        method, so that the extension does not compromise the soundness
         of completion: every rule of the final system is a theorem checked
         by Isabelle's kernel;
   \item a way of \emph{using} such a rule during completion without
@@ -360,12 +363,35 @@ candidate is
   f\,(\fp{g}{\Suc\;n}\,(f\,x)) = f\,(\fp{g}{\Suc\;n}\,x).
 \]
 The candidate is a conjecture, not a consequence of the rules seen so far,
-so it must be proved. The critic applies induction on $n$, with all the
-other free variables generalized, then simplifies both subgoals with the
-current rules and finally calls the first-order prover
+so it must be proved. By default the critic applies induction on $n$, with
+all the other free variables generalized, then simplifies both subgoals
+with the current rules and finally calls the first-order prover
 Metis~\cite{PaulsonSusanto07} with the same rules. The proof has a time
-limit; if it fails, the skeleton is marked as tried and completion goes on
-unchanged.
+limit (option \isa{max\_time\_in\_critic\_proof}); if it fails, the
+skeleton is marked as tried and completion goes on unchanged.
+
+No fixed tactic proves every family, so the proof is configurable at two
+levels. Lemmas declared with the attribute \isa{critic\_simps} are added
+to the simplification and Metis steps of the default tactic. Alternatively,
+the command
+\begin{lstlisting}
+divergence_critic_method ‹method›
+\end{lstlisting}
+replaces the default tactic by an arbitrary Isar method. The method text
+is checked when it is declared and is stored in the theory context, so it
+follows the usual scoping of Isabelle declarations. Since the names of the
+variables of a conjecture are only known at run time, two auxiliary
+notions make such methods writable. The proof method \isa{exponent\_induct}
+performs induction on the unique natural-number variable that occurs in an
+exponent of a function power, with all the other free variables
+generalized. The fact \isa{critic\_rules} is bound, during the proof
+attempt, to the current rules of the completion. In this notation, the
+default tactic is close to
+\begin{lstlisting}
+exponent_induct; (simp add: critic_rules)?; metis critic_rules
+\end{lstlisting}
+Whatever the method, the result is checked by Isabelle's kernel, so the
+choice of method affects which families are accepted, never soundness.
 
 \subsection{Termination}
 
@@ -469,8 +495,8 @@ Table~\ref{tab:results} summarizes the results.
 \small
 \caption{Divergent completions from the literature. ``Without critic'':
 completion with critical pairs and \isa{divergence\_critic = false},
-stopped after 300\,s. ``With critic'': the default configuration. Times are
-wall-clock times of the \isa{complete} commands.}
+stopped after 300\,s. ``With critic'': the default configuration, except
+for row 3b. Times are wall-clock times of the \isa{complete} commands.}
 \label{tab:results}
 \begin{tabular}{@{}l>{\raggedright}p{3.3cm}>{\raggedright}p{2.1cm}>{\raggedright}p{2.7cm}>{\raggedright\arraybackslash}p{3.3cm}@{}}
 \toprule
@@ -489,6 +515,8 @@ wall-clock times of the \isa{complete} commands.}
 3 & $a(b(a(x))) \approx b(a(b(x)))$ &
   \cite{KapurNarendran85}, \cite[Ex.~1]{HirokawaMiddeldorpSternagelWinkler17} &
   not run (no finite convergent system exists) & family found but not proved; no end\\
+3b & same, with \isa{funpow\_swap1} in \isa{critic\_simps} & & same as 3 &
+  ends, 1 schematic rule, 2\,s; the convergent system of the literature\\
 4 & associativity of Peano $+$ & \cite[\S4.4]{Dershowitz89} &
   no end; Dershowitz's sequence up to $n = 10$ & ends, 2 schematic rules, 73\,s\\
 5 & bands & \cite[\S2.4]{Dershowitz89} & not run & not triggered; no end\\
@@ -593,26 +621,38 @@ family, with exponent $n + 2$:
 \begin{lstlisting}[language={}]
 Divergence critic: a ((b ^^ Suc (Suc n)) (a (b x)))
                      = b (a (b (b ((a ^^ Suc n) x))))
-Schematic rule not proved
+Schematic rule not proved (built-in tactic)
 \end{lstlisting}
-The conjecture is a theorem, but the critic's tactic does not prove it
+The conjecture is a theorem, but the default tactic does not prove it
 within 60\,s, so completion goes on diverging. The induction step needs
 to rewrite $b(a(b(x)))$ to $a(b(a(x)))$ at the \emph{bottom} of the tower
 $b^{n+3}$, while the definition of the function power exposes the copy of
-$b$ at the \emph{top}. With the standard lemma
-$f\,(\fp{f}{n}\,x) = \fp{f}{n}\,(f\,x)$ (\isa{funpow\_swap1}) as an extra
-simplification rule, the proof is found by the same tactic in 0.1\,s:
+$b$ at the \emph{top}. The standard lemma
+$f\,(\fp{f}{n}\,x) = \fp{f}{n}\,(f\,x)$ (\isa{funpow\_swap1}) moves it
+there, and either of the following declarations makes the proof go
+through:
 \begin{lstlisting}
-lemma "a ((b ^^ Suc (Suc n)) (a (b x))) = b (a (b (b ((a ^^ Suc n) x))))"
-  apply (induction n arbitrary: x)
-   apply (simp_all add: funpow_swap1)
-  by (metis ab)+
+declare funpow_swap1 [critic_simps]
+(* or *)
+divergence_critic_method
+  ‹exponent_induct; (simp_all add: funpow_swap1)?; metis critic_rules›
 \end{lstlisting}
-This failure is therefore a limitation of the proof tactic rather than of
-the method (Section~\ref{sec:conclusion}). Note that a finite convergent
-system for the braid monoid needs a new symbol~\cite{Burckel01}; with the
-schematic rule, the infinite system of the literature would be represented
-by two rules over the original signature.
+With the first one, the critic proves the family in 0.2\,s, and completion
+terminates after 2\,s with the system
+\begin{gather*}
+  a(b(a(x))) \rw b(a(b(x))), \\
+  a\,(\fp{b}{\Suc\,(\Suc\;n)}\,(a\,(b\,x))) \rw
+  b\,(a\,(b\,(b\,(\fp{a}{\Suc\;n}\,x)))).
+\end{gather*}
+The instances of the second rule, for $n \ge 0$, are exactly the rules
+$ab^mab \rw babba^{m-1}$, $m \ge 2$, so this system has the same rewrite
+relation as the infinite convergent system of the literature: completion
+has computed it, as two rules over the original signature. (A finite
+convergent system for the braid monoid needs an additional
+symbol~\cite{Burckel01}.) With the second declaration the run that
+finishes first is the one that orients the equation the other way,
+$b(a(b(x))) \rw a(b(a(x)))$, and it ends after 3\,s with the mirror image
+of this system.
 
 \subsection{An inductive example: associativity of addition}
 
@@ -795,13 +835,18 @@ concept invention does with schemes~\cite{MontanoRivas12}, and connecting
 the critic with it is the most interesting direction for future work.
 
 \paragraph{Proving the generalization.}
-The proof tactic (induction, simplification and Metis with the current
+The default tactic (induction, simplification and Metis with the current
 rules) fails on the braid monoid although the family is a theorem: the
 induction step needs to move one copy of the iterated symbol from the top
 to the bottom of the tower, which Metis does not find without the lemma
-$f\,(\fp{f}{n}\,x) = \fp{f}{n}\,(f\,x)$. Adding a small library of lemmas
-about the function power, or calling IsaScheme's own inductive prover with
-lemma speculation, should close this gap.
+$f\,(\fp{f}{n}\,x) = \fp{f}{n}\,(f\,x)$. The configurable proof method lets
+the user supply that lemma, or any other method, and then the example is
+solved; but the user has to know what is missing. Two directions would make
+this automatic: a small default library of lemmas about the function power,
+and a method that calls IsaScheme's own inductive prover, which analyses
+its failures and speculates lemmas. The second one is already expressible
+with \isa{divergence\_critic\_method}, but its cost has to be balanced
+against the time limit of the critic.
 
 \paragraph{Completeness of the restarted completion.}
 The critical pairs of a schematic rule are approximated by those of its
@@ -822,9 +867,10 @@ families, state and prove the corresponding theorem by induction, and use
 it to finish completion, without leaving the logic and without changing
 the first-order machinery of termination checks and term orderings. The
 method solves the classical examples whose divergence is a growing tower of
-a unary symbol, including Dershowitz's inductive example on Peano addition,
-and the examples it does not solve point to natural extensions within the
-same framework.
+a unary symbol, including Dershowitz's inductive example on Peano addition
+and, with one lemma about the function power, the braid monoid, for which
+it computes the known infinite convergent system as two rules. The examples
+it does not solve point to natural extensions within the same framework.
 
 %% ===========================================================================
 \section*{Availability}

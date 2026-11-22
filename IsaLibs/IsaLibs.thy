@@ -4,7 +4,8 @@ imports "HOL-TPTP.THF_Arith"
 keywords (*"rec_complete" :: thy_decl and*)
          "complete" :: thy_goal and
          "orient_rules" :: thy_decl and
-         "schematic_lemma" :: thy_decl
+         "schematic_lemma" :: thy_decl and
+         "divergence_critic_method" :: thy_decl
 begin
   
 ML \<open>
@@ -59,6 +60,8 @@ definition invert_bin where
   "invert_bin bin x y = bin y x"
   
 (*ML_file "html.ML"*)
+named_theorems critic_simps "extra lemmas for the built-in proof tactic of the divergence critic"
+
 ML_file "const_names.ML"
 ML_file "tables.ML"
 ML_file "utils.ML"
@@ -138,6 +141,7 @@ DB_DPair.setup_max_time_in_termination #>
 
 DB_Completion.setup_generate_cps #>
 DB_Completion.setup_divergence_critic #>
+DB_Completion.setup_max_time_in_critic_proof #>
 
 DB_GP.setup_max_time_in_fitness #>
 
@@ -151,6 +155,7 @@ declare [[
   simp_before = false,
   max_time_in_counter_ex = 25,
   max_time_in_proof = 60,
+  max_time_in_critic_proof = 60,
   max_time_in_inductive_proof = 7200,
   max_time_normalization = 5,
   max_lambda_size = 10,

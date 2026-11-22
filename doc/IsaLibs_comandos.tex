@@ -179,6 +179,8 @@ respuestas se seguirían usando mientras viva el proceso.
 \cmd{complete} & comando (meta) & Demuestra una ecuación y la integra, por compleción,
   en el conjunto \isa{compl} (sección~\ref{sec:complete}).\\
 \isa{rec\_complete} & comando & Desactivado; versión antigua de \cmd{complete}.\\
+\cmd{divergence\_critic\_method} & comando & Fija el método con el que el crítico de
+  divergencia de \cmd{complete} demuestra sus conjeturas (sección~\ref{sec:complete}).\\
 \midrule
 \cmd{induct\_auto} & método & Búsqueda A* de inducción + \isa{auto}
   (sección~\ref{sec:induct_auto}).\\
@@ -190,8 +192,14 @@ respuestas se seguirían usando mientras viva el proceso.
 \cmd{spass\_auto} & método & Sledgehammer + reconstrucción con \isa{metis}.\\
 \isa{induct\_auto\_sledgehammer\_\-failure\_tac} & método & El demostrador atómico con
   Sledgehammer, como método independiente.\\
+\cmd{exponent\_induct} & método & Inducción sobre la variable del exponente de
+  \isa{g \textasciicircum\textasciicircum\ n}, con las demás variables arbitrarias.\\
 \midrule
 \isa{compl} & atributo / conjunto & Reglas producidas por \cmd{complete}.\\
+\isa{critic\_simps} & atributo / conjunto & Lemas extra para la táctica predefinida del
+  crítico de divergencia.\\
+\isa{critic\_rules} & hecho dinámico & Las reglas de la compleción en curso, visibles
+  para el método del crítico.\\
 \isa{prop\_scheme} & atributo / conjunto & Esquemas de propiedades (asociatividad,
   conmutatividad, \ldots) para conjeturar.\\
 \midrule
@@ -636,7 +644,8 @@ definición original de \isa{rev}.
 {\raggedright
 \paragraph{Opciones relevantes.} \isa{generate\_cps}, \isa{divergence\_critic},
 \isa{max\_time\_in\_termination}, \isa{use\_aprove}, \isa{use\_aprove\_srv},
-\isa{max\_time\_in\_proof} (para \isa{heuristic1} y el crítico de divergencia) y
+\isa{max\_time\_in\_proof} (para \isa{heuristic1}),
+\isa{max\_time\_in\_critic\_proof} (para el crítico de divergencia) y
 \isa{max\_time\_in\_counter\_ex}.\par}
 
 \paragraph{Crítico de divergencia (prototipo).}
@@ -663,9 +672,10 @@ sólo actúa con \isa{generate\_cps = true}) que hace lo siguiente:
   \item \textbf{Generalizar.} Las torres que crecen se escriben
         \isa{c \textasciicircum\textasciicircum\ Suc$^k$ n}, donde $k$ es su
         longitud en el miembro más pequeño. Las que no crecen se quedan igual.
-  \item \textbf{Demostrar} la regla esquemática por inducción sobre \isa{n} (con
-        las demás variables arbitrarias), simplificación y \isa{metis} con las
-        reglas del momento.
+  \item \textbf{Demostrar} la regla esquemática. Por omisión, por inducción sobre
+        \isa{n} (con las demás variables arbitrarias), simplificación y
+        \isa{metis} con las reglas del momento; el método se puede cambiar
+        (ver ``Método de prueba del crítico'' más abajo).
   \item \textbf{Comprobar la terminación} con AProVE de las reglas más las
         instancias $n = 0, 1, 2$.
   \item \textbf{Reiniciar} la compleción con la regla esquemática. Esta regla no
@@ -699,6 +709,69 @@ de \cmd{complete} si ya es esquemática, pasan al contexto de las compleciones
 siguientes.
 \end{ejemplo}
 
+\paragraph{Método de prueba del crítico.}
+Por omisión, el crítico demuestra cada conjetura con una táctica predefinida:
+inducción sobre el exponente con las demás variables arbitrarias,
+simplificación y \isa{metis}, ambas con las reglas de la compleción en curso.
+Hay dos maneras de cambiarlo:
+\begin{itemize}[nosep]
+  \item \textbf{Añadir lemas} a la táctica predefinida con el atributo
+        \isa{critic\_simps}, por ejemplo \isa{declare funpow\_swap1 [critic\_simps]}.
+        Los lemas se usan en la simplificación y en \isa{metis}.
+  \item \textbf{Sustituir el método} con el comando
+        \begin{lstlisting}
+divergence_critic_method ‹método›
+\end{lstlisting}
+        donde \emph{método} es cualquier método de Isar, con sus combinadores
+        (\isa{,} \isa{;} \isa{|} \isa{?} \isa{+}). El texto se comprueba al
+        declararlo (un método o un lema inexistente da error en ese momento) y se
+        guarda en el contexto de la teoría, no en una variable global. Un texto
+        vacío, \isa{divergence\_critic\_method ‹›}, vuelve a la táctica
+        predefinida.
+\end{itemize}
+El método recibe como meta la conjetura, con sus variables libres fijadas. Como
+sus nombres (\isa{n}, \isa{x}, \isa{xa}, \ldots) no se conocen de antemano,
+hay dos ayudas:
+\begin{itemize}[nosep]
+  \item el método \cmd{exponent\_induct} hace inducción sobre la variable natural
+        que aparece en los exponentes de \isa{\textasciicircum\textasciicircum}
+        (debe ser única), con todas las demás arbitrarias; también sirve en
+        pruebas escritas a mano;
+  \item el hecho \isa{critic\_rules} contiene las reglas de la compleción en el
+        momento de la conjetura, como igualdades de HOL, y sólo existe mientras el
+        crítico intenta la prueba.
+\end{itemize}
+Cada intento tiene un límite de \isa{max\_time\_in\_critic\_proof} segundos. Si
+falla, la traza lo indica con el método usado
+(\isa{Schematic rule not proved (\ldots)}). Cualquier método es seguro: el
+resultado pasa por el núcleo de Isabelle, y el método sólo decide qué
+conjeturas se aceptan.
+
+\needspace{20\baselineskip}
+\begin{ejemplo}
+Con el método predefinido, la compleción del monoide de trenzas
+$\langle a, b \mid aba = bab\rangle$ no termina: el crítico encuentra la familia
+pero no la demuestra, porque el paso de inducción necesita mover una copia de
+\isa{b} de la cima de la torre a su base. Cualquiera de estas dos líneas lo
+resuelve:
+\begin{lstlisting}
+declare funpow_swap1 [critic_simps]
+(* o bien *)
+divergence_critic_method
+  ‹exponent_induct; (simp_all add: funpow_swap1)?; metis critic_rules›
+
+declare [[generate_cps = true]]
+complete "a (b (a x)) = b (a (b x))" by (rule ab)
+(* Done: a (b (a ?x)) ≡ b (a (b ?x)),
+         a ((b ^^ Suc (Suc ?n)) (a (b ?x)))
+           ≡ b (a (b (b ((a ^^ Suc ?n) ?x)))) *)
+\end{lstlisting}
+La compleción termina en unos 2\,s, y el resultado es exactamente el sistema
+convergente infinito de la literatura,
+$\{aba \rw bab\} \cup \{ab^mab \rw babba^{m-1} \mid m \ge 2\}$, escrito como
+dos reglas.
+\end{ejemplo}
+
 Es un prototipo, con estas limitaciones:
 \begin{itemize}[nosep]
   \item Sólo reconoce torres de un símbolo unario (\isa{Const} o \isa{Free} de tipo
@@ -709,9 +782,9 @@ Es un prototipo, con estas limitaciones:
         (Comon~\cite{comon95}) sería lo completo.
   \item La terminación de la familia se comprueba con esas tres instancias, no con
         la familia entera.
-  \item Ningún método general basta: Sattler-Klein~\cite{sattler-klein} demostró
-        que una compleción divergente puede codificar cualquier conjunto
-        recursivamente enumerable.
+  \item Ningún método general basta: Sattler-Klein~\cite{sattler-klein} mostró
+        que los sistemas infinitos que produce una compleción divergente pueden
+        ser muy complejos.
   \item El simplificador normal de Isabelle no aplica la regla guardada en
         \isa{compl} a términos sin \isa{\textasciicircum\textasciicircum}; el simproc
         sólo existe dentro de la compleción.
@@ -1116,6 +1189,7 @@ el valor que fija \isa{IsaLibs.thy}, que es el que rige en las teorías de usuar
 \isa{max\_time\_in\_termination} & 180 & 20 & Segundos para AProVE (\isa{-t}) y para el método de pares de dependencia interno.\\
 \isa{generate\_cps} & true & \textbf{false} & Deducir pares críticos en la compleción.\\
 \isa{divergence\_critic} & true & true & Con \isa{generate\_cps}, generalizar familias divergentes de reglas con \isa{\textasciicircum\textasciicircum} (prototipo).\\
+\isa{max\_time\_in\_critic\_proof} & 60 & 60 & Segundos para cada prueba del crítico de divergencia.\\
 \isa{use\_quickcheck} & true & true & Buscar contraejemplos con Quickcheck.\\
 \isa{use\_nitpick} & true & true & Buscar contraejemplos con Nitpick.\\
 \isa{simp\_before} & false & false & Simplificar la conjetura antes de buscar contraejemplos.\\
@@ -1169,7 +1243,7 @@ Leen el texto en modo esquemático, por lo que admiten \isa{?x} y \isa{?'a}, que
 \isa{schematic\_lemmas.ML} & Comando \cmd{schematic\_lemma}.\\
 \isa{tables.ML} & Tablas auxiliares y el conjunto \isa{compl}.\\
 \isa{utils.ML} & Utilidades generales: orientación, normalización, dependencias definicionales, plazos (\isa{apply\_timeout}), HTML y \LaTeX, antiquotaciones.\\
-\isa{ground\_completion.ML} & Compleción sin fallo con ecuaciones incondicionales, reglas esquemáticas y crítico de divergencia.\\
+\isa{ground\_completion.ML} & Compleción sin fallo con ecuaciones incondicionales, reglas esquemáticas y crítico de divergencia (con el comando \cmd{divergence\_critic\_method} y el método \cmd{exponent\_induct}).\\
 \isa{conditional\_completion.ML} & Compleción con reglas condicionales (la usa \cmd{inductive\_prover}).\\
 \isa{orders.ML} & Extensiones de precedencias y LPO para unibilidad en términos cerrados.\\
 \isa{aprove.ML} & Traducción a WST e interfaz con AProVE.\\

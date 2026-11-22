@@ -10,3 +10,4 @@ session Divergence_Examples = IsaLibs +
     Ex2b_Denzinger_LPO
     Ex4_Peano_Assoc
     Ex3_Braid_Family
+    Ex3b_Braid_Critic_Simps

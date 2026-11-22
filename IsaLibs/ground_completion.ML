@@ -16,7 +16,9 @@ sig
 
   val generate_cps                  : bool Config.T
   val divergence_critic             : bool Config.T
+  val max_time_in_critic_proof      : int Config.T
   val schematic_instance            : Proof.context -> thm -> int -> thm
+  val exponent_induct_tac           : Proof.context -> int -> tactic
 
   val match_inst                    :  Proof.context -> Envir.env -> (ctyp * ctyp) list * (cterm * cterm) list
   val linear_if_possible            :  thm -> thm
@@ -57,6 +59,9 @@ val (max_time_in_completion, setup_max_time_in_completion) = Attrib.config_int @
 val (generate_cps, setup_generate_cps) = Attrib.config_bool @{binding "generate_cps"} (K true)
 (* only used when critical pairs are generated *)
 val (divergence_critic, setup_divergence_critic) = Attrib.config_bool @{binding "divergence_critic"} (K true)
+(* time limit (seconds) for each proof attempted by the divergence critic *)
+val (max_time_in_critic_proof, setup_max_time_in_critic_proof) =
+  Attrib.config_int @{binding "max_time_in_critic_proof"} (K 60)
 
 (*fun ord_to_str l = 
     l |> map (fn (Const (n,_),i) => n ^ string_of_int i
@@ -727,10 +732,81 @@ fun find_family history (skel, v) =
              end) same
   end
 
+(* The proof of a conjectured family.  By default the critic uses the
+   built-in tactic family_tac; the command divergence_critic_method replaces
+   it by an Isar method, evaluated in a context where the fact critic_rules
+   holds the current rules of the completion. *)
+
+(* induction on the natural number variable that occurs in the exponents of
+   function powers (there must be exactly one), the other free variables
+   arbitrary *)
+fun exponent_induct_tac ctxt = SUBGOAL (fn (goal, i) =>
+  case fold Term.add_frees (compow_exponents goal) []
+         |> filter (fn (_, T) => T = HOLogic.natT) of
+      [n] =>
+        let val others = Term.add_frees goal [] |> remove (op =) n
+        in Induct.induct_tac ctxt false [[SOME (NONE, (Free n, false))]] [others] [] NONE [] i end
+    | _ => no_tac)
+
+val _ = Theory.setup
+  (Method.setup @{binding exponent_induct}
+     (Scan.succeed (fn ctxt => SIMPLE_METHOD' (exponent_induct_tac ctxt)))
+     "induction on the exponent of a function power (g ^^ n), other variables arbitrary")
+
+(* extra lemmas for the built-in tactic, e.g. declare funpow_swap1 [critic_simps] *)
+fun critic_simps ctxt = Named_Theorems.get ctxt @{named_theorems critic_simps}
+
 fun family_tac rules n others ctxt =
-  Induct.induct_tac ctxt false [[SOME (NONE, (n, false))]] [others] [] NONE [] 1
-  THEN ALLGOALS (TRY o asm_full_simp_tac (Simplifier.add_simps rules ctxt))
-  THEN ALLGOALS (Metis_Tactic.metis_tac [] ATP_Problem_Generate.combsN ctxt rules)
+  let val rules = rules @ critic_simps ctxt
+  in Induct.induct_tac ctxt false [[SOME (NONE, (n, false))]] [others] [] NONE [] 1
+     THEN ALLGOALS (TRY o asm_full_simp_tac (Simplifier.add_simps rules ctxt))
+     THEN ALLGOALS (Metis_Tactic.metis_tac [] ATP_Problem_Generate.combsN ctxt rules)
+  end
+
+(* the user's method (its source text), kept in the context: NONE means the
+   built-in tactic *)
+structure Critic_Method = Generic_Data
+(
+  type T = Input.source option
+  val empty = NONE
+  fun merge (m, NONE) = m
+    | merge (_, m) = m
+)
+
+val critic_rulesN = "critic_rules"
+
+fun put_critic_rules rules = Proof_Context.put_thms false (critic_rulesN, SOME rules)
+
+(* read in a context where critic_rules is defined *)
+fun read_critic_method ctxt src = Method.read_closure_input ctxt src |> fst
+
+val _ =
+  Outer_Syntax.local_theory @{command_keyword divergence_critic_method}
+    "set the proof method of the divergence critic of complete (empty text: built-in tactic)"
+    (Parse.embedded_input >> (fn src => fn lthy =>
+      let val method =
+            if Input.string_of src |> Symbol.explode |> forall Symbol.is_blank then NONE
+            else (read_critic_method (put_critic_rules [] lthy) src; SOME src)
+      in Local_Theory.declaration {syntax = false, pervasive = true, pos = Input.pos_of src}
+           (K (Critic_Method.put method)) lthy
+      end))
+
+(* SOME theorem proving conj, using the method of the context *)
+fun prove_family ctxt rules n_free others conj =
+  let val time_out = Config.get ctxt max_time_in_critic_proof
+  in case Critic_Method.get (Context.Proof ctxt) of
+         NONE => Prover.prove_from_tactic ctxt NONE (family_tac rules n_free others) conj time_out
+       | SOME src =>
+           (let val ctxt' = put_critic_rules rules ctxt
+                val text = read_critic_method ctxt' src
+            in Prover.prove ctxt' NONE (text, Position.no_range) conj time_out end)
+           handle ERROR msg => (tracing ("Divergence critic method: " ^ msg); NONE)
+  end
+
+fun method_description ctxt =
+  case Critic_Method.get (Context.Proof ctxt) of
+      NONE => "built-in tactic"
+    | SOME src => Input.string_of src
 
 (* SOME schematic rule (meta equation) proved for the family of rl *)
 fun apply_divergence_critic ctxt terminates rules history rl =
@@ -746,8 +822,7 @@ fun apply_divergence_critic ctxt terminates rules history rl =
             val others = Term.add_frees conj [] |> filter_out (fn v => v = ("n", HOLogic.natT))
             val rules_obj = map Utils.meta_to_obj rules
             val _ = tracing ("Divergence critic: " ^ Syntax.string_of_term ctxt conj)
-            val time_out = Config.get ctxt Prover.max_time_in_proof
-        in case Prover.prove_from_tactic ctxt NONE (family_tac rules_obj n_free others) conj time_out of
+        in case prove_family ctxt rules_obj n_free others conj of
                SOME th =>
                  let val gen = Utils.obj_to_meta th
                      val instances = map (schematic_instance ctxt gen) [0, 1, 2]
@@ -755,7 +830,7 @@ fun apply_divergence_critic ctxt terminates rules history rl =
                     then (tracing ("Schematic rule: " ^ Utils.str_of_thms [gen]); SOME gen)
                     else (tracing "Schematic rule rejected (termination)"; NONE)
                  end
-             | NONE => (tracing "Schematic rule not proved"; NONE)
+             | NONE => (tracing ("Schematic rule not proved (" ^ method_description ctxt ^ ")"); NONE)
         end
 
 datatype COMPL = DONE of thm list | FINAL of thm list

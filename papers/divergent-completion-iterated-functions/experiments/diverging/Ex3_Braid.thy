@@ -1,8 +1,9 @@
 (* Example 3: the braid monoid <a, b | aba = bab>, which has no finite
    convergent presentation over {a, b} (Kapur and Narendran, 1985).
    Strings are encoded as compositions of unary functions.  The critic finds
-   the family a b^(n+2) a b -> b a b b a^(n+1) but does not prove it, so
-   completion does not terminate.  Open this theory in jEdit and interrupt it. *)
+   the family a b^(n+2) a b -> b a b b a^(n+1) but its default tactic does
+   not prove it, so completion does not terminate.  Open this theory in
+   jEdit and interrupt it.  See Ex3b_Braid_Critic_Simps for the fix. *)
 theory Ex3_Braid
   imports IsaLibs
 begin
