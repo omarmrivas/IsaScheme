@@ -152,11 +152,11 @@ unchecked rewrite rules. Our contributions are:
         exponent, with a proof method that the user can replace by any Isar
         method, which keeps completion sound because every rule of the
         final system is a theorem checked by Isabelle's kernel;
-  \item a way of \emph{using} such a rule during completion without
-        changing the first-order machinery around it, in which the
-        termination prover and the term orderings only ever see ordinary
-        rules and a simplification procedure unfolds, for each redex, the
-        instance of the schematic rule that applies to it;
+  \item a way of \emph{using} such a rule during completion that leaves
+        the termination checks, the term orderings and the computation of
+        critical pairs unchanged. These components only ever see ordinary
+        rules, while a simplification procedure unfolds, for each redex,
+        the instance of the schematic rule that applies to it;
   \item an evaluation on divergent examples from the literature, including
         the cases that are out of reach of the method
         (Section~\ref{sec:examples}).
@@ -394,8 +394,9 @@ choice of method affects which families are accepted, never soundness.
 
 \subsection{Termination}
 
-A rule with an exponent stands for infinitely many first-order rules, and
-the termination oracle can only check finitely many of them. The critic
+A rule with an exponent stands for infinitely many ordinary rules, one for
+each value of the exponent, and the termination oracle can only check
+finitely many of them. The critic
 asks AProVE for the termination of the current rules together with the
 instances $n = 0, 1, 2$ of the candidate. This check is a heuristic and
 does not prove that the infinite system terminates. In the examples of
@@ -410,8 +411,8 @@ the schematic system itself is left for future work
 A rule $\hat\rho(n)$ with an exponent cannot be given to the simplifier as
 it is, because its left-hand side contains $g \pp n$,
 which does not match a tower $\pw{g}{k}$, and because the rest of the
-procedure (termination checks, term orderings, critical pairs) works on
-first-order rules. Therefore schematic rules are kept in the proof context,
+procedure (termination checks, term orderings, critical pairs) only works
+on rules without exponents. Therefore schematic rules are kept in the proof context,
 not in the rule lists, and are used through a \emph{simplification
 procedure} (simproc). The simproc is triggered on terms headed by the head
 symbol of the left-hand side; for a redex $t$, it tries the instances
@@ -868,7 +869,8 @@ divergent completion are often a single theorem about the function power.
 We have shown how a theorem-producing completion procedure can detect such
 families, state and prove the corresponding theorem by induction, and use
 it to finish completion, without leaving the logic and without changing
-the first-order machinery of termination checks and term orderings. The
+the termination checks, the term orderings or the computation of critical
+pairs. The
 method solves the classical examples whose divergence is a growing tower of
 a unary symbol, including Dershowitz's inductive example on Peano addition
 and, with one lemma about the function power, the braid monoid, for which
