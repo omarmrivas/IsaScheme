@@ -173,7 +173,7 @@ declare [[
   use_aprove=true,
   use_aprove_srv=true,
   
-  generate_cps=false,
+  generate_cps=true,
   linarith_split_limit = 10,
   eta_contract = false
   ]]

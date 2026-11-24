@@ -611,10 +611,12 @@ del conjunto de simplificación.
 Hay dos detalles más. Primero, \isa{run\_completion} lanza en paralelo dos
 compleciones, con el orden de términos en sentido \isa{LESS} y en sentido
 \isa{GREATER}, y se queda con la que termina primero (\isa{Par\_List.get\_some}).
-Segundo, \textbf{\isa{IsaLibs.thy} pone \isa{generate\_cps = false}}, así que por
-omisión \cmd{complete} no deduce pares críticos y se limita a orientar, interreducir
-y eliminar reglas unibles. Para una compleción completa se declara
-\isa{declare [[generate\_cps = true]]}.
+Segundo, la opción \isa{generate\_cps} está activa por omisión, así que
+\cmd{complete} deduce pares críticos y, si termina, devuelve un sistema
+convergente. Con pares críticos la compleción también puede no terminar. Si sólo
+interesa orientar, interreducir y eliminar reglas unibles, se declara
+\isa{declare [[generate\_cps = false]]}. La misma opción rige la compleción
+condicional que usa \cmd{inductive\_prover} (sección~\ref{sec:inductive_prover}).
 
 \paragraph{Corrección.}
 Todas las reglas de \isa{compl} son teoremas de Isabelle. La regla inicial viene de
@@ -641,6 +643,7 @@ fun app :: "'a list ⇒ 'a list ⇒ 'a list" where ...
 fun rev :: "'a list ⇒ 'a list" where
   "rev [] = []" | "rev (x # xs) = app (rev xs) [x]"
 
+declare [[generate_cps = false]]
 complete "itrev xs [] = rev xs"
   by inductive_prover
 (* Additions: rev ?xs = itrev ?xs [],
@@ -649,6 +652,19 @@ complete "itrev xs [] = rev xs"
 \end{lstlisting}
 La compleción decidió que la definición eficiente \isa{itrev} sustituye a la
 definición original de \isa{rev}.
+
+El ejemplo desactiva los pares críticos porque con ellos esta compleción no
+termina. Genera las dos familias infinitas
+\begin{align*}
+  \mathit{itrev}\ \mathit{xs}\ [x_1,\ldots,x_n] &=
+    \mathit{app}\ (\cdots(\mathit{app}\ (\mathit{itrev}\ \mathit{xs}\ [\,])\ [x_1])\cdots)\ [x_n],\\
+  \mathit{app}\ (\mathit{itrev}\ \mathit{xs}\ [x_1,\ldots,x_{n-1}])\ [x_n] &=
+    \mathit{itrev}\ \mathit{xs}\ [x_1,\ldots,x_n],
+\end{align*}
+en las que crece una lista de variables distintas y no una torre de un mismo
+símbolo unario, así que el crítico de divergencia no las reconoce. La declaración
+también desactiva los pares críticos en la compleción condicional de
+\cmd{inductive\_prover}.
 \end{ejemplo}
 
 {\raggedright
@@ -671,8 +687,8 @@ Watson~\cite{thomas-watson}). En HOL basta la iteración de funciones
 \isa{f ((g \textasciicircum\textasciicircum\ Suc n) (f x)) = f ((g \textasciicircum\textasciicircum\ Suc n) x)},
 que se demuestra por inducción sobre \isa{n}.
 
-\cmd{complete} lleva un crítico (\isa{divergence\_critic}, activo por omisión, pero
-sólo actúa con \isa{generate\_cps = true}) que hace lo siguiente:
+\cmd{complete} lleva un crítico (\isa{divergence\_critic}, activo por omisión) que
+sólo actúa cuando se deducen pares críticos y hace lo siguiente:
 \begin{enumerate}[nosep]
   \item \textbf{Detectar.} Cada regla elegida se abstrae en un \emph{esqueleto},
         donde las torres maximales $c(c(\dots s))$ de símbolos unarios se
@@ -703,8 +719,6 @@ sólo actúa con \isa{generate\_cps = true}) que hace lo siguiente:
 typedecl T
 consts f :: "T ⇒ T"
        g :: "T ⇒ T"
-
-declare [[generate_cps = true]]
 
 complete "f (g (f x)) = f (g x)"
   sorry
@@ -771,7 +785,6 @@ declare funpow_swap1 [critic_simps]
 divergence_critic_method
   ‹exponent_induct; (simp_all add: funpow_swap1)?; metis critic_rules›
 
-declare [[generate_cps = true]]
 complete "a (b (a x)) = b (a (b x))" by (rule ab)
 (* Done: a (b (a ?x)) ≡ b (a (b ?x)),
          a ((b ^^ Suc (Suc ?n)) (a (b ?x)))
@@ -1052,9 +1065,9 @@ Tiempos medidos en Isabelle2026 con AProVE (8 hilos):
 \toprule
 Meta & Tiempo & Lemas descubiertos (además de \isa{.simps})\\
 \midrule
-\isa{add x y = add y x} & 33\,s & \isa{add x Z = x}, \isa{add x (S y) = S (add x y)}\\
-\isa{add (add x y) z = add x (add y z)} & 43\,s & los mismos dos\\
-\isa{rev2 (rev2 xs) = xs} & 290\,s & \isa{app x [] = x}, asociatividad de \isa{app},\\
+\isa{add x y = add y x} & 37\,s & \isa{add x Z = x}, \isa{add x (S y) = S (add x y)}\\
+\isa{add (add x y) z = add x (add y z)} & 26\,s & ninguno\\
+\isa{rev2 (rev2 xs) = xs} & 316\,s & \isa{app x [] = x}, asociatividad de \isa{app},\\
  & & \isa{rev2 (app xs ys) = app (rev2 ys) (rev2 xs)}\\
 \bottomrule
 \end{tabular}
@@ -1085,8 +1098,9 @@ atómico (\isa{induct\_auto\_sledgehammer\_failure\_tac}):
 \end{itemize}
 Sirve cuando el lema necesario se deduce de hechos de la biblioteca de HOL que el
 simplificador no encuentra. En Isabelle2026, \isa{add x y = add y x} se demuestra en
-213\,s con este método. Encuentra los lemas \isa{add x Z = x},
-\isa{add x (S y) = S (add x y)} y la asociatividad de \isa{add}.
+212\,s con este método. El conjunto final de lemas contiene \isa{add x Z = x} y
+\isa{add x (S y) = S (add x y)}. Durante la búsqueda también demuestra la
+asociatividad de \isa{add}, aunque ésta no queda en ese conjunto.
 
 % ---------------------------------------------------------------------------
 \subsection{\texttt{inductive\_provers}}
@@ -1095,7 +1109,7 @@ Es el mismo bucle con el demostrador atómico \isa{induct\_failure\_provers\_tac
 que intenta primero \isa{induct\_auto\_failure\_tac} y, sólo si no resuelve la meta
 (\isa{SOLVE \ldots\ ORELSE SOLVE \ldots}), la variante con Sledgehammer. Combina la
 rapidez de la primera con la fuerza de la segunda. Por ejemplo,
-\isa{add (add x y) z = add x (add y z)} se demuestra en 28\,s.
+\isa{add (add x y) z = add x (add y z)} se demuestra en 27\,s.
 
 % ---------------------------------------------------------------------------
 \subsection{\texttt{spass\_auto}}
@@ -1198,7 +1212,7 @@ el valor que fija \isa{IsaLibs.thy}, que es el que rige en las teorías de usuar
 \isa{use\_aprove} & true & true & Usar AProVE. Con \isa{false}, toda prueba de terminación falla.\\
 \isa{use\_aprove\_srv} & false & \textbf{true} & Hablar con el servidor de AProVE vía \isa{nc} en lugar de ejecutar el \isa{jar}.\\
 \isa{max\_time\_in\_termination} & 180 & 20 & Segundos para AProVE (\isa{-t}) y para el método de pares de dependencia interno.\\
-\isa{generate\_cps} & true & \textbf{false} & Deducir pares críticos en la compleción.\\
+\isa{generate\_cps} & true & true & Deducir pares críticos en la compleción (también en la condicional de \cmd{inductive\_prover}).\\
 \isa{divergence\_critic} & true & true & Con \isa{generate\_cps}, generalizar familias divergentes de reglas con \isa{\textasciicircum\textasciicircum} (prototipo).\\
 \isa{max\_time\_in\_critic\_proof} & 60 & 60 & Segundos para cada prueba del crítico de divergencia.\\
 \isa{use\_quickcheck} & true & true & Buscar contraejemplos con Quickcheck.\\
@@ -1300,8 +1314,11 @@ Leen el texto en modo esquemático, por lo que admiten \isa{?x} y \isa{?'a}, que
         igual que la de la compleción condicional.
   \item \textbf{\isa{quick\_and\_dirty}} está activado. Antes de dar por buena una
         teoría conviene comprobar que no quedan \isa{sorry}.
-  \item \textbf{Pares críticos desactivados} por omisión
-        (\isa{generate\_cps = false}).
+  \item \textbf{Pares críticos activados} por omisión
+        (\isa{generate\_cps = true}). Con ellos la compleción puede no terminar.
+        El crítico de divergencia resuelve algunos de esos casos, y
+        \isa{declare [[generate\_cps = false]]} vuelve a la compleción sin pares
+        críticos.
   \item \textbf{Paralelismo.} \cmd{inductive\_prover} usa muchos hilos (futuros,
         \isa{Par\_List}). Los tiempos dependen mucho del número de núcleos y de
         \isa{threads}.
