@@ -3,7 +3,7 @@
    family a b^(n+2) a b -> b a b b a^(n+1) and completion terminates with
    two rules, whose instances form the infinite convergent system of
    Hirokawa et al. (FSCD 2017, Example 1).  The same can be obtained with
-     divergence_critic_method
+     tower_critic_method
        \<open>exponent_induct; (simp_all add: funpow_swap1)?; metis critic_rules\<close> *)
 theory Ex3b_Braid_Critic_Simps
   imports IsaLibs

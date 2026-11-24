@@ -182,8 +182,9 @@ proceso.
 \cmd{complete} & comando (meta) & Demuestra una ecuación y la integra, por compleción,
   en el conjunto \isa{compl} (sección~\ref{sec:complete}).\\
 \isa{rec\_complete} & comando & Desactivado; versión antigua de \cmd{complete}.\\
-\cmd{divergence\_critic\_method} & comando & Fija el método con el que el crítico de
-  divergencia de \cmd{complete} demuestra sus conjeturas (sección~\ref{sec:complete}).\\
+\cmd{tower\_critic\_method} & comando & Fija el método con el que el crítico de
+  torres de \cmd{complete} demuestra sus conjeturas (sección~\ref{sec:complete}).\\
+\cmd{spine\_critic\_method} & comando & Igual, para el crítico de espinas.\\
 \midrule
 \cmd{induct\_auto} & método & Búsqueda A* de inducción + \isa{auto}
   (sección~\ref{sec:induct_auto}).\\
@@ -199,10 +200,10 @@ proceso.
   \isa{g \textasciicircum\textasciicircum\ n}, con las demás variables arbitrarias.\\
 \midrule
 \isa{compl} & atributo / conjunto & Reglas producidas por \cmd{complete}.\\
-\isa{critic\_simps} & atributo / conjunto & Lemas extra para la táctica predefinida del
-  crítico de divergencia.\\
+\isa{critic\_simps} & atributo / conjunto & Lemas extra para las pruebas predefinidas
+  de los críticos de torres y de espinas.\\
 \isa{critic\_rules} & hecho dinámico & Las reglas de la compleción en curso, visibles
-  para el método del crítico.\\
+  para los métodos de los críticos.\\
 \isa{prop\_scheme} & atributo / conjunto & Esquemas de propiedades (asociatividad,
   conmutatividad, \ldots) para conjeturar.\\
 \midrule
@@ -667,16 +668,25 @@ itrev ?xsa [?xa] = app (itrev ?xsa []) [?xa]}).
 \end{ejemplo}
 
 {\raggedright
-\paragraph{Opciones relevantes.} \isa{generate\_cps}, \isa{divergence\_critic},
+\paragraph{Opciones relevantes.} \isa{generate\_cps}, \isa{tower\_critic},
+\isa{spine\_critic},
 \isa{max\_time\_in\_termination}, \isa{use\_aprove}, \isa{use\_aprove\_srv},
 \isa{max\_time\_in\_proof} (para \isa{heuristic1}),
-\isa{max\_time\_in\_critic\_proof} (para el crítico de divergencia) y
+\isa{max\_time\_in\_critic\_proof} (para los críticos) y
 \isa{max\_time\_in\_counter\_ex}.\par}
 
-\paragraph{Crítico de divergencia (prototipo).}
-Con pares críticos, la compleción puede no terminar. El caso típico es una familia
-infinita de reglas que sólo difieren en la longitud de una torre de una función
-unaria. Por ejemplo, la regla $f(g(f\,x)) = f(g\,x)$ genera
+\paragraph{Críticos de divergencia (prototipo).}
+Con pares críticos, la compleción puede no terminar. \cmd{complete} lleva dos
+críticos que buscan una familia infinita entre las reglas elegidas y la sustituyen
+por un número finito de reglas. El \emph{crítico de torres} (opción
+\isa{tower\_critic}) trata las familias en las que crece una torre de una función
+unaria, y el \emph{crítico de espinas} (opción \isa{spine\_critic}) las familias en
+las que crece una lista de variables distintas. Los dos están activos por omisión
+y sólo actúan cuando se deducen pares críticos.
+
+\paragraph{Crítico de torres.}
+El caso típico es una familia infinita de reglas que sólo difieren en la longitud
+de una torre de una función unaria. Por ejemplo, la regla $f(g(f\,x)) = f(g\,x)$ genera
 $f(g^n(f\,x)) = f(g^n\,x)$ para todo $n \ge 1$. La literatura representa esas
 familias con meta-reglas (H.~Kirchner~\cite{kirchner89}), términos de recurrencia
 (Chen, Hsiang y Kong~\cite{chen-hsiang-kong}), términos con exponentes
@@ -686,8 +696,7 @@ Watson~\cite{thomas-watson}). En HOL basta la iteración de funciones
 \isa{f ((g \textasciicircum\textasciicircum\ Suc n) (f x)) = f ((g \textasciicircum\textasciicircum\ Suc n) x)},
 que se demuestra por inducción sobre \isa{n}.
 
-\cmd{complete} lleva un crítico (\isa{divergence\_critic}, activo por omisión) que
-sólo actúa cuando se deducen pares críticos y hace lo siguiente:
+El crítico de torres hace lo siguiente:
 \begin{enumerate}[nosep]
   \item \textbf{Detectar.} Cada regla elegida se abstrae en un \emph{esqueleto},
         donde las torres maximales $c(c(\dots s))$ de símbolos unarios se
@@ -699,8 +708,8 @@ sólo actúa cuando se deducen pares críticos y hace lo siguiente:
         longitud en el miembro más pequeño. Las que no crecen se quedan igual.
   \item \textbf{Demostrar} la regla esquemática. Por omisión, por inducción sobre
         \isa{n} (con las demás variables arbitrarias), simplificación y
-        \isa{metis} con las reglas del momento; el método se puede cambiar
-        (ver ``Método de prueba del crítico'' más abajo).
+        \isa{metis} con las reglas del momento. El método se puede cambiar
+        (ver ``Métodos de prueba de los críticos'' más abajo).
   \item \textbf{Comprobar la terminación} con AProVE de las reglas más las
         instancias $n = 0, 1, 2$.
   \item \textbf{Reiniciar} la compleción con la regla esquemática. Esta regla no
@@ -721,8 +730,8 @@ consts f :: "T ⇒ T"
 
 complete "f (g (f x)) = f (g x)"
   sorry
-(* Divergence critic: f ((g ^^ Suc n) (f x)) = f ((g ^^ Suc n) x)
-   Restarting completion with schematic rule: ...
+(* Tower critic: f ((g ^^ Suc n) (f x)) = f ((g ^^ Suc n) x)
+   Restarting completion with tower rule: ...
    Done: f ((g ^^ Suc ?n) (f ?x)) ≡ f ((g ^^ Suc ?n) ?x)
    Additions: f ((g ^^ Suc ?n) (f ?x)) = f ((g ^^ Suc ?n) ?x) *)
 \end{lstlisting}
@@ -730,69 +739,6 @@ Sin el crítico, esta compleción no termina. Con él termina en unos segundos y
 en \isa{compl} la regla esquemática. Las reglas esquemáticas de \isa{compl}, y la
 de \cmd{complete} si ya es esquemática, pasan al contexto de las compleciones
 siguientes.
-\end{ejemplo}
-
-\paragraph{Método de prueba del crítico.}
-Por omisión, el crítico demuestra cada conjetura con una táctica predefinida que
-hace inducción sobre el exponente, con las demás variables arbitrarias, y después
-aplica simplificación y \isa{metis}, ambas con las reglas de la compleción en
-curso.
-Hay dos maneras de cambiarlo:
-\begin{itemize}[nosep]
-  \item \textbf{Añadir lemas} a la táctica predefinida con el atributo
-        \isa{critic\_simps}, por ejemplo \isa{declare funpow\_swap1 [critic\_simps]}.
-        Los lemas se usan en la simplificación y en \isa{metis}.
-  \item \textbf{Sustituir el método} con el comando
-        \begin{lstlisting}
-divergence_critic_method ‹método›
-\end{lstlisting}
-        donde \emph{método} es cualquier método de Isar, con sus combinadores
-        (\isa{,} \isa{;} \isa{|} \isa{?} \isa{+}). El texto se comprueba al
-        declararlo (un método o un lema inexistente da error en ese momento) y se
-        guarda en el contexto de la teoría, no en una variable global. Un texto
-        vacío, \isa{divergence\_critic\_method ‹›}, vuelve a la táctica
-        predefinida.
-\end{itemize}
-El método recibe como meta la conjetura, con sus variables libres fijadas. Como
-sus nombres (\isa{n}, \isa{x}, \isa{xa}, \ldots) no se conocen de antemano,
-hay dos ayudas:
-\begin{itemize}[nosep]
-  \item el método \cmd{exponent\_induct} hace inducción sobre la variable natural
-        que aparece en los exponentes de \isa{\textasciicircum\textasciicircum}
-        (debe ser única), con todas las demás arbitrarias; también sirve en
-        pruebas escritas a mano;
-  \item el hecho \isa{critic\_rules} contiene las reglas de la compleción en el
-        momento de la conjetura, como igualdades de HOL, y sólo existe mientras el
-        crítico intenta la prueba.
-\end{itemize}
-Cada intento tiene un límite de \isa{max\_time\_in\_critic\_proof} segundos. Si
-falla, la traza lo indica con el método usado
-(\isa{Schematic rule not proved (\ldots)}). Cualquier método es seguro, porque
-el resultado pasa por el núcleo de Isabelle y el método sólo decide qué
-conjeturas se aceptan.
-
-\needspace{20\baselineskip}
-\begin{ejemplo}
-Con el método predefinido, la compleción del monoide de trenzas
-$\langle a, b \mid aba = bab\rangle$ no termina. El crítico encuentra la familia,
-pero no la demuestra porque el paso de inducción necesita mover una copia de
-\isa{b} de la cima de la torre a su base. Cualquiera de estas dos líneas lo
-resuelve:
-\begin{lstlisting}
-declare funpow_swap1 [critic_simps]
-(* o bien *)
-divergence_critic_method
-  ‹exponent_induct; (simp_all add: funpow_swap1)?; metis critic_rules›
-
-complete "a (b (a x)) = b (a (b x))" by (rule ab)
-(* Done: a (b (a ?x)) ≡ b (a (b ?x)),
-         a ((b ^^ Suc (Suc ?n)) (a (b ?x)))
-           ≡ b (a (b (b ((a ^^ Suc ?n) ?x)))) *)
-\end{lstlisting}
-La compleción termina en unos 2\,s, y el resultado es exactamente el sistema
-convergente infinito de la literatura,
-$\{aba \rw bab\} \cup \{ab^mab \rw babba^{m-1} \mid m \ge 2\}$, escrito como
-dos reglas.
 \end{ejemplo}
 
 \paragraph{Crítico de espinas.}
@@ -807,8 +753,8 @@ Cada nivel tiene su propia variable, así que la familia no se puede escribir co
 \isa{\textasciicircum\textasciicircum}. Walsh~\cite{walsh} describe un caso
 parecido, con la estructura acumulándose en el argumento acumulador, y lo deja sin
 resolver porque la especificación no tiene una función que añada elementos al
-final de una lista. Cuando la signatura sí la tiene, \cmd{complete} usa un segundo
-crítico, también controlado por \isa{divergence\_critic}, que hace lo siguiente:
+final de una lista. Cuando la signatura sí la tiene, el crítico de espinas hace lo
+siguiente:
 \begin{enumerate}[nosep]
   \item \textbf{Detectar espinas.} Una \emph{espina} es una cadena maximal
         $c\,v_1\,(c\,v_2\,(\dots(c\,v_k\,b)))$ de un constructor de un datatype,
@@ -831,9 +777,8 @@ crítico, también controlado por \isa{divergence\_critic}, que hace lo siguient
         Bundy~\cite{ireland-bundy}. Primero se intenta la conjetura más general.
   \item \textbf{Filtrar y demostrar.} Cada conjetura pasa por la búsqueda de
         contraejemplos (límite \isa{max\_time\_in\_counter\_ex}) y después se
-        intenta demostrar con \cmd{induct\_auto} (límite
-        \isa{max\_time\_in\_critic\_proof}). El método de
-        \cmd{divergence\_critic\_method} no se usa en este crítico.
+        intenta demostrar, por omisión con \cmd{induct\_auto} (ver ``Métodos de
+        prueba de los críticos'' más abajo).
   \item \textbf{Orientar y reiniciar.} El lema es una regla ordinaria, sin
         exponentes. Se orienta de modo que termine con las reglas del momento y
         haga unible al miembro más reciente de la familia, y la compleción se
@@ -862,7 +807,77 @@ siete minutos. Con el lema general, la compleción reiniciada converge en unos
 segundos.
 \end{ejemplo}
 
-Es un prototipo, con estas limitaciones:
+\paragraph{Métodos de prueba de los críticos.}
+Por omisión, el crítico de torres demuestra cada conjetura con una táctica
+predefinida que hace inducción sobre el exponente, con las demás variables
+arbitrarias, y después aplica simplificación y \isa{metis}, ambas con las reglas
+de la compleción en curso. El crítico de espinas usa por omisión
+\cmd{induct\_auto}, con las ecuaciones iniciales de la compleción como reglas de
+simplificación. Hay dos maneras de cambiar estas pruebas:
+\begin{itemize}[nosep]
+  \item \textbf{Añadir lemas} con el atributo \isa{critic\_simps}, por
+        ejemplo con \isa{declare funpow\_swap1 [critic\_simps]}. En el crítico de torres los
+        lemas se usan en la simplificación y en \isa{metis}, y en el de espinas
+        se añaden a la simplificación de \cmd{induct\_auto}.
+  \item \textbf{Sustituir el método} con los comandos
+        \begin{lstlisting}
+tower_critic_method ‹método›
+spine_critic_method ‹método›
+\end{lstlisting}
+        donde \emph{método} es cualquier método de Isar, con sus combinadores
+        (\isa{,} \isa{;} \isa{|} \isa{?} \isa{+}). El texto se comprueba al
+        declararlo (un método o un lema inexistente da error en ese momento) y se
+        guarda en el contexto de la teoría, no en una variable global. Un texto
+        vacío, como \isa{spine\_critic\_method ‹›}, vuelve a la prueba
+        predefinida de ese crítico.
+\end{itemize}
+El método recibe como meta la conjetura, con sus variables libres fijadas. Como
+sus nombres (\isa{n}, \isa{x}, \isa{xa}, \isa{ys}, \isa{zs}, \ldots) no se
+conocen de antemano, hay tres ayudas:
+\begin{itemize}[nosep]
+  \item el método \cmd{exponent\_induct} hace inducción sobre la variable natural
+        que aparece en los exponentes de \isa{\textasciicircum\textasciicircum}
+        (debe ser única), con todas las demás arbitrarias; sirve para el crítico
+        de torres y también en pruebas escritas a mano;
+  \item \cmd{induct\_auto} elige por sí mismo las variables de inducción, lo que
+        conviene en el crítico de espinas, porque sus lemas suelen necesitar
+        inducción sobre el argumento recursivo de la función (el \isa{xs} de
+        \isa{itrev}) y no sobre la variable que generaliza la lista;
+  \item el hecho \isa{critic\_rules} contiene las reglas de la compleción en el
+        momento de la conjetura, como igualdades de HOL, y sólo existe mientras
+        uno de los críticos intenta la prueba.
+\end{itemize}
+Cada intento tiene un límite de \isa{max\_time\_in\_critic\_proof} segundos. Si
+falla, la traza lo indica con el método usado (\isa{Tower rule not proved
+(\ldots)} o \isa{Spine lemma not proved (\ldots)}). Cualquier método es seguro,
+porque el resultado pasa por el núcleo de Isabelle y el método sólo decide qué
+conjeturas se aceptan.
+
+\needspace{20\baselineskip}
+\begin{ejemplo}
+Con el método predefinido, la compleción del monoide de trenzas
+$\langle a, b \mid aba = bab\rangle$ no termina. El crítico de torres encuentra la familia,
+pero no la demuestra porque el paso de inducción necesita mover una copia de
+\isa{b} de la cima de la torre a su base. Cualquiera de estas dos líneas lo
+resuelve:
+\begin{lstlisting}
+declare funpow_swap1 [critic_simps]
+(* o bien *)
+tower_critic_method
+  ‹exponent_induct; (simp_all add: funpow_swap1)?; metis critic_rules›
+
+complete "a (b (a x)) = b (a (b x))" by (rule ab)
+(* Done: a (b (a ?x)) ≡ b (a (b ?x)),
+         a ((b ^^ Suc (Suc ?n)) (a (b ?x)))
+           ≡ b (a (b (b ((a ^^ Suc ?n) ?x)))) *)
+\end{lstlisting}
+La compleción termina en unos 2\,s, y el resultado es exactamente el sistema
+convergente infinito de la literatura,
+$\{aba \rw bab\} \cup \{ab^mab \rw babba^{m-1} \mid m \ge 2\}$, escrito como
+dos reglas.
+\end{ejemplo}
+
+Los dos críticos son prototipos, con estas limitaciones:
 \begin{itemize}[nosep]
   \item El crítico de torres sólo reconoce torres de un símbolo unario
         (\isa{Const} o \isa{Free} de tipo $\tau \Rightarrow \tau$) que crecen de
@@ -1286,7 +1301,8 @@ el valor que fija \isa{IsaLibs.thy}, que es el que rige en las teorías de usuar
 \isa{use\_aprove\_srv} & false & \textbf{true} & Hablar con el servidor de AProVE vía \isa{nc} en lugar de ejecutar el \isa{jar}.\\
 \isa{max\_time\_in\_termination} & 180 & 20 & Segundos para AProVE (\isa{-t}) y para el método de pares de dependencia interno.\\
 \isa{generate\_cps} & true & true & Deducir pares críticos en la compleción (también en la condicional de \cmd{inductive\_prover}).\\
-\isa{divergence\_critic} & true & true & Con \isa{generate\_cps}, generalizar familias divergentes de reglas con \isa{\textasciicircum\textasciicircum} o con lemas sobre espinas (prototipo).\\
+\isa{tower\_critic} & true & true & Con \isa{generate\_cps}, generalizar familias divergentes de reglas con \isa{\textasciicircum\textasciicircum} (prototipo).\\
+\isa{spine\_critic} & true & true & Con \isa{generate\_cps}, resolver familias divergentes de reglas con lemas sobre espinas (prototipo).\\
 \isa{max\_time\_in\_critic\_proof} & 60 & 60 & Segundos para cada prueba de los críticos de torres y de espinas.\\
 \isa{use\_quickcheck} & true & true & Buscar contraejemplos con Quickcheck.\\
 \isa{use\_nitpick} & true & true & Buscar contraejemplos con Nitpick.\\
@@ -1341,7 +1357,7 @@ Leen el texto en modo esquemático, por lo que admiten \isa{?x} y \isa{?'a}, que
 \isa{schematic\_lemmas.ML} & Comando \cmd{schematic\_lemma}.\\
 \isa{tables.ML} & Tablas auxiliares y el conjunto \isa{compl}.\\
 \isa{utils.ML} & Utilidades generales de orientación, normalización, dependencias definicionales, plazos (\isa{apply\_timeout}), HTML y \LaTeX, y antiquotaciones.\\
-\isa{ground\_completion.ML} & Compleción sin fallo con ecuaciones incondicionales, reglas esquemáticas y crítico de divergencia (con el comando \cmd{divergence\_critic\_method} y el método \cmd{exponent\_induct}).\\
+\isa{ground\_completion.ML} & Compleción sin fallo con ecuaciones incondicionales, reglas esquemáticas y los críticos de torres y de espinas (con los comandos \cmd{tower\_critic\_method} y \cmd{spine\_critic\_method} y el método \cmd{exponent\_induct}).\\
 \isa{conditional\_completion.ML} & Compleción con reglas condicionales (la usa \cmd{inductive\_prover}).\\
 \isa{orders.ML} & Extensiones de precedencias y LPO para unibilidad en términos cerrados.\\
 \isa{aprove.ML} & Traducción a WST e interfaz con AProVE.\\

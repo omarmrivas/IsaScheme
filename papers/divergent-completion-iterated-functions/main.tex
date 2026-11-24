@@ -64,7 +64,7 @@ need dedicated unification and rewriting algorithms for the schematic
 objects. We observe that no new formalism is needed in higher-order logic,
 where the whole family is a \emph{single theorem} about the function power
 $g^n$ that can be proved by induction on $n$ inside the logic. We
-present a \emph{divergence critic} for the theorem-producing completion
+present a divergence critic, the \emph{tower critic}, for the theorem-producing completion
 procedure of IsaScheme, a theory exploration system for Isabelle/HOL. The
 critic recognizes families of chosen rules whose towers of unary symbols
 grow linearly, generalizes them to a rule with a natural-number exponent,
@@ -144,7 +144,7 @@ IsaScheme~\cite{MontanoRivas12}, a theory exploration system for
 Isabelle/HOL whose completion produces Isabelle theorems rather than
 unchecked rewrite rules. Our contributions are:
 \begin{itemize}
-  \item a \emph{divergence critic} that monitors the rules chosen by
+  \item a divergence critic, the \emph{tower critic}, that monitors the rules chosen by
         completion, recognizes families whose towers of unary symbols grow
         linearly, and generalizes them into a single rule with a natural
         number exponent (Section~\ref{sec:critic});
@@ -311,7 +311,10 @@ critic compares $\rho$ with the rules chosen before. If $\rho$ completes a
 family, the critic tries to replace the whole family by a single rule with
 an exponent. If it succeeds, completion is restarted with the new rule;
 otherwise it continues as usual. The critic is only active when critical
-pairs are generated.
+pairs are generated and the option \isa{tower\_critic} is set, as it is by
+default. IsaLibs calls it the tower critic to distinguish it from its spine
+critic, which handles families in which a list of distinct variables grows
+and is outside the scope of this article.
 
 \subsection{Tower signatures}
 
@@ -373,7 +376,7 @@ levels. Lemmas declared with the attribute \isa{critic\_simps} are added
 to the simplification and Metis steps of the default tactic. Alternatively,
 the command
 \begin{lstlisting}
-divergence_critic_method ‹method›
+tower_critic_method ‹method›
 \end{lstlisting}
 replaces the default tactic by an arbitrary Isar method. The method text
 is checked when it is declared and is stored in the theory context, so it
@@ -484,7 +487,7 @@ processors and 30\,GB of memory, the AProVE server of February 2026, and
 the default options of IsaLibs, which allow 20\,s for each termination
 check and 60\,s for each proof attempted by the critic. Times are wall-clock times of the
 \isa{complete} commands, measured from the trace. Runs without the critic
-(option \isa{divergence\_critic = false}) were stopped after 300\,s; they
+(option \isa{tower\_critic = false}) were stopped after 300\,s; they
 were run two at a time, so the number of rules they reached is only
 indicative. The theories are distributed with the paper (see the
 Availability section).
@@ -495,7 +498,7 @@ Table~\ref{tab:results} summarizes the results.
 \small
 \caption{Divergent completions from the literature. The column ``Without
 critic'' runs completion with critical pairs and
-\isa{divergence\_critic = false} and stops it after 300\,s. The column
+\isa{tower\_critic = false} and stops it after 300\,s. The column
 ``With critic'' uses the default configuration, except for row 3b. Times
 are wall-clock times of the \isa{complete} commands.}
 \label{tab:results}
@@ -532,9 +535,9 @@ For Example~\ref{ex:fg}, completion chooses the rules
 $f(\pw{g}{k}(f(x))) \rw f(\pw{g}{k}(x))$ for $k = 1, 2, 3$ and, when the
 third one is chosen, the critic reports:
 \begin{lstlisting}[language={}]
-Divergence critic: f ((g ^^ Suc n) (f x)) = f ((g ^^ Suc n) x)
-Schematic rule: f ((g ^^ Suc ?n) (f ?x)) ≡ f ((g ^^ Suc ?n) ?x)
-Restarting completion with schematic rule: ...
+Tower critic: f ((g ^^ Suc n) (f x)) = f ((g ^^ Suc n) x)
+Tower rule: f ((g ^^ Suc ?n) (f ?x)) ≡ f ((g ^^ Suc ?n) ?x)
+Restarting completion with tower rule: ...
 Done: f ((g ^^ Suc ?n) (f ?x)) ≡ f ((g ^^ Suc ?n) ?x)
 \end{lstlisting}
 The restarted completion finds that every critical pair is joinable with
@@ -620,9 +623,9 @@ the system $\{aba \rw bab\} \cup \{ab^nab \rw babba^{n-1} \mid n \ge 2\}$
 the equation in the same direction and the critic recognizes exactly this
 family, with exponent $n + 2$:
 \begin{lstlisting}[language={}]
-Divergence critic: a ((b ^^ Suc (Suc n)) (a (b x)))
-                     = b (a (b (b ((a ^^ Suc n) x))))
-Schematic rule not proved (built-in tactic)
+Tower critic: a ((b ^^ Suc (Suc n)) (a (b x)))
+                = b (a (b (b ((a ^^ Suc n) x))))
+Tower rule not proved (built-in tactic)
 \end{lstlisting}
 The conjecture is a theorem, but the default tactic does not prove it
 within 60\,s, so completion goes on diverging. The induction step needs
@@ -635,7 +638,7 @@ through:
 \begin{lstlisting}
 declare funpow_swap1 [critic_simps]
 (* or *)
-divergence_critic_method
+tower_critic_method
   ‹exponent_induct; (simp_all add: funpow_swap1)?; metis critic_rules›
 \end{lstlisting}
 With the first one, the critic proves the family in 0.2\,s, and completion
@@ -682,10 +685,10 @@ into Dershowitz's sequence. Along the way, its heuristic for equations of
 the form $c(s) = c(t)$ proves the inductive lemma $\mathit{plus}\;Z\;z = z$,
 and a second family appears. The critic generalizes both, in this order:
 \begin{lstlisting}[language={}]
-Schematic rule: plus ?x (plus ((S ^^ Suc ?n) Z) ?y)
-                  ≡ plus ((S ^^ Suc ?n) ?x) ?y
-Schematic rule: plus ((S ^^ Suc ?n) (plus ?x ?y)) ?z
-                  ≡ plus ?x (plus ((S ^^ Suc ?n) ?y) ?z)
+Tower rule: plus ?x (plus ((S ^^ Suc ?n) Z) ?y)
+              ≡ plus ((S ^^ Suc ?n) ?x) ?y
+Tower rule: plus ((S ^^ Suc ?n) (plus ?x ?y)) ?z
+              ≡ plus ?x (plus ((S ^^ Suc ?n) ?y) ?z)
 \end{lstlisting}
 The second rule is exactly the family of Dershowitz's sequence. Completion
 then terminates with the system
@@ -847,7 +850,7 @@ automated with a small default library of lemmas about the function power,
 or with a method that calls IsaScheme's own inductive prover, which
 analyses its failures and speculates lemmas. The second option is already
 expressible
-with \isa{divergence\_critic\_method}, but its cost has to be balanced
+with \isa{tower\_critic\_method}, but its cost has to be balanced
 against the time limit of the critic.
 
 \paragraph{Completeness of the restarted completion.}

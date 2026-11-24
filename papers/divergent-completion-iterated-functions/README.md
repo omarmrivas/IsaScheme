@@ -1,9 +1,9 @@
 # Taming divergent Knuth–Bendix completion with iterated functions
 
 Article (prepared for the *Journal of Symbolic Computation*, Elsevier
-`elsarticle` class) about the divergence critic of IsaScheme's `complete`
-command: infinite families of rules such as
-`f (g^n (f x)) = f (g^n x)` are replaced by a single Isabelle/HOL theorem
+`elsarticle` class) about the tower critic, a divergence critic of IsaScheme's
+`complete` command. The critic replaces infinite families of rules such as
+`f (g^n (f x)) = f (g^n x)` by a single Isabelle/HOL theorem
 `f ((g ^^ Suc n) (f x)) = f ((g ^^ Suc n) x)`, proved by induction on `n`.
 
 ## Contents
@@ -31,7 +31,7 @@ From the root of the repository:
 isabelle build -d IsaLibs -d papers/divergent-completion-iterated-functions/experiments Divergence_Examples
 ```
 
-To read the traces (`Divergence critic: ...`, `Schematic rule: ...`,
+To read the traces (`Tower critic: ...`, `Tower rule: ...`,
 `Additions: ...`), open the theories in jEdit:
 
 ```

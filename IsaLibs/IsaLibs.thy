@@ -5,7 +5,8 @@ keywords (*"rec_complete" :: thy_decl and*)
          "complete" :: thy_goal and
          "orient_rules" :: thy_decl and
          "schematic_lemma" :: thy_decl and
-         "divergence_critic_method" :: thy_decl
+         "tower_critic_method" :: thy_decl and
+         "spine_critic_method" :: thy_decl
 begin
   
 ML \<open>
@@ -60,7 +61,7 @@ definition invert_bin where
   "invert_bin bin x y = bin y x"
   
 (*ML_file "html.ML"*)
-named_theorems critic_simps "extra lemmas for the built-in proof tactic of the divergence critic"
+named_theorems critic_simps "extra lemmas for the built-in proofs of the tower and spine critics"
 
 ML_file "const_names.ML"
 ML_file "tables.ML"
@@ -140,7 +141,8 @@ DB_Aprove.setup_use_aprove_srv #>
 DB_DPair.setup_max_time_in_termination #>
 
 DB_Completion.setup_generate_cps #>
-DB_Completion.setup_divergence_critic #>
+DB_Completion.setup_tower_critic #>
+DB_Completion.setup_spine_critic #>
 DB_Completion.setup_max_time_in_critic_proof #>
 
 DB_GP.setup_max_time_in_fitness #>

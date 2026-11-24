@@ -15,7 +15,8 @@ sig
   val max_time_in_completion        : int Config.T
 
   val generate_cps                  : bool Config.T
-  val divergence_critic             : bool Config.T
+  val tower_critic                  : bool Config.T
+  val spine_critic                  : bool Config.T
   val max_time_in_critic_proof      : int Config.T
   val schematic_instance            : Proof.context -> thm -> int -> thm
   val exponent_induct_tac           : Proof.context -> int -> tactic
@@ -57,9 +58,10 @@ exception RESTART_COMPLETION of string * thm list
 
 val (max_time_in_completion, setup_max_time_in_completion) = Attrib.config_int @{binding "max_time_in_completion"} (K 180)
 val (generate_cps, setup_generate_cps) = Attrib.config_bool @{binding "generate_cps"} (K true)
-(* only used when critical pairs are generated *)
-val (divergence_critic, setup_divergence_critic) = Attrib.config_bool @{binding "divergence_critic"} (K true)
-(* time limit (seconds) for each proof attempted by the divergence critic *)
+(* the critics for divergent completion; only used when critical pairs are generated *)
+val (tower_critic, setup_tower_critic) = Attrib.config_bool @{binding "tower_critic"} (K true)
+val (spine_critic, setup_spine_critic) = Attrib.config_bool @{binding "spine_critic"} (K true)
+(* time limit (seconds) for each proof attempted by the tower and spine critics *)
 val (max_time_in_critic_proof, setup_max_time_in_critic_proof) =
   Attrib.config_int @{binding "max_time_in_critic_proof"} (K 60)
 
@@ -640,7 +642,14 @@ fun make_irreducible _ _ _ TRS [] = TRS
     then make_irreducible ctxt terminates f_map R TRS
     else make_irreducible ctxt terminates f_map (th :: R) TRS
 
-(* Divergence critic for completion.
+(* Critics for divergent completion.
+
+   Completion with critical pairs may diverge. Two critics look for an
+   infinite family among the chosen rules and replace it by finitely many
+   rules. They are the tower critic (option tower_critic) and the spine
+   critic (option spine_critic, see below).
+
+   Tower critic.
 
    When completion diverges it often produces a family of rules that only
    differ in the length of some towers of a unary function, e.g.
@@ -654,7 +663,8 @@ fun make_irreducible _ _ _ TRS [] = TRS
    the same skeleton whose tower lengths grow by 0 or 1 in each step
    suggest the schematic rule where the growing towers have length k + n,
    written c ^^ Suc^k n. It is proved by induction on n with the current
-   rules (simp, then metis), and completion restarts with it. *)
+   rules (simp, then metis, or the method of tower_critic_method), and
+   completion restarts with it. *)
 
 fun is_funT (Type ("fun", _)) = true
   | is_funT _ = false
@@ -744,10 +754,11 @@ fun find_family history (skel, v) =
              end) same
   end
 
-(* The proof of a conjectured family.  By default the critic uses the
-   built-in tactic family_tac; the command divergence_critic_method replaces
-   it by an Isar method, evaluated in a context where the fact critic_rules
-   holds the current rules of the completion. *)
+(* The proof of a conjecture of a critic.  By default the tower critic uses
+   the built-in tactic family_tac and the spine critic uses induct_auto; the
+   commands tower_critic_method and spine_critic_method replace them by an
+   Isar method, evaluated in a context where the fact critic_rules holds the
+   current rules of the completion. *)
 
 (* induction on the natural number variable that occurs in the exponents of
    function powers (there must be exactly one), the other free variables
@@ -765,7 +776,8 @@ val _ = Theory.setup
      (Scan.succeed (fn ctxt => SIMPLE_METHOD' (exponent_induct_tac ctxt)))
      "induction on the exponent of a function power (g ^^ n), other variables arbitrary")
 
-(* extra lemmas for the built-in tactic, e.g. declare funpow_swap1 [critic_simps] *)
+(* extra lemmas for the built-in proofs of both critics,
+   e.g. declare funpow_swap1 [critic_simps] *)
 fun critic_simps ctxt = Named_Theorems.get ctxt @{named_theorems critic_simps}
 
 fun family_tac rules n others ctxt =
@@ -775,9 +787,17 @@ fun family_tac rules n others ctxt =
      THEN ALLGOALS (Metis_Tactic.metis_tac [] ATP_Problem_Generate.combsN ctxt rules)
   end
 
-(* the user's method (its source text), kept in the context: NONE means the
-   built-in tactic *)
-structure Critic_Method = Generic_Data
+(* the user's methods (their source texts), kept in the context: NONE means
+   the built-in proof *)
+structure Tower_Critic_Method = Generic_Data
+(
+  type T = Input.source option
+  val empty = NONE
+  fun merge (m, NONE) = m
+    | merge (_, m) = m
+)
+
+structure Spine_Critic_Method = Generic_Data
 (
   type T = Input.source option
   val empty = NONE
@@ -792,36 +812,43 @@ fun put_critic_rules rules = Proof_Context.put_thms false (critic_rulesN, SOME r
 (* read in a context where critic_rules is defined *)
 fun read_critic_method ctxt src = Method.read_closure_input ctxt src |> fst
 
-val _ =
-  Outer_Syntax.local_theory @{command_keyword divergence_critic_method}
-    "set the proof method of the divergence critic of complete (empty text: built-in tactic)"
+fun critic_method_command keyword critic put =
+  Outer_Syntax.local_theory keyword
+    ("set the proof method of the " ^ critic ^ " critic of complete (empty text: built-in proof)")
     (Parse.embedded_input >> (fn src => fn lthy =>
       let val method =
             if Input.string_of src |> Symbol.explode |> forall Symbol.is_blank then NONE
             else (read_critic_method (put_critic_rules [] lthy) src; SOME src)
       in Local_Theory.declaration {syntax = false, pervasive = true, pos = Input.pos_of src}
-           (K (Critic_Method.put method)) lthy
+           (K (put method)) lthy
       end))
+
+val _ = critic_method_command @{command_keyword tower_critic_method} "tower" Tower_Critic_Method.put
+val _ = critic_method_command @{command_keyword spine_critic_method} "spine" Spine_Critic_Method.put
+
+(* SOME theorem proving conj with the user's method src; critic_rules holds
+   the current rules *)
+fun prove_with_critic_method ctxt critic rules src conj time_out =
+  (let val ctxt' = put_critic_rules rules ctxt
+       val text = read_critic_method ctxt' src
+   in Prover.prove ctxt' NONE (text, Position.no_range) conj time_out end)
+  handle ERROR msg => (tracing (critic ^ " critic method: " ^ msg); NONE)
 
 (* SOME theorem proving conj, using the method of the context *)
 fun prove_family ctxt rules n_free others conj =
   let val time_out = Config.get ctxt max_time_in_critic_proof
-  in case Critic_Method.get (Context.Proof ctxt) of
+  in case Tower_Critic_Method.get (Context.Proof ctxt) of
          NONE => Prover.prove_from_tactic ctxt NONE (family_tac rules n_free others) conj time_out
-       | SOME src =>
-           (let val ctxt' = put_critic_rules rules ctxt
-                val text = read_critic_method ctxt' src
-            in Prover.prove ctxt' NONE (text, Position.no_range) conj time_out end)
-           handle ERROR msg => (tracing ("Divergence critic method: " ^ msg); NONE)
+       | SOME src => prove_with_critic_method ctxt "Tower" rules src conj time_out
   end
 
-fun method_description ctxt =
-  case Critic_Method.get (Context.Proof ctxt) of
-      NONE => "built-in tactic"
+fun method_description get ctxt builtin =
+  case get (Context.Proof ctxt) of
+      NONE => builtin
     | SOME src => Input.string_of src
 
-(* SOME schematic rule (meta equation) proved for the family of rl *)
-fun apply_divergence_critic ctxt terminates rules history rl =
+(* SOME schematic rule (meta equation) proved for the tower family of rl *)
+fun apply_tower_critic ctxt terminates rules history rl =
   case find_family history (rule_signature rl) of
       NONE => NONE
     | SOME (u, d) =>
@@ -833,19 +860,21 @@ fun apply_divergence_critic ctxt terminates rules history rl =
             val n_free = Free ("n", HOLogic.natT)
             val others = Term.add_frees conj [] |> filter_out (fn v => v = ("n", HOLogic.natT))
             val rules_obj = map Utils.meta_to_obj rules
-            val _ = tracing ("Divergence critic: " ^ Syntax.string_of_term ctxt conj)
+            val _ = tracing ("Tower critic: " ^ Syntax.string_of_term ctxt conj)
         in case prove_family ctxt rules_obj n_free others conj of
                SOME th =>
                  let val gen = Utils.obj_to_meta th
                      val instances = map (schematic_instance ctxt gen) [0, 1, 2]
                  in if exponent_var gen <> NONE andalso terminates (instances @ rules)
-                    then (tracing ("Schematic rule: " ^ Utils.str_of_thms [gen]); SOME gen)
-                    else (tracing "Schematic rule rejected (termination)"; NONE)
+                    then (tracing ("Tower rule: " ^ Utils.str_of_thms [gen]); SOME gen)
+                    else (tracing "Tower rule rejected (termination)"; NONE)
                  end
-             | NONE => (tracing ("Schematic rule not proved (" ^ method_description ctxt ^ ")"); NONE)
+             | NONE => (tracing ("Tower rule not proved (" ^
+                                 method_description Tower_Critic_Method.get ctxt "built-in tactic" ^ ")");
+                        NONE)
         end
 
-(* Spine critic.
+(* Spine critic (option spine_critic).
 
    Completion can also diverge with rules that differ in the length of list
    literals of distinct variables, e.g.
@@ -865,8 +894,9 @@ fun apply_divergence_critic ctxt terminates rules history rl =
    function g of the signature (g ys t, e.g. an append), and list literals
    whose variables occur nowhere else are generalized to variables, like the
    sink of the generalization critics of Walsh (JAIR 4, 1996) and of Ireland
-   and Bundy. The conjecture is filtered by counterexample search and proved
-   with induct_auto. The lemma is an ordinary rule, oriented so that it
+   and Bundy. The conjecture is filtered by counterexample search and proved,
+   by default with induct_auto (command spine_critic_method). The lemma is an
+   ordinary rule, oriented so that it
    terminates with the current rules and joins the newest member of the
    family, and completion restarts with it among the rules. *)
 
@@ -1085,19 +1115,28 @@ fun apply_spine_critic ctxt terminates lemmas rules history rl =
     | SOME (_, d) =>
         let val time_out = Config.get ctxt max_time_in_critic_proof
             val ce_time_out = Config.get ctxt Counter_Example.max_time_in_counter_ex
+            (* built-in proof: induct_auto with the equations of the completion
+               and the critic_simps; or the user's method *)
+            fun prove conj =
+              case Spine_Critic_Method.get (Context.Proof ctxt) of
+                  NONE => Prover.prove ctxt (SOME (lemmas @ critic_simps ctxt))
+                                       (Prover.induct_auto_method ctxt) conj time_out
+                | SOME src => prove_with_critic_method ctxt "Spine" (map Utils.meta_to_obj rules)
+                                                       src conj time_out
             fun attempt conj =
               (tracing ("Spine critic: " ^ Syntax.string_of_term ctxt conj);
                case Counter_Example.unfalsified_conjecture ctxt ce_time_out conj of
                    NONE => (tracing "Spine conjecture falsified"; NONE)
                  | SOME _ =>
-                     (case Prover.prove ctxt (SOME lemmas) (Prover.induct_auto_method ctxt)
-                                        conj time_out of
+                     (case prove conj of
                           SOME th =>
                             (case orient_spine_lemma ctxt terminates rules rl (Utils.obj_to_meta th) of
                                SOME lemma => (tracing ("Spine lemma: " ^ Utils.str_of_thms [lemma]);
                                               SOME lemma)
                              | NONE => (tracing "Spine lemma rejected (termination)"; NONE))
-                        | NONE => (tracing "Spine conjecture not proved"; NONE)))
+                        | NONE => (tracing ("Spine lemma not proved (" ^
+                                            method_description Spine_Critic_Method.get ctxt "induct_auto" ^ ")");
+                                   NONE)))
         in spine_conjectures ctxt rl d
              |> map meta_eq_to_conj
              |> get_first attempt
@@ -1115,8 +1154,10 @@ datatype COMPL = DONE of thm list | FINAL of thm list
 fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
     let
       val proof_timeOut = Config.get ctxt Prover.max_time_in_proof
-      val use_critic = generate_cps andalso Config.get ctxt divergence_critic
-                       andalso length (schematic_rules ctxt) + length (Critic_Lemmas.get ctxt) < 5
+      (* at most five tower rules and spine lemmas per completion *)
+      val room = length (schematic_rules ctxt) + length (Critic_Lemmas.get ctxt) < 5
+      val use_tower = generate_cps andalso Config.get ctxt tower_critic andalso room
+      val use_spine = generate_cps andalso Config.get ctxt spine_critic andalso room
       val E = E |> map (fn th => (Utils.rule_int_ord th, th))
                 |> sort ((list_ord int_ord) o (apply2 fst))
                 |> map snd
@@ -1129,7 +1170,7 @@ fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
             val cps = semi_critical_pairs thy ord instances instances @
                       semi_critical_pairs thy ord instances E' @
                       semi_critical_pairs thy ord E' instances
-            val _ = tracing ("Restarting completion with schematic rule: " ^ Utils.str_of_thms [gen])
+            val _ = tracing ("Restarting completion with tower rule: " ^ Utils.str_of_thms [gen])
         in complete global_meta_rws thy ctxt' ord generate_cps terminates f_map (E' @ cps) end
       (* the lemmas of the spine critic are ordinary rules, kept with the
          orientation chosen by the critic: completion starts with them in R *)
@@ -1149,18 +1190,18 @@ fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
                                                   val _ = if !completion_debug then tracing ("Choosed (" ^ (if ord = LESS then "<" else ">") ^ "): " ^ Utils.str_of_thms [rl])
                                                           else ()
                                                   val sg = rule_signature rl
-                                                  val ssg = if use_critic then spine_signature ctxt rl
+                                                  val ssg = if use_spine then spine_signature ctxt rl
                                                             else (Term.dummy, [])
-                                                  val _ = if !completion_debug andalso use_critic
+                                                  val _ = if !completion_debug andalso use_spine
                                                           then tracing ("Spine skeleton: " ^
                                                                  Syntax.string_of_term ctxt (fst ssg) ^ " " ^
                                                                  ML_Syntax.print_list ML_Syntax.print_int (snd ssg))
                                                           else ()
-                                                  val gen = if use_critic andalso
+                                                  val gen = if use_tower andalso
                                                                not (exists (fn s => s aconv fst sg) tried)
-                                                            then apply_divergence_critic ctxt terminates (rl :: R') history rl
+                                                            then apply_tower_critic ctxt terminates (rl :: R') history rl
                                                             else NONE
-                                                  val lemma = if is_none gen andalso use_critic andalso
+                                                  val lemma = if is_none gen andalso use_spine andalso
                                                                  not (exists (fn s => s aconv fst ssg) stried)
                                                               then apply_spine_critic ctxt terminates E' (rl :: R') shistory rl
                                                               else NONE
@@ -1169,9 +1210,9 @@ fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
                                                  | (NONE, SOME lemma) => FINAL (restart_with_lemma lemma)
                                                  | (NONE, NONE) =>
                                                 let
-                                                  val tried = if use_critic andalso is_some (find_family history sg)
+                                                  val tried = if use_tower andalso is_some (find_family history sg)
                                                               then fst sg :: tried else tried
-                                                  val stried = if use_critic andalso is_some (find_family shistory ssg)
+                                                  val stried = if use_spine andalso is_some (find_family shistory ssg)
                                                                then fst ssg :: stried else stried
                                                   val cps = if generate_cps then
                                                               ((semi_critical_pairs thy ord [rl] R') @

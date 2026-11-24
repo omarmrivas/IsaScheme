@@ -9,7 +9,7 @@ consts f :: "T \<Rightarrow> T"
        g :: "T \<Rightarrow> T"
 axiomatization where fg: "f (g (f x)) = f (g x)"
 
-declare [[generate_cps = true]]   (* divergence_critic is true by default *)
+declare [[generate_cps = true]]   (* tower_critic is true by default *)
 
 complete "f (g (f x)) = f (g x)"
   by (rule fg)
