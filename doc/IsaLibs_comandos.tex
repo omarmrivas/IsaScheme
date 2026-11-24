@@ -637,34 +637,33 @@ complete "add x Z = x"
 (* Additions: add ?x Z = ?x      Deletions: (ninguna) *)
 thm compl
 \end{lstlisting}
-Y el ejemplo de \isa{IsaLibs\_Examples.thy} (tarda unos 3 minutos):
+Y el ejemplo de \isa{IsaLibs\_Examples.thy} (tarda unos 2 minutos y medio):
 \begin{lstlisting}
 fun app :: "'a list ⇒ 'a list ⇒ 'a list" where ...
 fun rev :: "'a list ⇒ 'a list" where
   "rev [] = []" | "rev (x # xs) = app (rev xs) [x]"
 
-declare [[generate_cps = false]]
 complete "itrev xs [] = rev xs"
   by inductive_prover
-(* Additions: rev ?xs = itrev ?xs [],
-              itrev ?xsa [?xa] = app (itrev ?xsa []) [?xa]
-   Deletions: rev (?xa # ?xsa) = app (rev ?xsa) [?xa], rev [] = [] *)
+(* Additions: app (itrev ?xs ?ys) ?zs = itrev ?xs (app ?ys ?zs),
+              itrev ?xs [] = rev ?xs, app (rev ?xs) ?ys = itrev ?xs ?ys,
+              rev (?xa # ?xsa) = itrev ?xsa [?xa]
+   Deletions: rev (?xa # ?xsa) = app (rev ?xsa) [?xa] *)
 \end{lstlisting}
-La compleción decidió que la definición eficiente \isa{itrev} sustituye a la
-definición original de \isa{rev}.
-
-El ejemplo desactiva los pares críticos porque con ellos esta compleción no
-termina. Genera las dos familias infinitas
-\begin{align*}
-  \mathit{itrev}\ \mathit{xs}\ [x_1,\ldots,x_n] &=
-    \mathit{app}\ (\cdots(\mathit{app}\ (\mathit{itrev}\ \mathit{xs}\ [\,])\ [x_1])\cdots)\ [x_n],\\
-  \mathit{app}\ (\mathit{itrev}\ \mathit{xs}\ [x_1,\ldots,x_{n-1}])\ [x_n] &=
+Con pares críticos, esta compleción genera la familia infinita
+\[
+  \mathit{app}\ (\mathit{itrev}\ \mathit{xs}\ [x_1,\ldots,x_{n-1}])\ [x_n] =
     \mathit{itrev}\ \mathit{xs}\ [x_1,\ldots,x_n],
-\end{align*}
-en las que crece una lista de variables distintas y no una torre de un mismo
-símbolo unario, así que el crítico de divergencia no las reconoce. La declaración
-también desactiva los pares críticos en la compleción condicional de
-\cmd{inductive\_prover}.
+\]
+en la que crece una lista de variables distintas. El crítico de espinas (ver
+``Crítico de espinas'' más abajo) la reconoce, demuestra el lema
+\isa{app (itrev xs ys) zs = itrev xs (app ys zs)} y reinicia la compleción con él.
+El sistema final es convergente. Conserva \isa{rev} como nombre de
+\isa{itrev xs []}, pero la calcula con la definición eficiente, porque
+\isa{rev (x \# xs)} se reescribe a \isa{itrev xs [x]}. Con
+\isa{declare [[generate\_cps = false]]} la compleción sólo orienta e interreduce,
+y entonces \isa{itrev} sustituye a \isa{rev} (\isa{Additions: rev ?xs = itrev ?xs [],
+itrev ?xsa [?xa] = app (itrev ?xsa []) [?xa]}).
 \end{ejemplo}
 
 {\raggedright
@@ -796,11 +795,85 @@ $\{aba \rw bab\} \cup \{ab^mab \rw babba^{m-1} \mid m \ge 2\}$, escrito como
 dos reglas.
 \end{ejemplo}
 
+\paragraph{Crítico de espinas.}
+Algunas compleciones divergen con familias en las que lo que crece no es una torre
+de un símbolo unario sino una lista de variables distintas, como la del ejemplo de
+\isa{itrev} de arriba,
+\[
+  \mathit{app}\ (\mathit{itrev}\ \mathit{xs}\ [x_1,\ldots,x_{n-1}])\ [x_n] =
+    \mathit{itrev}\ \mathit{xs}\ [x_1,\ldots,x_n].
+\]
+Cada nivel tiene su propia variable, así que la familia no se puede escribir con
+\isa{\textasciicircum\textasciicircum}. Walsh~\cite{walsh} describe un caso
+parecido, con la estructura acumulándose en el argumento acumulador, y lo deja sin
+resolver porque la especificación no tiene una función que añada elementos al
+final de una lista. Cuando la signatura sí la tiene, \cmd{complete} usa un segundo
+crítico, también controlado por \isa{divergence\_critic}, que hace lo siguiente:
+\begin{enumerate}[nosep]
+  \item \textbf{Detectar espinas.} Una \emph{espina} es una cadena maximal
+        $c\,v_1\,(c\,v_2\,(\dots(c\,v_k\,b)))$ de un constructor de un datatype,
+        $c :: \alpha \Rightarrow \beta \Rightarrow \beta$, cuyos primeros
+        argumentos son variables distintas, como la lista
+        \isa{[x$_1$, \ldots, x$_k$]}. Cada regla elegida se abstrae en otro
+        esqueleto, donde las espinas se sustituyen por huecos sin sus variables,
+        más la lista de sus longitudes. Las familias se reconocen igual que con las
+        torres.
+  \item \textbf{Generalizar.} Las variables que comparten las espinas que crecen
+        en el miembro más reciente, como prefijo o como sufijo, se sustituyen por
+        una sola variable \isa{ys} de tipo $\beta$. Si a una espina le quedan
+        elementos después de ese bloque, el resto $t$ se une a \isa{ys} con una
+        función $g$ de la signatura, \isa{g ys t}. Los candidatos son las funciones
+        de tipo $\beta \Rightarrow \beta \Rightarrow \beta$ que aparecen en la regla
+        o en sus dependencias definicionales.
+  \item \textbf{Generalizar el sumidero.} Las listas de variables cuyas variables
+        no aparecen en ningún otro sitio se sustituyen por variables nuevas, como en
+        los críticos de generalización de Walsh y de Ireland y
+        Bundy~\cite{ireland-bundy}. Primero se intenta la conjetura más general.
+  \item \textbf{Filtrar y demostrar.} Cada conjetura pasa por la búsqueda de
+        contraejemplos (límite \isa{max\_time\_in\_counter\_ex}) y después se
+        intenta demostrar con \cmd{induct\_auto} (límite
+        \isa{max\_time\_in\_critic\_proof}). El método de
+        \cmd{divergence\_critic\_method} no se usa en este crítico.
+  \item \textbf{Orientar y reiniciar.} El lema es una regla ordinaria, sin
+        exponentes. Se orienta de modo que termine con las reglas del momento y
+        haga unible al miembro más reciente de la familia, y la compleción se
+        reinicia con él entre las reglas, sin volver a orientarlo.
+\end{enumerate}
+
+\needspace{14\baselineskip}
+\begin{ejemplo}
+En el ejemplo de \isa{itrev}, el crítico encuentra la familia en su tercer miembro
+y la traza muestra
+\begin{lstlisting}[deletekeywords={lemma,with}]
+Spine critic: app (itrev xs ys) zs = itrev xs (itrev ys zs)
+Spine conjecture falsified
+Spine critic: app (itrev xs ys) [z] = itrev xs (itrev ys [z])
+Spine conjecture falsified
+Spine critic: app (itrev xs ys) zs = itrev xs (app ys zs)
+Spine lemma: app (itrev ?xs ?ys) ?zs ≡ itrev ?xs (app ?ys ?zs)
+Restarting completion with lemma: ...
+\end{lstlisting}
+Las funciones candidatas son \isa{itrev} y \isa{app}. Con \isa{itrev} la
+conjetura es falsa, y la búsqueda de contraejemplos la descarta en menos de un
+segundo. Con \isa{app} sale el lema, que \cmd{induct\_auto} demuestra.
+Generalizar \isa{[z]} a \isa{zs} importa. En una prueba aparte, con la versión
+de un solo elemento entre las ecuaciones iniciales, la compleción no terminó en
+siete minutos. Con el lema general, la compleción reiniciada converge en unos
+segundos.
+\end{ejemplo}
+
 Es un prototipo, con estas limitaciones:
 \begin{itemize}[nosep]
-  \item Sólo reconoce torres de un símbolo unario (\isa{Const} o \isa{Free} de tipo
-        $\tau \Rightarrow \tau$) que crecen de uno en uno, con una sola variable de
-        exponente.
+  \item El crítico de torres sólo reconoce torres de un símbolo unario
+        (\isa{Const} o \isa{Free} de tipo $\tau \Rightarrow \tau$) que crecen de
+        uno en uno, con una sola variable de exponente.
+  \item El crítico de espinas sólo generaliza un bloque de variables compartido
+        como prefijo o como sufijo, y necesita que la signatura tenga la función
+        que une ese bloque con el resto. Si no la tiene, como en el ejemplo de
+        Walsh, no propone nada. Usar para ese caso el \isa{@} de HOL, igual que se
+        usa \isa{\textasciicircum\textasciicircum}, queda pendiente.
+  \item Entre los dos críticos se añaden como mucho cinco reglas esquemáticas o
+        lemas en cada compleción.
   \item Los pares críticos de la regla esquemática con las demás se aproximan con
         sus instancias $n = 0, 1, 2$. Unificar con exponentes variables
         (Comon~\cite{comon95}) sería lo completo.
@@ -1213,8 +1286,8 @@ el valor que fija \isa{IsaLibs.thy}, que es el que rige en las teorías de usuar
 \isa{use\_aprove\_srv} & false & \textbf{true} & Hablar con el servidor de AProVE vía \isa{nc} en lugar de ejecutar el \isa{jar}.\\
 \isa{max\_time\_in\_termination} & 180 & 20 & Segundos para AProVE (\isa{-t}) y para el método de pares de dependencia interno.\\
 \isa{generate\_cps} & true & true & Deducir pares críticos en la compleción (también en la condicional de \cmd{inductive\_prover}).\\
-\isa{divergence\_critic} & true & true & Con \isa{generate\_cps}, generalizar familias divergentes de reglas con \isa{\textasciicircum\textasciicircum} (prototipo).\\
-\isa{max\_time\_in\_critic\_proof} & 60 & 60 & Segundos para cada prueba del crítico de divergencia.\\
+\isa{divergence\_critic} & true & true & Con \isa{generate\_cps}, generalizar familias divergentes de reglas con \isa{\textasciicircum\textasciicircum} o con lemas sobre espinas (prototipo).\\
+\isa{max\_time\_in\_critic\_proof} & 60 & 60 & Segundos para cada prueba de los críticos de torres y de espinas.\\
 \isa{use\_quickcheck} & true & true & Buscar contraejemplos con Quickcheck.\\
 \isa{use\_nitpick} & true & true & Buscar contraejemplos con Nitpick.\\
 \isa{simp\_before} & false & false & Simplificar la conjetura antes de buscar contraejemplos.\\
@@ -1316,7 +1389,7 @@ Leen el texto en modo esquemático, por lo que admiten \isa{?x} y \isa{?'a}, que
         teoría conviene comprobar que no quedan \isa{sorry}.
   \item \textbf{Pares críticos activados} por omisión
         (\isa{generate\_cps = true}). Con ellos la compleción puede no terminar.
-        El crítico de divergencia resuelve algunos de esos casos, y
+        Los críticos de torres y de espinas resuelven algunos de esos casos, y
         \isa{declare [[generate\_cps = false]]} vuelve a la compleción sin pares
         críticos.
   \item \textbf{Paralelismo.} \cmd{inductive\_prover} usa muchos hilos (futuros,

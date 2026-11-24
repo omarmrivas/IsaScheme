@@ -694,7 +694,19 @@ fun canonical_vars t =
         | ren t = t
   in map_aterms ren t end
 
-fun rule_signature th = th |> Thm.prop_of |> canonical_vars |> tower_skeleton
+(* type variables renamed ?'a, ?'b, ... in order of first occurrence, so
+   that the skeletons of polymorphic rules can be compared *)
+fun canonical_tvars t =
+  let val tvs = rev (Term.add_tvars t [])
+      val names = Name.invent Name.context "'a" (length tvs)
+      fun ren (T as TVar (xi, S)) =
+            (case find_index (fn (xi', _) => xi' = xi) tvs of
+               ~1 => T
+             | i => TVar ((nth names i, 0), S))
+        | ren T = T
+  in map_types (map_atyps ren) t end
+
+fun rule_signature th = th |> Thm.prop_of |> canonical_tvars |> canonical_vars |> tower_skeleton
 
 (* the skeleton with the given tower lengths; a tower whose length grows
    (delta 1) gets the exponent Suc^k n *)
@@ -833,13 +845,278 @@ fun apply_divergence_critic ctxt terminates rules history rl =
              | NONE => (tracing ("Schematic rule not proved (" ^ method_description ctxt ^ ")"); NONE)
         end
 
+(* Spine critic.
+
+   Completion can also diverge with rules that differ in the length of list
+   literals of distinct variables, e.g.
+
+     app (itrev xs [y]) [z] = itrev xs [y, z],
+     app (itrev xs [y, y']) [z] = itrev xs [y, y', z],  ...
+
+   Here each level of the growing structure has its own variable, so it is
+   not a tower of one unary function. A spine is a maximal chain
+   c v1 (c v2 (... (c vk b))) of a datatype constructor c :: 'a => 'b => 'b
+   whose first arguments are pairwise distinct variables. Every chosen rule
+   is abstracted into a spine skeleton (spines replaced by holes, their
+   variables dropped) plus the spine lengths, and families are found as for
+   towers. The variables shared by the growing spines of the newest member
+   become one variable ys of the spine type. When a growing spine has more
+   elements after the shared block, the rest t is joined to ys with a
+   function g of the signature (g ys t, e.g. an append), and list literals
+   whose variables occur nowhere else are generalized to variables, like the
+   sink of the generalization critics of Walsh (JAIR 4, 1996) and of Ireland
+   and Bundy. The conjecture is filtered by counterexample search and proved
+   with induct_auto. The lemma is an ordinary rule, oriented so that it
+   terminates with the current rules and joins the newest member of the
+   family, and completion restarts with it among the rules. *)
+
+val spine_hole = "__spine"
+
+(* a constructor of a datatype 'b of type 'a => 'b => 'b, with 'a <> 'b *)
+fun spine_constructor ctxt (Const (name, Type ("fun", [A, Type ("fun", [B, B'])]))) =
+      B = B' andalso A <> B andalso
+      (case B of
+         Type (tname, _) =>
+           (case Ctr_Sugar.ctr_sugar_of ctxt tname of
+              SOME {ctrs, ...} => exists (fn ctr => fst (dest_Const ctr) = name) ctrs
+            | NONE => false)
+       | _ => false)
+  | spine_constructor _ _ = false
+
+(* the spine at t: its constructor, its variables and its base *)
+fun dest_spine ctxt (t as (c $ Var _ $ _)) =
+      if spine_constructor ctxt c then
+        let fun go vs (c' $ (v as Var _) $ s) =
+                  if c' aconv c andalso not (member (op aconv) vs v) then go (v :: vs) s
+                  else (rev vs, c' $ v $ s)
+              | go vs s = (rev vs, s)
+            val (vs, base) = go [] t
+        in SOME (c, vs, base) end
+      else NONE
+  | dest_spine _ _ = NONE
+
+fun rebuild_spine c vs base = fold_rev (fn v => fn t => c $ v $ t) vs base
+
+fun spine_type c = range_type (range_type (fastype_of c))
+
+fun is_nil_const (Const (_, T)) = not (is_funT T)
+  | is_nil_const _ = false
+
+(* skeleton of t (maximal spines replaced by holes) and the spine lengths,
+   in pre-order *)
+fun spine_skeleton ctxt t =
+  let fun skel t =
+        case dest_spine ctxt t of
+          SOME (c, vs, base) =>
+            let val (base', ks) = skel base
+                val T = spine_type c
+            in (Free (spine_hole, fastype_of c --> T --> T) $ c $ base', length vs :: ks) end
+        | NONE =>
+            (case t of
+               u $ s => let val (u', ks1) = skel u
+                            val (s', ks2) = skel s
+                        in (u' $ s', ks1 @ ks2) end
+             | Abs (x, T, b) => let val (b', ks) = skel b in (Abs (x, T, b'), ks) end
+             | _ => (t, []))
+  in skel t end
+
+fun spine_signature ctxt th =
+  th |> Thm.prop_of |> spine_skeleton ctxt |> apfst (canonical_vars o canonical_tvars)
+
+(* the spines of t, in the order of spine_skeleton *)
+fun spines_of ctxt t =
+  let fun sp t acc =
+        case dest_spine ctxt t of
+          SOME (c, vs, base) => sp base ((c, vs) :: acc)
+        | NONE => (case t of
+                     u $ s => sp s (sp u acc)
+                   | Abs (_, _, b) => sp b acc
+                   | _ => acc)
+  in rev (sp t []) end
+
+(* replaces the j-th spine (c, vs, base) of t by f j (c, vs, base'), where
+   base' is the base with its own spines replaced *)
+fun map_spines ctxt f t =
+  let fun mp t j =
+        case dest_spine ctxt t of
+          SOME (c, vs, base) =>
+            let val (base', j') = mp base (j + 1)
+            in (f j (c, vs, base'), j') end
+        | NONE =>
+            (case t of
+               u $ s => let val (u', j1) = mp u j
+                            val (s', j2) = mp s j1
+                        in (u' $ s', j2) end
+             | Abs (x, T, b) => let val (b', j') = mp b j in (Abs (x, T, b'), j') end
+             | _ => (t, j))
+  in fst (mp t 0) end
+
+fun common_prefix (x :: xs) (y :: ys) = if x aconv y then x :: common_prefix xs ys else []
+  | common_prefix _ _ = []
+
+fun common_prefixes [] = []
+  | common_prefixes (vs :: vss) = fold (fn vs' => fn acc => common_prefix acc vs') vss vs
+
+(* vs = pre @ block @ post *)
+fun split_block block vs =
+  let val k = length block
+      fun find pre rest =
+        if length rest < k then NONE
+        else if eq_list (op aconv) (take k rest, block) then SOME (rev pre, drop k rest)
+        else case rest of
+               x :: rest' => find (x :: pre) rest'
+             | [] => NONE
+  in find [] vs end
+
+fun replace_subterm s v t =
+  if t aconv s then v
+  else case t of
+         u $ w => replace_subterm s v u $ replace_subterm s v w
+       | Abs (x, T, b) => Abs (x, T, replace_subterm s v b)
+       | _ => t
+
+(* list literals of variables whose variables occur nowhere else become
+   variables; NONE if there is none *)
+fun sink_generalize ctxt t =
+  let fun literals t acc =
+        case dest_spine ctxt t of
+          SOME (_, _, base) => if is_nil_const base then insert (op aconv) t acc
+                               else literals base acc
+        | NONE => (case t of
+                     u $ s => literals s (literals u acc)
+                   | Abs (_, _, b) => literals b acc
+                   | _ => acc)
+      fun only_inside s =
+        let val t' = replace_subterm s (Var (("__sink", 0), fastype_of s)) t
+            val rest = Term.add_vars t' []
+        in forall (fn v => not (member (op =) rest v)) (Term.add_vars s []) end
+      val sinks = filter only_inside (literals t [])
+      val used = Term.add_var_names t [] |> map fst
+      val names = Name.variant_list used (map (K "zs") sinks)
+  in if null sinks then NONE
+     else SOME (fold (fn (s, n) => replace_subterm s (Var ((n, 0), fastype_of s)))
+                     (sinks ~~ names) t)
+  end
+
+(* the conjectures (meta equations) for a spine family whose newest member is
+   rl and whose growing spines are those with delta 1, most general first *)
+fun spine_conjectures ctxt rl d =
+  let val thy = Proof_Context.theory_of ctxt
+      val prop = Thm.prop_of rl
+      val spines = spines_of ctxt prop
+  in if length spines <> length d then [] else
+  let val grows = map (fn x => x = 1) d
+      fun growing j = nth grows j
+      val growing_spines = map_filter (fn (s, g) => if g then SOME s else NONE) (spines ~~ grows)
+      val c = fst (hd growing_spines)
+      (* variables outside the elements of the growing spines *)
+      val outside = map_spines ctxt (fn j => fn (c, vs, base) =>
+                                       if growing j then base else rebuild_spine c vs base) prop
+                    |> (fn t => Term.add_vars t [])
+                    |> map Var
+      fun outer v = member (op aconv) outside v
+      fun trim block = block |> drop_prefix outer |> rev |> drop_prefix outer |> rev
+      val vss = map snd growing_spines
+      val block = case trim (common_prefixes vss) of
+                      [] => trim (rev (common_prefixes (map rev vss)))
+                    | b => b
+      val ok = not (null block) andalso
+               forall (fn (c', _) => c' aconv c) growing_spines andalso
+               not (exists outer block) andalso
+               forall (fn vs => is_some (split_block block vs)) vss
+  in if not ok then [] else
+  let val B = spine_type c
+      val used = Term.add_var_names prop [] |> map fst
+      val ys = Var ((singleton (Name.variant_list used) "ys", 0), B)
+      exception NO_JOIN
+      fun build g =
+        let fun f j (c, vs, base) =
+              if not (growing j) then rebuild_spine c vs base
+              else let val (pre, post) = the (split_block block vs)
+                       val tail = rebuild_spine c post base
+                       val mid = if is_nil_const tail then ys
+                                 else case g of
+                                        SOME g => g $ ys $ tail
+                                      | NONE => raise NO_JOIN
+                   in rebuild_spine c pre mid end
+        in SOME (map_spines ctxt f prop) handle NO_JOIN => NONE end
+      (* functions of type 'b => 'b => 'b of the signature *)
+      val gT = B --> B --> B
+      fun schematicT T = map_atyps (fn TFree (a, S) => TVar ((a, 0), S) | U => U) T
+      fun instance name =
+        let val T = schematicT (Sign.the_const_type thy name)
+        in SOME (Const (name, Envir.subst_type (Sign.typ_match thy (T, gT) Vartab.empty) T))
+        end handle Type.TYPE_MATCH => NONE | TYPE _ => NONE
+      val names = (Term.add_const_names prop [] @
+                   map fst (Utils.definitional_dependencies thy ([], prop)))
+                  |> distinct (op =)
+      val props = (case build NONE of
+                     SOME t => [t]
+                   | NONE => map_filter (build o SOME) (map_filter instance names))
+  in props
+       |> maps (fn t => case sink_generalize ctxt t of SOME t' => [t', t] | NONE => [t])
+       |> distinct (op aconv)
+  end end end
+  handle TERM _ => [] | TYPE _ => [] | Option.Option => [] | Empty => []
+
+fun meta_eq_to_conj prop =
+  let val (lhs, rhs) = Logic.dest_equals prop
+  in HOLogic.mk_Trueprop (HOLogic.mk_eq (lhs, rhs)) |> Logic.unvarify_global end
+
+(* the orientation of a proved lemma: one that terminates with the current
+   rules and makes rl joinable, else one that terminates *)
+fun orient_spine_lemma ctxt terminates rules rl lemma =
+  let val others = filter_out (fn r => Thm.eq_thm_prop (r, rl)) rules
+      val candidates = [lemma, Utils.commute_meta_eq lemma]
+      fun joins th =
+        let val ctxt' = ordered_simpset_without_simprocs ctxt terminates (th :: others)
+        in rl |> simplify ctxt' |> Utils.dest_meta_equation |> (op aconv) end
+        handle THM _ => false | TERM _ => false
+      val terminating = filter (fn th => terminates (th :: rules)) candidates
+  in case filter joins terminating of
+       th :: _ => SOME th
+     | [] => (case terminating of th :: _ => SOME th | [] => NONE)
+  end
+
+(* SOME lemma (oriented meta equation) proved for the spine family of rl *)
+fun apply_spine_critic ctxt terminates lemmas rules history rl =
+  case find_family history (spine_signature ctxt rl) of
+      NONE => NONE
+    | SOME (_, d) =>
+        let val time_out = Config.get ctxt max_time_in_critic_proof
+            val ce_time_out = Config.get ctxt Counter_Example.max_time_in_counter_ex
+            fun attempt conj =
+              (tracing ("Spine critic: " ^ Syntax.string_of_term ctxt conj);
+               case Counter_Example.unfalsified_conjecture ctxt ce_time_out conj of
+                   NONE => (tracing "Spine conjecture falsified"; NONE)
+                 | SOME _ =>
+                     (case Prover.prove ctxt (SOME lemmas) (Prover.induct_auto_method ctxt)
+                                        conj time_out of
+                          SOME th =>
+                            (case orient_spine_lemma ctxt terminates rules rl (Utils.obj_to_meta th) of
+                               SOME lemma => (tracing ("Spine lemma: " ^ Utils.str_of_thms [lemma]);
+                                              SOME lemma)
+                             | NONE => (tracing "Spine lemma rejected (termination)"; NONE))
+                        | NONE => (tracing "Spine conjecture not proved"; NONE)))
+        in spine_conjectures ctxt rl d
+             |> map meta_eq_to_conj
+             |> get_first attempt
+        end
+
+(* lemmas added by the spine critic in this completion *)
+structure Critic_Lemmas = Proof_Data
+(
+  type T = thm list
+  fun init _ = []
+)
+
 datatype COMPL = DONE of thm list | FINAL of thm list
 
 fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
     let
       val proof_timeOut = Config.get ctxt Prover.max_time_in_proof
       val use_critic = generate_cps andalso Config.get ctxt divergence_critic
-                       andalso length (schematic_rules ctxt) < 5
+                       andalso length (schematic_rules ctxt) + length (Critic_Lemmas.get ctxt) < 5
       val E = E |> map (fn th => (Utils.rule_int_ord th, th))
                 |> sort ((list_ord int_ord) o (apply2 fst))
                 |> map snd
@@ -854,27 +1131,48 @@ fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
                       semi_critical_pairs thy ord E' instances
             val _ = tracing ("Restarting completion with schematic rule: " ^ Utils.str_of_thms [gen])
         in complete global_meta_rws thy ctxt' ord generate_cps terminates f_map (E' @ cps) end
-      (* history: signatures of the chosen rules; tried: skeletons already generalized *)
-      fun compl (history, tried) (E,S,R) =
+      (* the lemmas of the spine critic are ordinary rules, kept with the
+         orientation chosen by the critic: completion starts with them in R *)
+      fun restart_with_lemma lemma =
+        let val ctxt' = Critic_Lemmas.map (fn ls => ls @ [lemma]) ctxt
+            val _ = tracing ("Restarting completion with lemma: " ^ Utils.str_of_thms [lemma])
+        in complete global_meta_rws thy ctxt' ord generate_cps terminates f_map E' end
+      (* history: signatures of the chosen rules; tried: skeletons already generalized;
+         shistory and stried: the same for spines *)
+      fun compl (history, tried, shistory, stried) (E,S,R) =
                           case (if !completion_debug then print_completion (E,S,R) else ();
                                 orient ctxt global_meta_rws ord terminates f_map (E,S,R)) of
                             NORMAL ([],R') => DONE R'
                           | NORMAL (S',R') => let (*val lemmas = (S @ R) |> memoized_discriminate_rules terminates
                                                                            |> (fn (x, y) => x @ y)*)
                                                   val (rl,S'') = choose ctxt proof_timeOut E' S'
-                                                  val _ = if !completion_debug then tracing ("Choosed: " ^ Utils.str_of_thms [rl])
+                                                  val _ = if !completion_debug then tracing ("Choosed (" ^ (if ord = LESS then "<" else ">") ^ "): " ^ Utils.str_of_thms [rl])
                                                           else ()
                                                   val sg = rule_signature rl
+                                                  val ssg = if use_critic then spine_signature ctxt rl
+                                                            else (Term.dummy, [])
+                                                  val _ = if !completion_debug andalso use_critic
+                                                          then tracing ("Spine skeleton: " ^
+                                                                 Syntax.string_of_term ctxt (fst ssg) ^ " " ^
+                                                                 ML_Syntax.print_list ML_Syntax.print_int (snd ssg))
+                                                          else ()
                                                   val gen = if use_critic andalso
                                                                not (exists (fn s => s aconv fst sg) tried)
                                                             then apply_divergence_critic ctxt terminates (rl :: R') history rl
                                                             else NONE
-                                              in case gen of
-                                                   SOME gen => FINAL (restart_with gen)
-                                                 | NONE =>
+                                                  val lemma = if is_none gen andalso use_critic andalso
+                                                                 not (exists (fn s => s aconv fst ssg) stried)
+                                                              then apply_spine_critic ctxt terminates E' (rl :: R') shistory rl
+                                                              else NONE
+                                              in case (gen, lemma) of
+                                                   (SOME gen, _) => FINAL (restart_with gen)
+                                                 | (NONE, SOME lemma) => FINAL (restart_with_lemma lemma)
+                                                 | (NONE, NONE) =>
                                                 let
                                                   val tried = if use_critic andalso is_some (find_family history sg)
                                                               then fst sg :: tried else tried
+                                                  val stried = if use_critic andalso is_some (find_family shistory ssg)
+                                                               then fst ssg :: stried else stried
                                                   val cps = if generate_cps then
                                                               ((semi_critical_pairs thy ord [rl] R') @
                                                                (semi_critical_pairs thy ord R' [rl]) @
@@ -886,12 +1184,12 @@ fun complete global_meta_rws thy ctxt ord generate_cps terminates f_map E =
 (*                                                                |> map (Raw_Simplifier.rewrite_rule ctxt global_meta_rws)*)
                                                             else []
                                                   val _ = if !completion_debug then tracing ("Critical pairs: " ^ Utils.str_of_thms cps) else ()
-                                              in compl (sg :: history, tried) (cps,S'',rl :: R') end
+                                              in compl (sg :: history, tried, ssg :: shistory, stried) (cps,S'',rl :: R') end
                                               end
                           | RESTART thms => (tracing ("Restarting completion..." ^ Utils.str_of_thms (E' @ thms));
                                              FINAL (complete global_meta_rws thy ctxt ord generate_cps terminates f_map (E' @ thms)))
     in
-      case (E,[],[]) |> compl ([], []) of
+      case (E,[],Critic_Lemmas.get ctxt) |> compl ([], [], [], []) of
         FINAL TRS => TRS
       | DONE R =>
           R |> make_irreducible ctxt terminates f_map []
