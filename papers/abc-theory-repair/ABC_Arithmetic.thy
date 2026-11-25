@@ -15,6 +15,10 @@ carry argument of the addition function (ABC's Reformation 5) gives a theory tha
 explains the observation, and IsaScheme then proves what the repaired procedure
 computes.
 
+ABC_Examples.thy repairs the Datalog version of the chapter with the commands of
+ABC.thy, which find the same diagnosis by Reformation 5. Here the repair is written by
+hand on recursive functions.
+
 The inductive proofs use IsaScheme's method induct_auto, which chooses the induction
 by itself. The times are those of Isabelle2026 on 8 threads, and each proof has a
 comment with an equivalent proof that does not need IsaScheme.

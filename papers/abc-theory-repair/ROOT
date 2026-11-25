@@ -1,0 +1,9 @@
+(* ABC-style theory repair as an extension of IsaScheme.  Build from the root of
+   the repository with
+     isabelle build -d IsaLibs -d papers/abc-theory-repair ABC_Repair *)
+session ABC_Repair = IsaLibs +
+  options [document = false, timeout = 1800]
+  theories
+    ABC
+    ABC_Examples
+    ABC_Arithmetic

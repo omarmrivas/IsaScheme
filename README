@@ -19,8 +19,15 @@ Rebuild it with "cd doc && latexmk -pdf IsaLibs_comandos.tex" (or "make -C doc")
 PAPERS
 
 papers/divergent-completion-iterated-functions contains an article (for the
-Journal of Symbolic Computation) on the divergence critic of "complete",
-together with the Isabelle theories of its experiments.
+Journal of Symbolic Computation) on the tower critic of "complete", together with
+the Isabelle theories of its experiments.
+
+papers/abc-theory-repair contains an extension of IsaScheme with the faults and
+repair operations of the ABC system of Bundy and colleagues, in its own session
+ABC_Repair, together with the examples of the ABC chapter and a pilot on
+recursive functions. Build it with
+
+isabelle build -d IsaLibs -d papers/abc-theory-repair ABC_Repair
 
 WINDOWS INSTALLATION
 
