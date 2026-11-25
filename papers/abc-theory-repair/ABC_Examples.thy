@@ -106,19 +106,85 @@ explanations of the same answer.
 \<close>
 
 ML \<open>
-local
-  val ctxt = @{context}
-  fun digit n = ABC.F (string_of_int n, [])
-  val facts =
-    map_product (fn a => fn b =>
-        {body = [], head = SOME (ABC.F ("add", [digit a, digit b,
-                                                digit ((a + b) mod 10), digit ((a + b) div 10)]))})
-      (0 upto 9) (0 upto 9)
-  val sum_rule = ABC.read_clause ctxt
-    "add U1 U2 U3 C1 \<and> add T2 C1 T2' 0 \<and> add T1 T2' T3 C2 \<Longrightarrow> sum T1 U1 T2 U2 C2 T3 U3"
-  val preferred = {true_set = [ABC.read_atom ctxt "sum 4 9 8 3 0 2 2"], false_set = []}
+structure Arith =
+struct
+
+fun digit n = ABC.F (string_of_int n, [])
+
+(* add(a, b, u, c) for all the digits a and b, and the same facts without the carry *)
+val add_facts : ABC.clause list =
+  map_product (fn a => fn b =>
+      {body = [], head = SOME (ABC.F ("add", [digit a, digit b,
+                                              digit ((a + b) mod 10), digit ((a + b) div 10)]))})
+    (0 upto 9) (0 upto 9)
+val add_facts_no_carry : ABC.clause list =
+  map_product (fn a => fn b =>
+      {body = [], head = SOME (ABC.F ("add", [digit a, digit b, digit ((a + b) mod 10)]))})
+    (0 upto 9) (0 upto 9)
+
+val sum_rule = ABC.read_clause @{context}
+  "add U1 U2 U3 C1 \<and> add T2 C1 T2' 0 \<and> add T1 T2' T3 C2 \<Longrightarrow> sum T1 U1 T2 U2 C2 T3 U3"
+
+fun preferred trues falses =
+  {true_set = map (ABC.read_atom @{context}) trues, false_set = map (ABC.read_atom @{context}) falses}
+
+end
+\<close>
+
+ML \<open>
+writeln (ABC.repair_report @{context} (Arith.sum_rule :: Arith.add_facts)
+           (Arith.preferred ["sum 4 9 8 3 0 2 2"] []))
+\<close>
+
+text \<open>
+With the whole table of digit facts, the theory repaired by Reformation 5 on the carry
+explains the observation but predicts too much. After the repair, the variable C1 occurs
+only in the atom add(T2, C1, T2'), where it ranges over all the digits, and C2 occurs
+only in the head. The repaired theory therefore proves sum(4, 9, 8, 3, 0, d, 2) for
+every digit d, which the report below shows for d = 3, the correct tens digit.
+\<close>
+
+ML \<open>
+let
+  val no_carry_rule = ABC.read_clause @{context}
+    "add U1 U2 U3 \<and> add T2 C1 T2' \<and> add T1 T2' T3 \<Longrightarrow> sum T1 U1 T2 U2 C2 T3 U3"
 in
-  val _ = writeln (ABC.repair_report ctxt (sum_rule :: facts) preferred)
+  writeln (ABC.faults_report @{context} (no_carry_rule :: Arith.add_facts_no_carry)
+             (Arith.preferred ["sum 4 9 8 3 0 2 2"] ["sum 4 9 8 3 0 3 2"]))
+end
+\<close>
+
+text \<open>
+More observations narrow the diagnosis. A second answer of the student, 18 + 25 = 33,
+leaves four repairs with one operation, because Abduction 1 and Reformation 6 no longer
+explain both answers. Putting in the false set the answers 32 and 43, which the student
+did not give, rejects the repair by Reformation 5, and no repair is found with at most
+two operations.
+\<close>
+
+ML \<open>
+writeln (ABC.repair_report @{context} (Arith.sum_rule :: Arith.add_facts)
+           (Arith.preferred ["sum 4 9 8 3 0 2 2", "sum 1 8 2 5 0 3 3"] []));
+writeln (ABC.repair_report @{context} (Arith.sum_rule :: Arith.add_facts)
+           (Arith.preferred ["sum 4 9 8 3 0 2 2", "sum 1 8 2 5 0 3 3"]
+                            ["sum 4 9 8 3 0 3 2", "sum 1 8 2 5 0 4 3"]))
+\<close>
+
+text \<open>
+The missing step instantiates the variables left unbound by Reformation 5 with the
+carry 0. The result is the student's procedure, which explains both answers and does
+not predict 32 or 43. ABC has no operation for this step, which
+ABC_Arithmetic.thy also performs by hand on recursive functions.
+\<close>
+
+ML \<open>
+let
+  val student_rule = ABC.read_clause @{context}
+    "add U1 U2 U3 \<and> add T2 0 T2' \<and> add T1 T2' T3 \<Longrightarrow> sum T1 U1 T2 U2 0 T3 U3"
+in
+  writeln (ABC.faults_report @{context} (student_rule :: Arith.add_facts_no_carry)
+             (Arith.preferred ["sum 4 9 8 3 0 2 2", "sum 1 8 2 5 0 3 3"]
+                              ["sum 4 9 8 3 0 3 2", "sum 1 8 2 5 0 4 3"]))
 end
 \<close>
 

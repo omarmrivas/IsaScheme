@@ -1,0 +1,962 @@
+%% Repairing faulty logical theories in Isabelle/HOL with the operations of
+%% the ABC system.
+%% The target journal has not been chosen yet. The elsarticle class is used as
+%% a neutral preprint format.
+\documentclass[preprint,12pt]{elsarticle}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs,array,tabularx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\newtheorem{definition}{Definition}
+
+\newcommand{\isa}[1]{\texttt{#1}}
+\newcommand{\at}[1]{\mathit{#1}}
+\newcommand{\TPS}{T(\mathit{PS})}
+\newcommand{\FPS}{F(\mathit{PS})}
+\newcommand{\imp}{\Longrightarrow}
+
+\definecolor{kw}{RGB}{0,0,160}
+\lstdefinelanguage{Isar}{
+  morekeywords={theory,imports,begin,end,fun,where,lemma,theorem,by,
+    abbreviation,abc_faults,abc_repair,axioms,true,false,ML,val,fn,
+    datatype,type,of},
+  sensitive=true,
+  morecomment=[n]{(*}{*)},
+  morestring=[b]",
+  literate={⟹}{{$\Longrightarrow$}}2 {∧}{{$\wedge$}}1 {≠}{{$\neq$}}1
+    {⇒}{{$\Rightarrow$}}1 {≡}{{$\equiv$}}1 {≤}{{$\le$}}1
+    {⟷}{{$\longleftrightarrow$}}2
+    {‹}{{$\langle$}}1 {›}{{$\rangle$}}1
+}
+\lstdefinelanguage{Out}{
+  sensitive=true,
+  basicstyle=\ttfamily\footnotesize,
+  literate={⟹}{{$\Longrightarrow$}}2 {∧}{{$\wedge$}}1 {≠}{{$\neq$}}1
+}
+\lstset{language=Isar,basicstyle=\ttfamily\small,keywordstyle=\color{kw}\bfseries,
+  columns=fullflexible,keepspaces=true,showstringspaces=false,upquote=true,
+  frame=single,framesep=3pt,
+  xleftmargin=4pt,xrightmargin=4pt,breaklines=true}
+
+\journal{}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Repairing faulty logical theories in Isabelle/HOL with the operations
+of the ABC system}
+
+\author[aff]{Omar Monta\~{n}o-Rivas}
+% TODO: complete the affiliation and the corresponding author's e-mail.
+\address[aff]{Affiliation to be completed}
+
+\begin{abstract}
+The ABC system of Li, Bundy and Smaill repairs a logical theory whose
+predictions disagree with observations. An observed fact that is not a
+theorem reveals an insufficiency, and a theorem that contradicts an
+observation reveals an incompatibility. ABC analyses the failed and the
+unwanted proofs and repairs the theory with operations drawn from
+abduction, belief revision and conceptual change, some of which change the
+language of the theory. We describe an implementation of the fault
+diagnosis and of the ten repair operations of ABC as an extension of
+IsaScheme, a theory exploration system for Isabelle/HOL. Theories are sets
+of Horn clauses written in Isabelle's syntax, terms may contain function
+symbols, and proofs are searched by selected literal resolution up to a
+depth limit. A breadth-first search reports, for each number of
+operations, the fault-free theories that the operations produce. The
+extension reproduces the repairs of the worked examples of ABC, from the
+black swan to the root cause analysis of a 5G network and the diagnosis of
+a student's arithmetic misconception. It also shows that, with the complete
+table of digit facts, the repair that forgets the carry predicts any tens
+digit, which a single answer in the false set exposes. Finally, we carry the
+arithmetic example over to recursive functions in higher-order logic. There
+the repair removes an argument of a function definition, and IsaScheme's
+inductive prover proves what the student's procedure computes and why the
+misconception is hard to notice.
+\end{abstract}
+
+\begin{keyword}
+theory repair \sep abduction \sep belief revision \sep reformation \sep
+Horn clauses \sep theory exploration \sep Isabelle/HOL
+\end{keyword}
+
+\end{frontmatter}
+
+%% ===========================================================================
+\section{Introduction}
+\label{sec:intro}
+
+A logical theory that describes an environment makes predictions, which
+are its theorems. When the environment is observed, some predictions may
+turn out to be false and some observed facts may not be predicted at all.
+The ABC system~\cite{LiBundySmaill18,Li21,Bundy26} diagnoses both kinds of
+fault and repairs them. Its name comes from the three techniques it
+combines, which are abduction~\cite{CoxPietrzykowski86}, belief
+revision~\cite{Nebel91} and conceptual change through
+reformation~\cite{BundyMitrovic16}. Abduction adds axioms that explain an
+observation, belief revision deletes or weakens axioms, and reformation
+changes the language of the theory, for example by splitting a predicate in
+two or by changing its arity. ABC is written in Prolog and works on
+theories in Datalog~\cite{CeriGottlobTanca90}, where theoremhood is
+decidable. It has been applied to defeasible reasoning, virtual bargaining,
+root cause analysis in mobile networks and the diagnosis of arithmetic
+misconceptions~\cite{Bundy26,BundyPhilalithisLi20,LiEtAl22,Tang16}.
+
+Repairing a theory is close in spirit to the analysis of failed proofs in
+inductive theorem proving. Proof critics~\cite{IrelandBundy96} patch a
+failed proof attempt by speculating a lemma or a generalization, while ABC
+patches the axioms. Theory exploration systems such as
+IsaScheme~\cite{MontanoRivas12}, IsaCoSy~\cite{JohanssonDixonBundy11},
+QuickSpec~\cite{ClaessenSmallboneHughes10} and Hipster~\cite{Hipster14} work
+on the other side of the same loop. Given a theory, they find and prove its
+interesting properties, which describe what the theory predicts. A proof
+assistant that hosts both tasks could diagnose a theory, repair it and then
+explore what the repaired theory says. This paper takes a first step in
+that direction for Isabelle/HOL~\cite{NipkowPaulsonWenzel02}. We follow the
+presentation of ABC in a recent chapter by Bundy~\cite{Bundy26}, whose
+Section~5 defines the faults and the repair operations that we implement.
+
+Our contributions are the following.
+\begin{itemize}
+  \item An implementation of the fault diagnosis and of the ten repair
+        operations of ABC as an extension of IsaScheme, in a separate
+        Isabelle session that does not modify IsaScheme
+        (Section~\ref{sec:extension}). Theories are Horn clauses written in
+        Isabelle's syntax and may contain function symbols, so proofs are
+        searched up to a depth limit, as Bundy suggests for logics beyond
+        Datalog.
+  \item A breadth-first search for sequences of repair operations, which
+        reports the fault-free theories found with the smallest number of
+        operations and with each larger number up to a bound
+        (Section~\ref{sec:search}).
+  \item The reproduction of the worked examples of the chapter, where the
+        repairs described by Bundy appear among the fault-free theories
+        with one or two operations, together with the size of the search
+        and its cost (Section~\ref{sec:examples}). A closer look at the
+        arithmetic example shows that the repair that forgets the carry
+        leaves a variable unbound, so the repaired theory predicts any tens
+        digit.
+  \item A pilot that carries the arithmetic example over to recursive
+        functions in Isabelle/HOL. The repair removes an argument of a
+        function, and IsaScheme's inductive prover proves what the repaired
+        function computes and why the misconception is hard to notice
+        (Section~\ref{sec:functions}).
+\end{itemize}
+
+Section~\ref{sec:abc} recalls the ABC system, Section~\ref{sec:extension}
+describes the extension, Section~\ref{sec:examples} the examples of the
+chapter and Section~\ref{sec:functions} the pilot on recursive functions.
+Section~\ref{sec:related} discusses related work, and
+Section~\ref{sec:conclusion} the limitations of the extension and future
+work.
+
+%% ===========================================================================
+\section{The ABC system}
+\label{sec:abc}
+
+\subsection{Theories and preferred structures}
+
+ABC represents a theory as a finite set of Horn clauses in Kowalski form,
+\[
+  Q_1 \wedge \dots \wedge Q_m \imp R,
+\]
+where the $Q_i$ and $R$ are atoms, $m \geq 0$ and the head $R$ may be
+missing. A clause with $m = 0$ is an \emph{assertion}, or fact, written
+$\imp R$. A clause with $m \geq 1$ and a head is a \emph{rule}, and a clause
+without head is a \emph{goal clause}. As in Prolog, names that start with an
+upper-case letter are variables, which are implicitly universally
+quantified, and the other names are constants and predicates. Datalog has
+no function symbols, so a theory has finitely many ground atoms and
+theoremhood is decidable.
+
+The observations are given by a \emph{preferred structure} $\mathit{PS}$,
+which consists of two sets of ground atoms. The true set $\TPS$ contains
+the atoms that should be theorems, and the false set $\FPS$ the atoms that
+should not. ABC adopts the closed world assumption. In particular, two
+syntactically distinct constants are taken to be unequal, and since
+Datalog has no negation, $\neq$ is a predicate of its own. Axioms whose
+head is an equation or a disequation can override this assumption, for
+instance when an entity has two names.
+
+ABC proves goals by selected literal (SL) resolution~\cite{KowalskiKuehner71}.
+One atom of a goal clause is selected and resolved with the head of a rule
+or of an assertion, and the process is repeated until the empty goal
+clause is reached. Since all the clauses are Horn clauses, each step of a
+proof uses an axiom of the theory. A repair can therefore be applied
+directly to the axiom involved in a step, without propagating it through
+derived clauses.
+
+\subsection{Faults and repairs}
+
+\begin{definition}[Faults]
+Let $T$ be a theory and $\mathit{PS}$ a preferred structure. An
+\emph{incompatibility} is an atom $\varphi \in \FPS$ such that
+$T \vdash \varphi$. An \emph{insufficiency} is an atom $\varphi \in \TPS$
+such that $T \nvdash \varphi$. A theory without incompatibilities and
+insufficiencies is \emph{fault-free}.
+\end{definition}
+
+An incompatibility is repaired by blocking each of its proofs, which
+requires making at least one step of each proof fail. An insufficiency is
+repaired by letting one or more failed steps of a partial proof succeed.
+ABC has five operations for each kind of fault, named after the area of artificial intelligence they come
+from. They are summarized in Table~\ref{tab:operations}. For an
+incompatibility, the operations target a step that resolves a goal
+$P(s_1,\dots,s_n)$ with the head $P(t_1,\dots,t_n)$ of an axiom. For an
+insufficiency, they target a failed step between a goal
+$P(s_1,\dots,s_m)$ and the head $P'(t_1,\dots,t_n)$ of an axiom, where
+either $P \neq P'$ or some $s_i$ and $t_i$ do not unify.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}l X@{}}
+\toprule
+\multicolumn{2}{@{}l}{\emph{Incompatibility}, goal $P(\bar s)$ resolved
+  with the head $P(\bar t)$ of the targeted axiom} \\
+\midrule
+Belief Revision 1 & Delete the targeted axiom. \\
+Belief Revision 2 & Add an unprovable precondition to the body of the
+  targeted axiom. \\
+Reformation 1 & Rename $P$ to a new predicate $P'$ in the targeted axiom. \\
+Reformation 2 & Add an argument to every occurrence of $P$, so that the new
+  arguments of the goal and of the targeted head do not unify. \\
+Reformation 3 & If $s_i$ and $t_i$ are the same constant $C$, change $t_i$
+  to a new constant $C'$. \\
+\midrule
+\multicolumn{2}{@{}l}{\emph{Insufficiency}, goal $P(\bar s)$ failing
+  against the head $P'(\bar t)$ of an axiom} \\
+\midrule
+Abduction 1 & Add an axiom whose head unifies with the goal. \\
+Abduction 2 & Delete from its axiom the body atom that created the goal. \\
+Reformation 4 & Replace $P'(\bar t)$ by $P(\bar s)$ in the axiom. \\
+Reformation 5 & Remove from every occurrence of $P'$ an argument $i$ such
+  that $s_i$ and $t_i$ do not unify. \\
+Reformation 6 & If $s_i$ and $t_i$ are distinct constants $C$ and $C'$,
+  rename $C'$ to $C$ in all the axioms, or replace that occurrence of $C'$
+  by a new variable. \\
+\bottomrule
+\end{tabularx}
+\caption{The repair operations of ABC, after Definitions~5.2 and~5.3 of
+Bundy's chapter~\cite{Bundy26}.}
+\label{tab:operations}
+\end{table}
+
+Reformation~1, 2 and~3 introduce new symbols, which ABC calls dummy terms.
+Giving them meaningful names is a symbol grounding problem, for which Chan,
+Li and Bundy use large language models~\cite{ChanLiBundy23}. A fault may
+need several operations, and many sequences of operations may repair a
+theory, so ABC produces several repaired theories. Urbonas et al.\ prune
+them to a Pareto front with a Max-SAT solver~\cite{Urbonas20}. For logics
+beyond Datalog, Bundy notes that the search for proofs needs a heuristic
+limit. An atom of the true set may then be misclassified as an
+insufficiency because its proof is too long, and an incompatibility may go
+unnoticed for the same reason~\cite{Bundy26}. Wong, Li and Bundy describe
+a version of the repair operations for first-order logic~\cite{WongLiBundy24}.
+
+%% ===========================================================================
+\section{An extension of IsaScheme}
+\label{sec:extension}
+
+The extension lives in the directory \isa{papers/abc-theory-repair} of the
+IsaScheme repository. It is an Isabelle session, \isa{ABC\_Repair}, built
+on top of IsaLibs, the Isabelle library of IsaScheme, and it does not
+change IsaScheme. Its core is a Standard ML file of about 600 lines,
+\isa{abc.ML}, loaded by the theory \isa{ABC.thy}, which also declares two
+diagnostic commands, \isa{abc\_faults} and \isa{abc\_repair}. The ML
+structure \isa{ABC} exports the same functions, so that theories can also
+be built programmatically, as we do for the arithmetic example.
+
+\subsection{Language}
+\label{sec:language}
+
+Clauses and atoms are written as Isabelle propositions inside quotes. The
+conjunction $\wedge$ separates the atoms of a body, and either the
+meta-implication $\imp$ or the implication $\longrightarrow$ of HOL
+separates the body from the head. A clause whose head is $\mathit{False}$
+is a goal clause. The text is parsed with Isabelle's syntax but not
+type-checked, so names such as \isa{sum} or \isa{add}, which are constants
+of HOL, can be used as predicates without clashes. After parsing, an
+unapplied free name that starts with an upper-case letter becomes a
+variable, every other name becomes a constant, a predicate or a function
+symbol, numerals become constants, and the equality and disequality of HOL
+become the built-in predicates $=$ and $\neq$. Internally, a term is a
+variable or a symbol applied to a list of terms,
+\begin{lstlisting}
+datatype fterm = V of indexname | F of string * fterm list
+type clause = {body : fterm list, head : fterm option}
+\end{lstlisting}
+so predicates, function symbols and constants share one representation, and
+a predicate is identified by its name and its arity.
+
+The swan theory of Bundy's Example~6.1, with its preferred structure, is
+written as follows:
+\begin{lstlisting}
+abc_faults
+  axioms "german X ⟹ euro X" "euro X ∧ swan X ⟹ white X"
+         "german bruce" "swan bruce"
+  true "black bruce"
+  false "white bruce"
+\end{lstlisting}
+The command prints the faults in the notation of the chapter, with one
+proof of each incompatibility and the failed goals of each insufficiency:
+\begin{lstlisting}[language=Out]
+Faults:
+  Insufficiency: black(bruce) is in the true set but is not a theorem.
+    Failed goals: black(bruce)
+  Incompatibility: white(bruce) is in the false set but is a theorem.
+    Proof:
+      white(bruce)  by  euro(X) ∧ swan(X) ⟹ white(X)
+      euro(bruce)  by  german(X) ⟹ euro(X)
+      german(bruce)  by  ⟹ german(bruce)
+      swan(bruce)  by  ⟹ swan(bruce)
+\end{lstlisting}
+
+\subsection{Proof search}
+\label{sec:proofs}
+
+Function symbols make Horn logic undecidable, so the extension cannot
+decide theoremhood as ABC does for Datalog. It searches SL resolution
+proofs depth first, always selecting the leftmost atom of the goal clause
+and trying the clauses in the order of the theory. A branch is cut after
+\isa{abc\_max\_depth} resolution steps, 30 by default, and the whole search
+stops after \isa{abc\_max\_proofs} proofs, 5 by default. Clauses are
+renamed apart with a fresh index at each step, and unification is ordinary
+first-order unification with occurs check.
+
+Every step of a proof records the selected goal, the clause it was resolved
+with and the origin of the goal, which is the clause and the position in
+its body of the atom that created it. A goal that unifies with no head is a
+\emph{dead end}, and it is recorded with its origin as well. Branches cut
+by the depth limit are not dead ends. These records are what the repair
+operations need. A step tells an incompatibility repair which axiom to
+target, and a dead end tells an insufficiency repair which goal failed and
+which body atom created it.
+
+The built-in predicates are solved without axioms. A goal $s = t$ succeeds
+by unifying $s$ and $t$, and a goal $s \neq t$ succeeds when $s$ and $t$
+are ground and distinct, which is the closed world assumption of ABC.
+Clauses with $=$ or $\neq$ in their heads are used like any other clause,
+so they can override the assumption as in ABC.
+
+The function \isa{ABC.faults} searches proofs for each atom of the
+preferred structure. An atom of the true set without proofs is an
+insufficiency, which keeps the dead ends of its search, and an atom of the
+false set with proofs is an incompatibility, which keeps the proofs found.
+Insufficiencies are listed before incompatibilities, in the order of the
+preferred structure.
+
+\subsection{Repair operations}
+\label{sec:operations}
+
+The operations follow Definitions~5.2 and~5.3 of Bundy's chapter. This
+section describes the choices that the definitions leave open.
+
+\paragraph{Incompatibilities}
+An incompatibility is repaired on the first of its proofs. Each step of the
+proof that uses a clause $k$ of the theory yields the following candidates.
+Belief Revision~1 deletes clause $k$. Belief Revision~2 adds to its body the
+atom $\mathit{dum}(X_1,\dots,X_r)$, where $\mathit{dum}$ is a new predicate
+and $X_1,\dots,X_r$ are the variables of the head, so the precondition is
+unprovable and the clause can no longer be used. Reformation~1 renames the
+predicate of the head to a primed name, as in $\mathit{euro}'$.
+Reformation~3 is applied to every argument position where the goal and the
+head carry the same constant $C$, which is changed to $C'$ in the head.
+Steps solved by the built-in predicates are not targeted, and Reformation~1
+and~2 are never applied to $=$ and $\neq$, because renaming the equality or
+changing its arity would take its meaning away.
+
+Reformation~2 needs more care, since it changes every occurrence of the
+predicate $P$ and must still block the proof. The targeted head gets a new
+constant as its extra argument, and the other facts get distinct new
+constants too. The clause whose body atom created the goal gets a new
+constant when that atom is its only occurrence of $P$. When the clause has
+other occurrences of $P$, all of them share a new variable instead. The
+targeted step then succeeds, but the shared variable forces the other
+occurrences to agree with the new constant of the targeted fact, which
+blocks a later step of the proof. This is the repair of the unique mothers
+example of the chapter, shown in Section~\ref{sec:mothers}. The remaining
+rules get a fresh variable shared by all their occurrences of $P$, so they
+keep working for every value of the new argument.
+
+\paragraph{Insufficiencies}
+An insufficiency is repaired at its dead ends, of which the first ten
+distinct ones are considered. For a dead end with goal $P(s_1,\dots,s_m)$,
+Abduction~1 adds the goal as a new fact, whose variables become ordinary
+clause variables. Abduction~2 deletes from its clause the body atom that
+created the goal, unless the goal is the observation itself. The other
+three operations need a \emph{near miss}, a head that almost resolves with
+the goal. The chapter does not say how to choose it, and the extension
+considers two kinds. A head with the same predicate and arity as the goal
+is a near miss when no other head of that predicate fails on fewer
+arguments. A head $Q(t_1,\dots,t_m)$ with another predicate of the same
+arity is a near miss when its arguments unify with those of the goal.
+
+Reformation~5 removes from every occurrence of $P$ an argument on which a
+near miss of the first kind fails. Reformation~6 takes such an argument
+when both terms are constants $c$ and $c'$, and either renames $c'$ to $c$
+in all the axioms or replaces $c'$ by a new variable in the near miss.
+Reformation~4 takes a near miss of the second kind and either replaces $Q$
+by $P$ in its head, keeping the arguments $t_i$, which unify with the
+$s_i$, or merges $P$ into $Q$ in all the axioms. The second form extends
+the definition of the chapter. It is the one used in the root cause
+analysis of Section~\ref{sec:5g}, where the predicate $\mathit{ms}$ of a
+rule body is a rival name for the predicate $\mathit{microservice}$ of the
+facts. The built-in predicates are excluded from Reformation~4 and~5.
+
+New predicates and constants are called $\mathit{dum}_1$,
+$\mathit{dum}_2$, and so on, and renamed symbols get a prime. As in ABC,
+the preferred structure is never modified, so the new symbols cannot
+appear in it.
+
+\subsection{Search for repairs}
+\label{sec:search}
+
+A fault may need several operations, and an operation may repair one fault
+and create another, so the extension searches sequences of operations
+breadth first. Each node of the search is a theory. A node without faults
+is a solution and is not repaired further. Otherwise its first fault is
+repaired with every applicable operation, and the theories obtained form
+the next level, after removing those already seen, which are compared by
+their printed clauses. The search stops after \isa{abc\_max\_repairs}
+levels, 2 by default. It reports, for each level, the fault-free theories
+found with that number of operations, showing at most
+\isa{abc\_max\_solutions} of them, 10 by default, with the clauses that
+each repair deletes and adds.
+
+Repairing only the first fault of each node fixes the order in which faults
+are treated, so the search does not generate the permutations of a
+sequence of independent repairs. The remaining faults, including the other
+proofs of a repaired incompatibility, are found again when the next level
+is diagnosed.
+
+The report shows every level and not only the first one with solutions,
+because the smallest repairs are often coarse, such as the deletion of a
+rule, while the repair that a human would choose may need one more
+operation. The black swan and the 5G examples below are of this kind.
+Table~\ref{tab:commands} summarizes the commands and the options, which are
+set with Isabelle's attribute syntax, as in
+\isa{declare [[abc\_max\_repairs = 3]]}.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\toprule
+Command or option & Default & Meaning \\
+\midrule
+\isa{abc\_faults} & & Print the faults, with a proof of each
+  incompatibility and the failed goals of each insufficiency. \\
+\isa{abc\_repair} & & Print the faults and the fault-free theories found
+  for each number of operations. \\
+\isa{abc\_max\_depth} & 30 & Resolution steps of a proof. \\
+\isa{abc\_max\_proofs} & 5 & Proofs kept for each atom. \\
+\isa{abc\_max\_repairs} & 2 & Operations of a repair. \\
+\isa{abc\_max\_solutions} & 10 & Theories shown for each number of
+  operations. \\
+\bottomrule
+\end{tabularx}
+\caption{Commands and options of the extension. Both commands take the
+arguments \isa{axioms}~$c_1 \dots c_k$ \isa{true}~$a_1 \dots a_l$
+\isa{false}~$b_1 \dots b_p$, where the $c_i$ are clauses and the $a_i$ and
+$b_i$ atoms, and the last two parts are optional.}
+\label{tab:commands}
+\end{table}
+
+%% ===========================================================================
+\section{The examples of the chapter}
+\label{sec:examples}
+
+The theory \isa{ABC\_Examples.thy} contains the worked examples of Bundy's
+chapter. Table~\ref{tab:examples} summarizes the search for each of them.
+The candidates of a level are the distinct theories generated at that
+level, and the fault-free ones are reported as repairs. The last column
+gives the level and the position in the report of the repair described in
+the chapter. The times are those of \isa{abc\_repair} with the default
+options, measured with Isabelle2026 on an Intel Xeon E5645 at 2.40\,GHz.
+The search runs in a single thread.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}l r c r r r r r c@{}}
+\toprule
+& & Faults & \multicolumn{2}{c}{1 operation} & \multicolumn{2}{c}{2 operations}
+  & & Chapter \\
+\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+Example & Clauses & ins./inc. & cand. & free & cand. & free & Time (s)
+  & level, pos. \\
+\midrule
+Black swan (6.1)  &   4 & 1/1 &  5 &  4 &  17 &  17 & $<0.01$ & 2, 7th \\
+Mothers (7)       &   3 & 0/1 & 12 & 12 & --- & --- & $<0.01$ & 1, 6th \\
+Penguin (9.1)     &   3 & 0/1 & 13 &  8 &  23 &   1 & $<0.01$ & 1, 8th \\
+5G, stage 1 (9.3) &   9 & 2/0 & 14 &  3 & 117 &  32 & 16.2    & 2, 6th \\
+5G, stage 2 (9.3) &  10 & 0/3 & 14 &  9 &  70 &  70 & $<0.01$ & 1, 5th \\
+Arithmetic (9.4)  & 101 & 1/0 & 51 &  6 & 366 & 166 & 0.07    & 1, 5th \\
+\bottomrule
+\end{tabular}
+\caption{The search on the examples of the chapter, whose section is given
+in parentheses. The faults are counted as insufficiencies and
+incompatibilities. In the unique mothers example every candidate of the first
+level is fault-free, so there is no second level.}
+\label{tab:examples}
+\end{table}
+
+\subsection{The black swan}
+
+Bruce is a German swan, the theory concludes that it is white, and it is
+observed to be black. With one operation, four theories are fault-free.
+Each applies Reformation~4 to one clause and turns its head into
+$\mathit{black}$, either in a rule, as in
+$\mathit{german}(X) \imp \mathit{black}(X)$, or in one of the two facts.
+Each of them makes $\mathit{black}(\mathit{bruce})$ a theorem and blocks
+the proof of $\mathit{white}(\mathit{bruce})$ at the same time. They are
+small but implausible, since they change what the theory says about all
+Germans or all European swans, or replace a fact about Bruce. The repair of the
+chapter needs two operations:
+\begin{lstlisting}[language=Out]
+Abduction 1: add ⟹ black(bruce)
+Reformation 1: rename euro to euro' in german(X) ⟹ euro(X)
+  - german(X) ⟹ euro(X)
+  + german(X) ⟹ euro'(X)
+  + ⟹ black(bruce)
+\end{lstlisting}
+Here $\mathit{euro}'$ means a European resident and $\mathit{euro}$ a swan
+of European type. The repair is the seventh of the 17 repairs with two
+operations, all of which start with Abduction~1 because the insufficiency
+is the first fault. The other ones block the proof of
+$\mathit{white}(\mathit{bruce})$ at another step or with another operation.
+
+\subsection{Unique mothers}
+\label{sec:mothers}
+
+The third axiom of the theory
+\begin{lstlisting}
+abc_repair
+  axioms "mum diana william" "mum camilla william"
+         "mum X Z ∧ mum Y Z ⟹ X = Y"
+  false "diana = camilla"
+\end{lstlisting}
+allows one mother per person, so the two mothers of William prove that
+Diana and Camilla are the same person. The proof resolves the goal with the
+rule and then the two body atoms with the two facts. Twelve repairs with one
+operation block one of these steps, and the sixth one is Reformation~2 on
+the first fact:
+\begin{lstlisting}[language=Out]
+Reformation 2: increase the arity of mum by one, blocking
+               mum(diana, Z_3) against ⟹ mum(diana, william)
+  - mum(X, Z) ∧ mum(Y, Z) ⟹ X = Y
+  + mum(X, Z, Dum) ∧ mum(Y, Z, Dum) ⟹ X = Y
+  - ⟹ mum(diana, william)
+  - ⟹ mum(camilla, william)
+  + ⟹ mum(diana, william, dum1)
+  + ⟹ mum(camilla, william, dum2)
+\end{lstlisting}
+This is the theory of kinds of mothers of the chapter, before symbol
+grounding names $\mathit{dum}_1$ and $\mathit{dum}_2$ \emph{birth} and
+\emph{step}. Since the rule has two occurrences of $\mathit{mum}$, its new
+argument is a shared variable, so the rule only identifies two mothers of
+the same kind. Without the exclusion of the built-in predicates,
+Reformation~1 and~2 would also apply to the equality in the head of the
+rule and produce repairs without meaning.
+
+\subsection{Defeasible reasoning}
+
+The penguin theory states that birds fly, that penguins are birds and that
+Tweety is a penguin, and $\mathit{fly}(\mathit{tweety})$ is in the false
+set. The atom $\mathit{penguin}(\mathit{tweety})$ is also put in the true
+set, so that the repairs that delete it are rejected. Of the 13 theories
+generated with one operation, eight are fault-free, and the last of them
+is Reformation~2 on $\mathit{bird}$:
+\begin{lstlisting}[language=Out]
+  - bird(X) ⟹ fly(X)
+  - penguin(X) ⟹ bird(X)
+  + bird(X, dum1) ⟹ fly(X)
+  + penguin(X) ⟹ bird(X, dum2)
+\end{lstlisting}
+The new constants play the role of \emph{normal} and \emph{abnormal} in
+the chapter, so only normal birds fly and penguins are abnormal birds. The
+repaired theory is still monotonic and still says that Tweety is a bird,
+which is how ABC models defeasible reasoning without a non-monotonic logic.
+
+\subsection{Root cause analysis of a 5G network}
+\label{sec:5g}
+
+The root cause analysis of a 5G network uses ABC in two
+stages~\cite{LiEtAl22,Bundy26}. In the first one, the three observed
+failures $\mathit{fail}(\mathit{id}_1)$, $\mathit{fail}(\mathit{id}_2)$ and
+$\mathit{fail}(\mathit{id}_3)$ are in the true set, but only
+$\mathit{fail}(\mathit{id}_2)$ is a theorem. The extension reports two
+insufficiencies. Their failed goals include
+$\mathit{createOn}(\mathit{id}_1, d_1)$, because no fact says that
+$\mathit{id}_1$ is created on $d_1$, and $\mathit{ms}(X, s_1)$, because the
+rule for $\mathit{depend}$ uses the predicate $\mathit{ms}$ while the facts
+use $\mathit{microservice}$. Three repairs with one operation are
+fault-free. One deletes the atom $\mathit{createOn}(Y, X)$ from the rule for
+$\mathit{fail}$, one removes the first argument of $\mathit{createOn}$, and
+one replaces $\mathit{id}_2$ by a variable in
+$\mathit{createOn}(\mathit{id}_2, d_1)$. Each of them makes every service
+fail, so they explain the observations without saying why. The repair of
+the chapter is the sixth of the 32 repairs with two operations:
+\begin{lstlisting}[language=Out]
+Abduction 1: add ⟹ createOn(id1, d1)
+Reformation 4: merge ms into microservice in all axioms
+  - ms(X, s1) ∧ ms(Y, s2) ∧ sameRoute(X, Y) ⟹ depend(Y, X)
+  + microservice(X, s1) ∧ microservice(Y, s2) ∧ sameRoute(X, Y)
+      ⟹ depend(Y, X)
+  + ⟹ createOn(id1, d1)
+\end{lstlisting}
+
+Almost all of the 16 seconds of this example are spent on one candidate
+theory of the second level, while every other candidate is diagnosed in
+less than 0.2 seconds. In that candidate, Abduction~1
+adds the dead end $\mathit{ms}(X_{35}, s_1)$ as a fact with a variable, and
+Reformation~4 then merges $\mathit{ms}$ into $\mathit{depend}$. The rule
+for $\mathit{depend}$ becomes recursive, the new fact makes
+$\mathit{depend}(X, s_1)$ true for every $X$, and every attempt to prove a
+failure explores the two recursive rules down to the depth limit.
+
+In the second stage, the abduced fact and the merged rule are part of the
+theory, and the three failures move to the false set, so each of them is
+an incompatibility. Nine theories with one operation are fault-free. The
+fifth one deletes the fact $\imp \mathit{full}(d_1)$, which blocks the three
+proofs at once and identifies the root cause found in the chapter, namely
+that the device $d_1$ is full. The other ones weaken or delete the rule
+that derives the failures, or change $\mathit{full}$ or
+$\mathit{createOn}$. In the chapter, the second stage is not allowed to
+undo the repairs of the first one. The extension has no such protection,
+so the repairs with two operations include some that delete the abduced
+fact $\mathit{createOn}(\mathit{id}_1, d_1)$.
+
+\subsection{A student's arithmetic misconception}
+\label{sec:arith}
+
+Bundy represents the addition of two two-digit numbers as a relation
+$\mathit{sum}$ with seven arguments, the two digits of each operand
+followed by the three digits of the result, and the addition of two digits
+as a relation $\mathit{add}(a, b, u, c)$, where $u$ and $c$ are the units
+digit and the carry of $a + b$. The rule
+\[
+\begin{array}{l}
+  \mathit{add}(U_1, U_2, U_3, C_1) \wedge \mathit{add}(T_2, C_1, T_2', 0)
+  \wedge \mathit{add}(T_1, T_2', T_3, C_2) \\
+  \qquad \imp \mathit{sum}(T_1, U_1, T_2, U_2, C_2, T_3, U_3)
+\end{array}
+\]
+adds the units, adds the carry to the tens digit of the second operand and
+then adds the tens. A student who forgets to carry answers $49 + 83 = 22$,
+so $\mathit{sum}(4, 9, 8, 3, 0, 2, 2)$ is in the true set. The chapter uses
+three digit facts and abduces the missing ones after the repair, and notes
+that the whole table of digit facts could be part of the theory. We take
+the whole table, generated with the ML interface of the extension:
+\begin{lstlisting}
+val add_facts : ABC.clause list =
+  map_product (fn a => fn b =>
+      {body = [], head = SOME (ABC.F ("add", [digit a, digit b,
+         digit ((a + b) mod 10), digit ((a + b) div 10)]))})
+    (0 upto 9) (0 upto 9)
+val sum_rule = ABC.read_clause @{context}
+  "add U1 U2 U3 C1 ∧ add T2 C1 T2' 0 ∧ add T1 T2' T3 C2
+     ⟹ sum T1 U1 T2 U2 C2 T3 U3"
+val _ = writeln (ABC.repair_report @{context}
+                  (sum_rule :: add_facts)
+                  (preferred ["sum 4 9 8 3 0 2 2"] []))
+\end{lstlisting}
+The function \isa{digit} builds the constant for a digit, and
+\isa{preferred} reads the atoms of the true and the false sets.
+
+The proof fails at the goal $\mathit{add}(4, 9, 2, 0)$, the tens column
+once the carry has been added to the 8. Six theories with one operation are
+fault-free. Reformation~5 on the fourth argument of $\mathit{add}$, the
+carry, is the diagnosis of the chapter, and it needs no abduction here,
+because the facts $\mathit{add}(8, 0, 8)$ and $\mathit{add}(4, 8, 2)$ are
+already in the table. The other five are Abduction~1, which adds the wrong
+fact $\mathit{add}(4, 9, 2, 0)$ and would correspond to a careless slip,
+Abduction~2, which deletes the atom for the tens column, Reformation~5 on
+the first or the third argument, and Reformation~6, which renames the digit
+1 to 0 in all the axioms and so also sets every carry to 0.
+
+A closer look at the theory repaired by Reformation~5 on the carry shows
+that it explains too much. After the repair, the rule reads
+\[
+\begin{array}{l}
+  \mathit{add}(U_1, U_2, U_3) \wedge \mathit{add}(T_2, C_1, T_2') \wedge
+  \mathit{add}(T_1, T_2', T_3) \\
+  \qquad \imp \mathit{sum}(T_1, U_1, T_2, U_2, C_2, T_3, U_3).
+\end{array}
+\]
+The variable $C_1$ is no longer bound by the units column, so it ranges
+over all the digits, and $C_2$ occurs only in the head. The repaired theory
+therefore proves $\mathit{sum}(4, 9, 8, 3, 0, d, 2)$ for every digit $d$,
+and also $\mathit{sum}(4, 9, 8, 3, 7, 2, 2)$, although it still determines
+the units digit. The fragment of three facts used in the chapter hides this
+problem, because the only fact abduced for the second atom is
+$\mathit{add}(8, 0, 8)$.
+
+More observations narrow the diagnosis. A second answer of the student,
+$18 + 25 = 33$, leaves four repairs with one operation, since Abduction~1
+and Reformation~6 no longer explain both answers. Putting in the false set
+the answers 32 and 43, which the student did not give, rejects the
+repair by Reformation~5, and no repair is found with at most two
+operations. The missing step instantiates the variables left unbound by
+Reformation~5 with the carry 0, which gives the rule
+\[
+\begin{array}{l}
+  \mathit{add}(U_1, U_2, U_3) \wedge \mathit{add}(T_2, 0, T_2') \wedge
+  \mathit{add}(T_1, T_2', T_3) \\
+  \qquad \imp \mathit{sum}(T_1, U_1, T_2, U_2, 0, T_3, U_3).
+\end{array}
+\]
+The extension confirms that this theory has no faults with respect to the
+two answers and the two rejected ones. ABC has no operation for this step,
+which we also perform by hand on recursive functions in the next section.
+
+%% ===========================================================================
+\section{Repairing recursive functions}
+\label{sec:functions}
+
+Datalog has no functions, which forces the seven-argument representation
+of the previous section. In higher-order logic, the natural representation
+of the same knowledge is a recursive function. The theory
+\isa{ABC\_Arithmetic.thy} represents numbers as lists of decimal digits,
+least significant digit first, and defines column-wise addition with a
+carry:
+\begin{lstlisting}
+fun val :: "nat list ⇒ nat" where
+  "val [] = 0"
+| "val (d # ds) = d + 10 * val ds"
+
+abbreviation units :: "nat ⇒ nat" where
+  "units s ≡ (if s < 10 then s else s - 10)"
+abbreviation carry :: "nat ⇒ nat" where
+  "carry s ≡ (if s < 10 then 0 else 1)"
+
+fun add_carry :: "nat ⇒ nat list ⇒ nat list ⇒ nat list" where
+  "add_carry c [] [] = (if c = 0 then [] else [c])"
+| "add_carry c (a # as) [] =
+     units (a + c) # add_carry (carry (a + c)) as []"
+| "add_carry c [] (b # bs) =
+     units (b + c) # add_carry (carry (b + c)) [] bs"
+| "add_carry c (a # as) (b # bs) =
+     units (a + b + c) # add_carry (carry (a + b + c)) as bs"
+\end{lstlisting}
+A predicate \isa{valid} states that all the digits are below 10. The
+correct theory is right, and it predicts $49 + 83 = 132$:
+\begin{lstlisting}
+lemma add_carry_correct:
+  "c ≤ 1 ⟹ valid xs ⟹ valid ys ⟹
+   val (add_carry c xs ys) = c + val xs + val ys"
+  by induct_auto
+lemma correct_prediction: "add_carry 0 [9, 4] [3, 8] = [2, 3, 1]"
+  by simp
+\end{lstlisting}
+The method \isa{induct\_auto} of IsaLibs searches, with an A* search, for
+an induction followed by \isa{auto}, choosing by itself the induction
+variable, the induction rule and the variables to generalize. The observation $49 + 83 = 22$ becomes the equation
+\isa{add\_carry 0 [9, 4] [3, 8] = [2, 2]}, whose negation the simplifier
+proves, so it is an insufficiency of the correct theory. For ground
+observations about terminating functions, evaluation decides theoremhood,
+and no depth limit is needed.
+
+Reformation~5 removes the carry argument of \isa{add\_carry}. Every call
+\isa{add\_carry (carry s) xs ys} becomes a call of the new function, and the
+occurrences of \isa{c} that no equation binds any more are instantiated
+with 0, which is the step that the Datalog version lacks. Simplifying
+$a + b + 0$ to $a + b$ gives the student's procedure, which writes the
+units digit of each column and forgets the carry:
+\begin{lstlisting}
+fun add_student :: "nat list ⇒ nat list ⇒ nat list" where
+  "add_student [] [] = []"
+| "add_student (a # as) [] = units a # add_student as []"
+| "add_student [] (b # bs) = units b # add_student [] bs"
+| "add_student (a # as) (b # bs) =
+     units (a + b) # add_student as bs"
+\end{lstlisting}
+The repaired theory explains the observation, since
+\isa{add\_student [9, 4] [3, 8] = [2, 2]} is proved by simplification.
+
+At this point theory exploration takes over. A diagnosis is more useful
+when we know what the misconceived procedure computes, and IsaScheme
+proves it by induction. With the function \isa{carries xs ys}, which lists
+the carry of each column, the student's answer loses ten times the value of
+the carries:
+\begin{lstlisting}
+theorem add_student_value:
+  "valid xs ⟹ valid ys ⟹
+   val (add_student xs ys) + 10 * val (carries xs ys) =
+   val xs + val ys"
+  by induct_auto
+lemma add_carry_differs [simp]:
+  "0 < c ⟹ c < 10 ⟹ add_student xs ys ≠ add_carry c xs ys"
+  by induct_auto
+theorem add_student_correct_iff_no_carry:
+  "add_student xs ys = add_carry 0 xs ys ⟷
+   val (carries xs ys) = 0"
+  by induct_auto
+lemma add_student_comm: "add_student xs ys = add_student ys xs"
+  by induct_auto
+lemma add_carry_comm: "add_carry c xs ys = add_carry c ys xs"
+  by induct_auto
+\end{lstlisting}
+For $49 + 83$ the carries are $[1, 1]$ and $132 - 110 = 22$. The third
+theorem explains why the misconception is hard to notice, as the chapter
+observes. The student's answer is right exactly when no column produces a
+carry. Its inductive proof uses as a simplification rule the second
+lemma, which says that a carry changes the next column. The
+last two lemmas show that forgetting the carry does not break
+commutativity, so the misconception cannot be detected by swapping the
+operands. The proofs by \isa{induct\_auto} take about 90, 40, 20, 45, 1 and
+15 seconds on 8 threads, in the order of the listings. For the first four,
+the theory also gives a proof by the induction or case analysis rule of the
+function followed by \isa{auto}.
+
+In this pilot the repair is written by hand. Automating it requires
+lifting the operations of ABC from clauses to function definitions.
+Reformation~5 on a function removes an argument from every equation and
+every call and instantiates the variables that are no longer bound, after
+which the function package~\cite{Krauss06} must prove termination again.
+Reformation~4 and~6 correspond to replacing a function symbol or a
+constant in an equation, and Belief Revision~1 to deleting an equation.
+The diagnosis can rely on evaluation for ground observations, and on
+IsaScheme's counterexample search with Quickcheck and
+Nitpick~\cite{Bulwahn12,BlanchetteNipkow10} for observations with
+variables.
+
+%% ===========================================================================
+\section{Related work}
+\label{sec:related}
+
+ABC grew out of work on the evolution of representations. Bundy and McNeill
+argued that representations should be fluents that change with the
+reasoning task~\cite{BundyMcNeill06}, and the ORS system of McNeill and
+Bundy repaired the ontologies of planning agents after failed plan
+executions~\cite{McNeillBundy07}. Reformation, the algorithm behind the
+conceptual changes of ABC, was introduced by Bundy and Mitrovic as a
+domain-independent way of blocking and unblocking
+unifications~\cite{BundyMitrovic16}. Li, Bundy and Smaill combined it with
+abduction and belief revision in ABC~\cite{LiBundySmaill18,Li21}. Later
+work prunes the repairs with Max-SAT~\cite{Urbonas20}, names the dummy
+terms with large language models~\cite{ChanLiBundy23}, extends the
+operations to first-order logic~\cite{WongLiBundy24} and applies ABC to
+virtual bargaining, root cause analysis and arithmetic
+misconceptions~\cite{BundyPhilalithisLi20,LiEtAl22,Tang16}. Our extension
+follows the presentation of Bundy's recent chapter~\cite{Bundy26}. We are
+not aware of a previous implementation of the operations of ABC inside a
+proof assistant.
+
+Belief revision in the AGM tradition~\cite{AGM85} studies the rational
+contraction and revision of deductively closed belief sets, and
+syntax-based approaches revise finite bases of axioms~\cite{Nebel91}, as
+Belief Revision~1 and~2 do. Abduction computes hypotheses that explain an
+observation~\cite{CoxPietrzykowski86}, and abductive logic programming
+integrates it with Horn clause reasoning~\cite{KakasKowalskiToni92}.
+Neither changes the language of the theory, which is the role of
+reformation. Lakatos analysed how mathematical concepts are stretched or
+split in the face of counterexamples~\cite{Lakatos76}, an idea close to
+Reformation~1 and~2.
+
+Theory revision in inductive logic programming refines a Horn clause
+domain theory from positive and negative examples~\cite{MuggletonDeRaedt94}.
+FORTE~\cite{RichardsMooney95}, for instance, revises a theory by adding and
+deleting clauses and antecedents, which correspond to abduction and to
+belief revision in ABC, and its examples play the role of the true and
+false sets. Algorithmic debugging~\cite{Shapiro83} locates the faulty
+clause of a logic program by asking an oracle about intermediate goals,
+and model-based diagnosis~\cite{Reiter87} computes minimal sets of faulty
+components, which is close to the root cause analysis of
+Section~\ref{sec:5g}. The BUGGY models of Brown and Burton~\cite{BrownBurton78}
+describe arithmetic misconceptions as perturbations of correct procedures,
+which is the view taken by the arithmetic examples of
+Sections~\ref{sec:arith} and~\ref{sec:functions}.
+
+In inductive theorem proving, proof critics~\cite{IrelandBundy96} analyse
+failed proof attempts to speculate lemmas and generalizations, and
+IsaScheme uses this idea in its inductive prover~\cite{MontanoRivas12}.
+ABC applies the same productive use of failure to the axioms of a theory.
+Theory exploration
+systems~\cite{MontanoRivas12,JohanssonDixonBundy11,ClaessenSmallboneHughes10,Hipster14}
+discover the properties of a theory, and Section~\ref{sec:functions} uses
+IsaScheme to describe the theory produced by a repair.
+
+%% ===========================================================================
+\section{Limitations, future work and conclusion}
+\label{sec:conclusion}
+
+\paragraph{Proofs outside the kernel}
+The extension reasons about Horn theories in ML, outside the logic, so its
+proofs are not checked by Isabelle's kernel and its theories are not
+Isabelle theories. A Horn theory has a natural representation as an
+inductive definition~\cite{Paulson94} with one introduction rule per
+clause. The proofs found by SL resolution could be replayed as theorems
+about it, and ground atoms could be decided by the predicate
+compiler~\cite{BerghoferBulwahnHaftmann09}. Each repaired theory would then
+be an Isabelle theory that IsaScheme can explore.
+
+\paragraph{Approximate diagnosis}
+With recursion and function symbols, the depth limit makes the diagnosis
+approximate. An atom of the true set whose proofs are longer than the limit
+is reported as an insufficiency, and an atom of the false set with only
+long proofs hides an incompatibility. The 5G example also shows the cost
+of the limit, since one candidate with two recursive rules takes almost all
+the time of the search. Tabled resolution, as used by Datalog engines,
+would make the diagnosis exact again for theories without function symbols
+and would avoid the repeated exploration of recursive goals.
+
+\paragraph{Too many repairs}
+The search returns many fault-free theories, 166 with two operations in
+the arithmetic example, in the order in which they are generated. Larger
+theories need a ranking, for example by the Pareto front of Urbonas et
+al.~\cite{Urbonas20}, by the plausibility of each operation, or by
+protecting the axioms that the user trusts, as the second stage of the root
+cause analysis requires.
+
+\paragraph{A missing operation}
+The arithmetic example shows that Reformation~5 may leave variables
+unbound and produce a theory that predicts too much. An operation that
+instantiates such variables with a constant would complete the diagnosis of
+the chapter. On recursive functions we applied it by hand, together with
+the rest of the repair, and automating the repair of function definitions
+along the lines of Section~\ref{sec:functions} is the most interesting
+direction for future work, since it would connect the repair of a theory
+with its exploration by IsaScheme.
+
+\paragraph{Conclusion}
+We have implemented the diagnosis of faults and the ten repair operations
+of ABC as an extension of IsaScheme for Isabelle/HOL, for Horn theories
+that may contain function symbols. A breadth-first search over sequences of
+operations finds the repairs of the worked examples of Bundy's chapter
+among the fault-free theories with one or two operations, in less than a
+second in all the examples but one. The examples also show the need for
+ranking the repairs and for an operation that binds the variables left
+free by the removal of an argument. In the pilot on recursive functions,
+the repair of the arithmetic misconception becomes a change of a function
+definition, after which IsaScheme proves what the student's procedure
+computes. Joining theory repair and theory exploration in one proof
+assistant is the goal of this line of work.
+
+%% ===========================================================================
+\section*{Availability}
+{\sloppy
+IsaScheme/IsaLibs is available at
+\url{https://github.com/omarmrivas/IsaScheme}. The extension and the
+theories of Sections~\ref{sec:examples} and~\ref{sec:functions} are in the
+directory \url{papers/abc-theory-repair} of the repository. From the
+root of the repository, the command
+\begin{center}
+\isa{isabelle build -d IsaLibs -d papers/abc-theory-repair ABC\_Repair}
+\end{center}
+builds them in about two minutes on 8 threads.\par}
+
+\bibliographystyle{elsarticle-num}
+\bibliography{references}
+
+\end{document}

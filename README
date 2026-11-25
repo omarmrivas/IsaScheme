@@ -24,8 +24,8 @@ the Isabelle theories of its experiments.
 
 papers/abc-theory-repair contains an extension of IsaScheme with the faults and
 repair operations of the ABC system of Bundy and colleagues, in its own session
-ABC_Repair, together with the examples of the ABC chapter and a pilot on
-recursive functions. Build it with
+ABC_Repair, together with the examples of the ABC chapter, a pilot on recursive
+functions and an article that describes them. Build it with
 
 isabelle build -d IsaLibs -d papers/abc-theory-repair ABC_Repair
 

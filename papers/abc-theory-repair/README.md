@@ -12,11 +12,13 @@ IsaScheme itself.
 
 ## Files
 
+- `main.tex` and `references.bib` are an article that describes the extension
+  and the theories listed below. `main.pdf` is built with `latexmk -pdf main.tex`.
 - `abc.ML` implements the extension. Theories are lists of Horn clauses, and terms
   may contain function symbols, so proofs by selected literal resolution are searched
   up to a depth limit, as section 8 of the chapter suggests for logics beyond
   Datalog. The file implements the two kinds of fault (incompatibilities and
-  insufficiencies), the four operations that repair incompatibilities (Belief
+  insufficiencies), the five operations that repair incompatibilities (Belief
   Revision 1 and 2, Reformation 1 to 3) and the five that repair insufficiencies
   (Abduction 1 and 2, Reformation 4 to 6), together with a breadth-first search for
   sequences of operations that leave the theory without faults.
